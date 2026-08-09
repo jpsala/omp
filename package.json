@@ -1,0 +1,11 @@
+{
+  "name": "omp-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "index": "bun scripts/update-index.ts",
+    "index:check": "bun scripts/update-index.ts --check",
+    "audit": "bun scripts/audit.ts",
+    "test": "bun test"
+  }
+}

@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Runtime and migration artifacts
+/artifacts/
+/archive/
+/tmp/

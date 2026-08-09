@@ -1,0 +1,10 @@
+# Topics
+
+Índice generado por `bun run index`. Editar los archivos de `topics/`, no esta tabla.
+
+| Topic | Status | Summary |
+| --- | --- | --- |
+| [OMP Fleet](../topics/omp-fleet.md) | active | Ejecución multi-repositorio por RPC con control explícito, aprobaciones en vivo y observadores WezTerm sin propiedad del ciclo de vida. |
+| [OMP RPC client v2](../topics/rpc-client.md) | active | Contrato de referencia para stdio JSONL, correlación, reassembly v2 y settle correcto. |
+| [UX surfaces: native, port or discard](../topics/ux-matrix.md) | active | Matriz durable de Windows input, status/cuota, renderers y atención WezTerm basada en OMP 17.2.7. |
+| [WezTerm Attention](../topics/wezterm-attention.md) | active | Productor OMP project-local de marcadores atómicos de atención por pane. |

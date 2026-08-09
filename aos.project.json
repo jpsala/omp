@@ -1,0 +1,10 @@
+{
+  "baseline": "2026-08-08",
+  "capabilities": {
+    "agent-bootstrap": 2,
+    "context-index": 1,
+    "context-audit": 1,
+    "omp-native": 1
+  },
+  "appliedMigrations": ["stable-bootstrap-v1"]
+}

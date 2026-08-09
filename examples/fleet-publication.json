@@ -1,0 +1,16 @@
+{
+  "name": "publication-readiness",
+  "goal": "Review publication readiness without changing files, invoking models beyond the assigned worker, or causing external effects. Report concrete findings and the exact local checks performed.",
+  "window": "tabs",
+  "maxConcurrency": 2,
+  "repos": {
+    "omp-lab": {
+      "cwd": "C:/dev/omp",
+      "message": "Inspect the reusable RPC client, fleet integration, examples, and project-local discovery wiring. Report blockers for publication."
+    },
+    "infra": {
+      "cwd": "C:/dev/infra",
+      "message": "Inspect downstream integration assumptions and report any compatibility or operational blockers for publication."
+    }
+  }
+}
