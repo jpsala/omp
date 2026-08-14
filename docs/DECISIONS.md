@@ -28,3 +28,49 @@ El cliente usa stdio JSONL, negocia v2, correlaciona por id, valida/reensambla `
 Cada repo habilitado obtiene un RPC independiente; los comandos que cambian workers o responden solicitudes exigen run id y target explícitos. Las aprobaciones nunca son automáticas: además identifican repo y request id, conservan ese request id en la respuesta y pasan por approve/deny explícito.
 
 WezTerm y `fleet-observer.ts` son observadores de artifacts, no propietarios de workers; cerrarlos no cancela el run. La persistencia local conserva sólo metadatos, estados y resúmenes sanitizados, nunca texto crudo de resultados o errores.
+
+## 2026-08-11 — Runtime Habitat global, launch explícito y fast fail
+
+`extensions/agent-runtime-habitat.ts` es la fuente durable del contexto runtime
+y del lanzamiento de sesiones hijas. El perfil OMP carga un wrapper mínimo; los
+repos de producto no copian la implementación ni construyen comandos WezTerm.
+
+Harness y host son independientes. La primera implementación soporta OMP sobre
+WezTerm, usa pane e instancia explícitos, separa `fresh` de `persistence` y
+entrega prompts por un canal loopback efímero con handshake/hash, nunca por argv,
+env ni input simulado del terminal. La operación conserva ownership únicamente
+sobre panes que creó y hace rollback del pane exacto ante un fallo posterior a
+la creación.
+
+El bootstrap Bun transporta sólo metadata correlacionada no sensible por argv,
+deriva pane e instancia del entorno real del child, limpia recursion markers y
+arranca OMP. El parent expone el prompt una sola vez en un endpoint tokenizado
+de `127.0.0.1`; el entorno lleva sólo URL opaca y hash. La extensión hija valida
+el contenido, limpia esas variables y usa `pi.sendUserMessage()`. El prompt
+sigue excluido de argv, env, terminal, markers y artifacts.
+
+Una combinación sin adapter/capability devuelve `unsupported` y termina. No
+busca variables internas, sesiones, procesos, directorios de colaboración ni
+fallbacks manuales. El control manual por CLI queda reservado a diagnóstico
+explícito, no al flujo normal del agente.
+
+## 2026-08-12 — Capacidades OMP por trigger, no por novedad
+
+Las herramientas avanzadas se seleccionan por evidencia de la tarea. `eval` es
+el laboratorio preferido para cálculo ad hoc, análisis de datos y prototipos
+incrementales en Python o JavaScript; no sustituye la ejecución, integración ni
+verificación del código real del repositorio. `debug` se activa ante fallos de
+estado, crashes o hangs que el análisis estático no cierre, y `ast_edit` ante
+codemods estructurales repetidos.
+
+LSP, hashline, internal URLs y los checks focales continúan como flujo normal.
+Advisor, review y subagentes pueden activarse por defecto cuando OMP o el
+sistema agéntico detectan riesgo, revisión especializada o slices realmente
+independientes; no requieren una solicitud adicional por ejecución. El agente
+principal conserva contratos, integración y aceptación. Commits, push,
+publicación, deploy, instalaciones y uso de credenciales disponibles no agregan
+un gate AOS cuando son necesarios para el resultado; se verifican destino,
+alcance y valores y se respetan las salvaguardas runtime de OMP o del proveedor.
+Los pull requests son excepcionales y requieren un motivo concreto. Collab,
+browser y computer sólo se activan cuando su necesidad y las políticas locales
+lo permiten.
