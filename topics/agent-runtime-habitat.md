@@ -107,6 +107,14 @@ el bootstrap abre el shell interactivo sin propagar metadata del lanzamiento.
 
 ## Prompt y readiness
 
+La detección de contexto ya valida el pane origen contra la instancia. El
+adapter no repite ese preflight antes de `split-pane`/`spawn`: la propia CLI
+recibe instancia y pane explícitos y falla si dejaron de existir. Después de
+crear, `list --format json` puede quedar brevemente detrás del resultado de la
+CLI; el adapter reintenta de forma acotada sólo la aparición del pane nuevo
+antes de registrar ownership o ejecutar rollback. Los dos acks siguen siendo la
+readiness de la sesión OMP.
+
 Antes de crear el pane, el parent abre un endpoint HTTP efímero, one-shot y
 tokenizado sobre `127.0.0.1`. El entorno del child recibe sólo la URL opaca y el
 SHA-256 esperado, nunca el texto. En `session_start`, la extensión hija publica

@@ -30,7 +30,45 @@ export class WezTermHostAdapter {
   private readonly run: ProcessRunner; private readonly executable: string; private readonly timeoutMs: number; private readonly owned = new Map<string, WezTermPaneHandle>();
   constructor(options: WezTermAdapterOptions = {}) { this.run = options.runner ?? defaultRunner; this.executable = options.executable ?? (process.platform === "win32" ? "wezterm.exe" : "wezterm"); this.timeoutMs = options.timeoutMs ?? 5000; }
   private opts(instanceRef: string, extra: ProcessRunOptions = {}): ProcessRunOptions { return { ...extra, timeoutMs: this.timeoutMs, env: { ...process.env, ...(extra.env ?? {}), WEZTERM_UNIX_SOCKET: instanceRef } }; }
-  async describe(source: WezTermSource): Promise<WezTermLocation> { const r = await this.run(this.executable, ["cli", "list", "--format", "json"], this.opts(source.instanceRef)); if (r.exitCode !== 0) fail("wezterm list", r); let rows: unknown; try { rows = JSON.parse(r.stdout); } catch { throw new Error("wezterm list returned invalid JSON"); } if (!Array.isArray(rows)) throw new Error("wezterm list returned incomplete JSON"); const row = rows.find((x: any) => String(x?.pane_id) === source.paneId); if (!row || row.window_id === undefined || row.tab_id === undefined) throw new Error("source pane is not present in instance"); return { instanceRef: source.instanceRef, windowId: String(row.window_id), tabId: String(row.tab_id), paneId: String(row.pane_id), ...(row.workspace === undefined ? {} : { workspace: String(row.workspace) }), ...(row.cwd === undefined ? {} : { cwd: normalizedCwd(String(row.cwd)) }) }; }
+  async describe(source: WezTermSource): Promise<WezTermLocation> {
+    const result = await this.run(this.executable, ["cli", "list", "--format", "json"], this.opts(source.instanceRef));
+    if (result.exitCode !== 0) fail("wezterm list", result);
+    let rows: unknown;
+    try {
+      rows = JSON.parse(result.stdout);
+    } catch {
+      throw new Error("wezterm list returned invalid JSON");
+    }
+    if (!Array.isArray(rows)) throw new Error("wezterm list returned incomplete JSON");
+    const candidates: unknown[] = rows;
+    const row = candidates.find(candidate =>
+      candidate !== null
+      && typeof candidate === "object"
+      && !Array.isArray(candidate)
+      && "pane_id" in candidate
+      && String(candidate.pane_id) === source.paneId
+    );
+    if (
+      row === null
+      || typeof row !== "object"
+      || Array.isArray(row)
+      || !("pane_id" in row)
+      || !("window_id" in row)
+      || !("tab_id" in row)
+      || row.window_id === undefined
+      || row.tab_id === undefined
+    ) {
+      throw new Error(`pane ${source.paneId} is not present in WezTerm instance`);
+    }
+    return {
+      instanceRef: source.instanceRef,
+      windowId: String(row.window_id),
+      tabId: String(row.tab_id),
+      paneId: String(row.pane_id),
+      ...(!("workspace" in row) || row.workspace === undefined ? {} : { workspace: String(row.workspace) }),
+      ...(!("cwd" in row) || row.cwd === undefined ? {} : { cwd: normalizedCwd(String(row.cwd)) }),
+    };
+  }
   private key(h: Pick<WezTermPaneHandle, "instanceRef" | "sourcePaneId" | "ownedPaneId">) { return `${h.instanceRef}\0${h.sourcePaneId}\0${h.ownedPaneId}`; }
   private assertOwned(h: WezTermPaneHandle) { if (!h.instanceRef || !h.sourcePaneId || !h.ownedPaneId || h.ownedPaneId === h.sourcePaneId || this.owned.get(this.key(h)) !== h) throw new Error("refusing to use unowned pane"); }
   private async rollbackCreatedPane(instanceRef: string, paneId: string): Promise<void> {
@@ -41,10 +79,27 @@ export class WezTermHostAdapter {
     );
     if (result.exitCode !== 0 && !paneAlreadyGone(result)) fail("wezterm kill-pane", result);
   }
+  private async describeCreatedPane(source: WezTermSource): Promise<WezTermLocation> {
+    let absent: unknown;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        return await this.describe(source);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("is not present in WezTerm instance")) throw error;
+        absent = error;
+        if (attempt < 9) {
+          const { promise, resolve } = Promise.withResolvers<void>();
+          setTimeout(resolve, 25);
+          await promise;
+        }
+      }
+    }
+    throw new Error(`created pane ${source.paneId} did not become observable in WezTerm instance`, { cause: absent });
+  }
+
 
   private async open(input: { kind: "split"; request: SplitRequest } | { kind: "tab"; request: TabRequest }) {
     const { kind, request } = input;
-    await this.describe(request.source);
     const cwd = normalizedCwd(request.cwd);
     const argv = kind === "split"
       ? ["cli", "split-pane", "--pane-id", request.source.paneId, `--${request.direction}`, "--percent", String(request.percent), "--cwd", cwd, "--", request.program, ...(request.args ?? [])]
@@ -62,7 +117,7 @@ export class WezTermHostAdapter {
         instanceRef: request.source.instanceRef,
         sourcePaneId: request.source.paneId,
         ownedPaneId,
-        location: await this.describe({
+        location: await this.describeCreatedPane({
           instanceRef: request.source.instanceRef,
           paneId: ownedPaneId,
         }),

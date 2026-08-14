@@ -32,6 +32,7 @@ function expectSocket(call: Call, instanceRef: string) {
 test("split and tab use distinct commands and executable argv", async () => {
   const calls: Call[] = [];
   const adapter = new WezTermHostAdapter({ executable: "wezterm.exe", runner: fakeRunner(calls) });
+  expect(calls).toHaveLength(0);
   await adapter.split({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:\\dev\\omp", direction: "right", percent: 40, program: "omp", args: ["--flag"] });
   await adapter.tab({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:\\dev\\omp", program: "omp", args: ["--flag"] });
   const split = calls.find(call => call.argv.includes("split-pane")!);
@@ -40,6 +41,34 @@ test("split and tab use distinct commands and executable argv", async () => {
   expect(split?.argv).not.toContain("--socket-name");
   expect(tab?.argv).toContain("spawn");
   for (const call of calls) expectSocket(call, "inst");
+  expect(calls[0].argv).toContain("split-pane");
+});
+
+test("retries until a newly created pane becomes visible in the mux list", async () => {
+  const calls: Call[] = [];
+  let listCount = 0;
+  const runner: ProcessRunner = async (executable, argv, options) => {
+    calls.push({ executable, argv: [...argv], options });
+    if (argv.includes("split-pane")) return { exitCode: 0, stdout: "9\n", stderr: "" };
+    if (argv.includes("list")) {
+      listCount++;
+      const rows = [{ pane_id: 7, window_id: 1, tab_id: 2 }];
+      if (listCount > 1) rows.push({ pane_id: 9, window_id: 1, tab_id: 2 });
+      return { exitCode: 0, stdout: JSON.stringify(rows), stderr: "" };
+    }
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const adapter = new WezTermHostAdapter({ runner });
+  const handle = await adapter.split({
+    source: { instanceRef: "inst", paneId: "7" },
+    cwd: "C:/dev/omp",
+    direction: "right",
+    percent: 50,
+    program: "omp",
+  });
+  expect(handle.location.paneId).toBe("9");
+  expect(listCount).toBe(2);
+  expect(calls.some(call => call.argv.includes("kill-pane"))).toBe(false);
 });
 
 
