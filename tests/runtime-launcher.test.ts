@@ -1,7 +1,7 @@
 import { launchAgent, type LaunchDeps, type LaunchRequest } from "../src/runtime-launcher.ts";
 import { PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { promptSha256, type HandshakeAck, type MarkerStore } from "../src/runtime-handshake.ts";
-const request: LaunchRequest = { cwd: "C:\\work", placement: { kind: "split", direction: "right", percent: 40 }, fresh: true, persistence: "ephemeral", model: { mode: "explicit", spec: "openai/gpt-5" }, prompt: "héllo\nsecond", focus: true };
+const request: LaunchRequest = { cwd: "C:\\work", placement: { kind: "split", direction: "right", percent: 40 }, pane: { title: "Implementador · framing", onExit: "keep-open" }, fresh: true, persistence: "ephemeral", model: { mode: "explicit", spec: "openai/gpt-5" }, prompt: "héllo\nsecond", focus: true };
 
 const ack = (stage: "session_start" | "before_agent_start", extra: Partial<HandshakeAck> = {}): HandshakeAck => ({ version: 1, stage, launchId: "01010101010101010101010101010101", nonce: "nonce", paneId: "child-pane", sessionId: "child-session", model: "openai/gpt-5", timestamp: Date.now(), parentSessionId: "parent", instanceRef: "wez-instance", ...extra });
 function harness(acks: HandshakeAck[], opts: { timeoutMs?: number } = {}) {

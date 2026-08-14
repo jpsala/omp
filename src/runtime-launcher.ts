@@ -1,7 +1,7 @@
 import { promptSha256, randomLaunchId, type AckStage, type HandshakeAck, type MarkerStore } from "./runtime-handshake.ts";
 import type { WezTermPaneHandle, WezTermHostAdapter } from "./runtime-host-wezterm.ts";
 import { openPromptChannel, type PromptChannelHandle } from "./runtime-prompt-channel.ts";
-export interface LaunchRequest { cwd:string; placement:{kind:"split";direction:"left"|"right"|"top"|"bottom";percent:number}|{kind:"tab"}; fresh:boolean; persistence:"saved"|"ephemeral"; model:{mode:"inherit"}|{mode:"explicit";spec:string}; prompt:string; focus:boolean }
+export interface LaunchRequest { cwd:string; placement:{kind:"split";direction:"left"|"right"|"top"|"bottom";percent:number}|{kind:"tab"}; pane:{title:string;onExit:"close"|"keep-open"}; fresh:boolean; persistence:"saved"|"ephemeral"; model:{mode:"inherit"}|{mode:"explicit";spec:string}; prompt:string; focus:boolean }
 export interface LaunchEnvironment { launchId:string; nonce:string; promptHash:string; sourcePaneId:string; instanceRef:string; parentSessionId:string }
 export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; source:{instanceRef:string;paneId:string}; parentSessionId:string; model?:string }
 export interface LaunchResult { ok:true; launchId:string; paneId:string; sessionId:string; model:string }
@@ -35,7 +35,7 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
   };
   try{
     if(deps.signal?.aborted)throw new Error("launch aborted");
-    if(unsafe(request.prompt))throw new Error("prompt contains terminal control bytes");
+    if(unsafe(request.prompt)||unsafe(request.pane.title))throw new Error("prompt and pane title must not contain terminal control bytes");
     channel=await (deps.openPromptChannel??openPromptChannel)(request.prompt);
     const child=await deps.buildChild(request,env);
     const req={source:deps.source,cwd:request.cwd,program:child.program,args:child.args,env:{...child.env,...channel.environment}};

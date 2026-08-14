@@ -3,11 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { MAX_RUNTIME_FRAGMENT_LENGTH, compactRuntimeFragment } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, compactRuntimeFragment } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
-interface PluginApi { on: (event: string, handler: Function) => void; registerTool: (definition: ToolSpec) => void; getThinkingLevel: () => string; pi: { getAgentDir: () => string } }
+interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
+interface PluginApi { on: (event: string, handler: Function) => void; registerTool: (definition: ToolSpec) => void; registerCommand: (name: string, definition: CommandSpec) => void; sendUserMessage: (content: string) => void; getThinkingLevel: () => string; pi: { getAgentDir: () => string } }
 const env = { TERM_PROGRAM: "WezTerm", WEZTERM_PANE: "42", WEZTERM_UNIX_SOCKET: "\\\\?\\pipe\\wez" };
 const listed = JSON.stringify([{ pane_id: 42, window_id: 7, tab_id: 8, workspace: "ws", cwd: "C:\\dev\\omp" }]);
 
@@ -48,16 +49,42 @@ test("extension registers context and an explicit nested launch contract", async
   try {
     const handlers: Record<string, Function> = {};
     const tools = new Map<string, ToolSpec>();
-    const pi: PluginApi = { on(event, handler) { handlers[event] = handler; }, registerTool(definition) { tools.set(definition.name, definition); }, getThinkingLevel: () => "medium", pi: { getAgentDir: () => agentDir } };
+    const commands = new Map<string, CommandSpec>();
+    const sentMessages: string[] = [];
+    const pi: PluginApi = { on(event, handler) { handlers[event] = handler; }, registerTool(definition) { tools.set(definition.name, definition); }, registerCommand(name, definition) { commands.set(name, definition); }, sendUserMessage(content) { sentMessages.push(content); }, getThinkingLevel: () => "medium", pi: { getAgentDir: () => agentDir } };
     habitat(pi as unknown as Parameters<typeof habitat>[0]);
     const contextTool = tools.get("agent_runtime_context");
     const sessionTool = tools.get("agent_runtime_session");
     expect(contextTool?.approval).toBe("read");
     expect(sessionTool?.approval).toBe("write");
-    const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[] }> };
-    expect(schema.required).toEqual(["cwd", "prompt", "placement", "fresh", "persistence", "model", "focus"]);
+    const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[] }> };
+    expect(schema.required).toEqual(["cwd", "prompt", "placement", "pane", "fresh", "persistence", "model", "focus"]);
     expect(schema.properties?.placement.anyOf).toHaveLength(2);
+    expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
+    const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
+    expect(planCommand?.description).toContain("right split");
+    await planCommand!.handler('corregir "framing"', {});
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]).toContain(JSON.stringify('corregir "framing"'));
+    expect(sentMessages[0]).toContain('placement {kind:"split",direction:"right",percent:50}');
+    expect(sentMessages[0]).toContain('pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}');
+    expect(sentMessages[0]).toContain('model:{mode:"inherit"}');
+    expect(sentMessages[0]).toContain("No implementes aquí");
+    await planCommand!.handler("   ", {});
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[1]).toContain("solicitud de usuario accionable inmediatamente anterior");
+    const promoteCommand = commands.get(PROMOTE_CONTEXT_COMMAND);
+    expect(promoteCommand?.description).toContain("durable session context");
+    await promoteCommand!.handler('decisión de "framing"', {});
+    expect(sentMessages).toHaveLength(3);
+    expect(sentMessages[2]).toContain(JSON.stringify('decisión de "framing"'));
+    expect(sentMessages[2]).toContain("decisiones y sus razones a Decisions");
+    expect(sentMessages[2]).toContain("No guardes transcripts");
+    expect(sentMessages[2]).toContain("Si no hay delta durable, no edites archivos");
+    await promoteCommand!.handler(" ", {});
+    expect(sentMessages).toHaveLength(4);
+    expect(sentMessages[3]).toContain("Revisá toda la sesión");
 
     const prior = ["existing"]; const result = await handlers.before_agent_start({ systemPrompt: prior }, { cwd: "C:\\dev\\omp", hasUI: true });
     expect(result.systemPrompt.slice(0, 1)).toEqual(prior); expect(result.systemPrompt).toHaveLength(2); expect(result.systemPrompt.filter((x: string) => x === "existing")).toHaveLength(1);
@@ -69,7 +96,7 @@ test("extension registers context and an explicit nested launch contract", async
     const invalid = await sessionTool!.execute("id", { cwd: "C:\\tmp", prompt: "x", placement: { type: "split", direction: "right", size: 50 }, fresh: true, persistence: "saved", model: { type: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(invalid.content[0].text).reason).toContain("placement {kind:'tab'}");
 
-    const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", placement: { kind: "split", direction: "right", percent: 50 }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
+    const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", placement: { kind: "split", direction: "right", percent: 50 }, pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");
   } finally { await rm(agentDir, { recursive: true, force: true }); }
 });

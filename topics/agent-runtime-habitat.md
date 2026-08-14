@@ -12,6 +12,37 @@ Summary: Contexto runtime tipado y lanzamiento OMP fresco sobre un pane WezTerm 
 
 La extensión no autoriza lanzamientos por estar disponible. La tool mutante conserva los gates del perfil y sólo opera ante una solicitud directa.
 
+### Handoff corto de implementación
+
+`/plan-implement-short [objetivo]` dispara un turno compacto en la sesión actual:
+el parent cierra alcance, contratos e invariantes, produce el plan completo con
+la menor cantidad de pasos y entrega un único prompt autocontenido a un
+implementador. Sin argumento usa la solicitud accionable inmediatamente
+anterior; sin objetivo recuperable pide sólo ese dato y no abre una sesión.
+
+El comando lanza exactamente una sesión fresh saved, hereda modelo y cwd, abre
+un split derecho al 50% y conserva el foco en el parent. El pane recibe un
+título corto `Implementador · <objetivo>` y `onExit: "keep-open"`: salir de OMP
+devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo. Los
+pasos sólo se marcan paralelos cuando son independientes; el implementador puede
+delegarlos con contratos ya cerrados. El parent no implementa, no abre panes
+adicionales ni monitorea al child después del handshake.
+
+### Promoción de contexto durable
+
+`/promote-context [foco]` dispara una curaduría semántica en la sesión actual.
+Compara conversación y estado comprobado con las fuentes canónicas del repo,
+promueve una sola vez únicamente deltas durables y prefiere actualizar
+documentos existentes. Rutea reglas a `AGENTS.md`, estado vivo a Working
+Memory, decisiones con razones a Decisions, conocimiento reusable a topics y
+trabajo retomable incompleto a tracks.
+
+El comando no crea memoria paralela ni guarda transcripts, handoffs, intentos,
+logs, resultados crudos de tools o hechos derivables del código. Si no encuentra
+un delta durable no edita archivos. Tras cambios documentales ejecuta el índice
+y audit definidos por el repo y reporta promociones, omisiones deliberadas y
+checks.
+
 ## Primera implementación
 
 - Harness: OMP 17.2.13.
@@ -22,6 +53,24 @@ La extensión no autoriza lanzamientos por estar disponible. La tool mutante con
 - Fresh ephemeral: `--no-session`.
 - Selección de modelo: el request siempre declara `explicit` o `inherit`;
   `inherit` resuelve el modelo actual.
+
+### Ciclo de vida y nombre de panes
+
+Todo request de `agent_runtime_session`, tanto para `tab` como para `split`,
+declara `pane: { title, onExit }`. `title` es un nombre breve, sin caracteres de
+control, que el bootstrap publica mediante `OSC 1`; con la configuración actual
+de WezTerm aparece como título del tab cuando ese pane está activo.
+
+`onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
+termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
+inicia un shell interactivo después de OMP, en el mismo `cwd`; Windows usa
+PowerShell 7 y otros hosts usan `$SHELL` o `/bin/sh`. El shell recibe un entorno
+limpio: no hereda metadata `OMP_RUNTIME_*`, el canal efímero del prompt ni
+marcadores de recursión. Cerrar explícitamente el pane en WezTerm siempre lo
+elimina.
+
+`persistence: "saved"|"ephemeral"` gobierna el almacenamiento de la sesión OMP;
+no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
 
 
 ### Modelo: rol de agente vs spec real
@@ -51,9 +100,10 @@ un directorio nuevo, la sesión arranca en su padre existente y lo crea después
 
 WezTerm asigna la identidad del pane desde el entorno real del proceso creado.
 `scripts/runtime-child-bootstrap.ts` conserva la frontera: recibe por argv sólo
-launch id, nonce, parent session id y agent dir; deriva pane e instancia del
-child, limpia marcadores de recursión y arranca OMP. El prompt no entra en ese
-argv.
+launch id, nonce, parent session id, título, conducta al salir y agent dir;
+deriva pane e instancia del child, limpia marcadores de recursión y arranca OMP.
+El prompt no entra en ese argv. Si el request exige `keep-open`, después de OMP
+el bootstrap abre el shell interactivo sin propagar metadata del lanzamiento.
 
 ## Prompt y readiness
 
@@ -70,10 +120,10 @@ devolver éxito. El canal se cierra después de una única lectura válida o dur
 rollback; el prompt no aparece en argv, env, terminal, logs, artifacts ni
 markers.
 
-La tool publica el schema anidado completo de `placement` y `model`; todos los
-campos de lanzamiento son requeridos. Esto evita que el agente improvise
-sinónimos como `type`/`size`, que el traductor V1 rechaza. Un request inválido
-devuelve además la forma exacta esperada.
+La tool publica el schema anidado completo de `placement`, `pane` y `model`;
+todos los campos de lanzamiento son requeridos. Esto evita que el agente
+improvise sinónimos como `type`/`size`, que el traductor V1 rechaza. Un request
+inválido devuelve además la forma exacta esperada.
 
 ## Ownership y rollback
 

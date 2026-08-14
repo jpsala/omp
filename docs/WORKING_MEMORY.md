@@ -10,7 +10,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
-- Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime y lanzamiento OMP fresco sobre WezTerm. Wrapper global activo; handshake usa `scripts/runtime-child-bootstrap.ts` para metadata y `src/runtime-prompt-channel.ts` para entregar el prompt por un endpoint loopback efímero autenticado, nunca por argv, env ni input del pane. Smoke vivo 2026-08-11 verde: pane `76` -> `118`, mismo tab `33`, nueva session id, prompt Unicode de 9165 caracteres y `IPC_LONG_OK`.
+- Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime, lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]` para entregar un plan mínimo a un implementador y `/promote-context [foco]` para consolidar deltas durables en las fuentes canónicas del repo. Todo launch declara nombre y conducta al salir; el handoff corto usa un split `Implementador · <objetivo>` que vuelve a PowerShell al terminar OMP. Wrapper global activo; handshake usa `scripts/runtime-child-bootstrap.ts` para metadata y `src/runtime-prompt-channel.ts` para entregar el prompt por un endpoint loopback efímero autenticado, nunca por argv, env ni input del pane. Smoke vivo 2026-08-11 verde: pane `76` -> `118`, mismo tab `33`, nueva session id, prompt Unicode de 9165 caracteres y `IPC_LONG_OK`.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.
@@ -28,6 +28,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Los observers WezTerm sólo leen artifacts: no poseen workers y cerrarlos no cancela un run.
 - Las solicitudes UI del fleet requieren approve/deny explícito con run id; no se persisten texto crudo de resultados o errores.
 - Habitat falla como `unsupported` cuando falta provider/capability; no investiga ni construye launchers ad hoc. Sólo opera panes creados por la operación y nunca el pane origen.
+- La persistencia de sesión OMP y la vida del pane son independientes: `pane.onExit` decide entre cerrar o volver a un shell limpio; `pane.title` nombra el pane mediante `OSC 1`.
 
 ## Próxima lectura
 

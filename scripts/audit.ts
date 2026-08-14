@@ -233,7 +233,7 @@ async function auditProjectExtensionLoad(): Promise<void> {
 					typeof data === "object" && data !== null && !Array.isArray(data)
 						? (data as Record<string, unknown>).commands
 						: undefined;
-				for (const requiredCommand of ["wezterm-attention-status", "fleet"]) {
+				for (const requiredCommand of ["wezterm-attention-status", "fleet", "plan-implement-short", "promote-context"]) {
 					const discovered =
 						Array.isArray(commands) &&
 						commands.some(

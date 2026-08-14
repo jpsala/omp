@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { OMP_FRESH_OVERLAY_PATH, OMP_RECURSION_MARKERS, translateOmpRequest } from "../src/runtime-harness-omp.ts";
 
 const context = (extra: Record<string, unknown> = {}) => ({ version: 1 as const, harness: { id: "omp" as const, hasUI: false, agentDir: "C:/agent", model: { provider: "fallback", id: "wrong" } }, host: { kind: "headless" as const, provider: "unknown", trust: "unknown" as const }, capabilities: {}, ...extra });
-const request = (persistence: "saved" | "ephemeral" = "saved", model: { mode: "inherit" } | { mode: "explicit"; spec: string } = { mode: "inherit" }) => ({ version: 1 as const, cwd: "C:/dev/omp", placement: { kind: "tab" as const }, fresh: true, persistence, model, prompt: "never argv", focus: false });
+const request = (persistence: "saved" | "ephemeral" = "saved", model: { mode: "inherit" } | { mode: "explicit"; spec: string } = { mode: "inherit" }) => ({ version: 1 as const, cwd: "C:/dev/omp", placement: { kind: "tab" as const }, pane: { title: "Implementador", onExit: "close" as const }, fresh: true, persistence, model, prompt: "never argv", focus: false });
 
 describe("OMP Phase 3 translation", () => {
   test("saved fresh uses overlay and resolved inherited model", async () => {

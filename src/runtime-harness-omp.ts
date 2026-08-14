@@ -49,12 +49,17 @@ function validResolvedModel(value: unknown): value is OmpModel {
 function validRequest(value: unknown): value is SpawnAgentSessionRequestV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
-  const allowed = ["version", "cwd", "placement", "fresh", "persistence", "model", "prompt", "focus"];
+  const allowed = ["version", "cwd", "placement", "pane", "fresh", "persistence", "model", "prompt", "focus"];
   if (Object.keys(request).some(key => !allowed.includes(key))) return false;
   if (request.version !== 1 || typeof request.cwd !== "string" || !request.cwd.trim()) return false;
   if (request.fresh !== true && request.fresh !== false) return false;
   if (request.persistence !== "saved" && request.persistence !== "ephemeral") return false;
   if (typeof request.prompt !== "string" || !request.prompt.trim() || typeof request.focus !== "boolean" || !validModel(request.model)) return false;
+  const pane = request.pane;
+  if (!pane || typeof pane !== "object" || Array.isArray(pane)) return false;
+  const paneOptions = pane as Record<string, unknown>;
+  if (Object.keys(paneOptions).length !== 2 || typeof paneOptions.title !== "string" || !paneOptions.title.trim()
+    || (paneOptions.onExit !== "close" && paneOptions.onExit !== "keep-open")) return false;
   const placement = request.placement;
   if (!placement || typeof placement !== "object" || Array.isArray(placement)) return false;
   const p = placement as Record<string, unknown>;
