@@ -44,11 +44,13 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
       :await deps.adapter.tab(req);
     const get=async(stage:AckStage,window:number):Promise<HandshakeAck>=>{
       const end=now()+window;
-      while(now()<=end){
+      while(true){
         if(deps.signal?.aborted)throw new Error("launch aborted");
         const a=await deps.markers.consume(id,stage);
         if(a&&valid(a,stage,env,h!.ownedPaneId,deps.model,stage==="before_agent_start"?env.promptHash:undefined)&&a.timestamp<=now()&&a.timestamp>=now()-60000)return a;
-        await pause(deps.pollMs??20);
+        const remaining=end-now();
+        if(remaining<=0)break;
+        await pause(Math.min(deps.pollMs??20,remaining));
       }
       throw new Error(`${stage} handshake timeout`);
     };

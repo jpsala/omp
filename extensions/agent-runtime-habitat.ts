@@ -83,6 +83,7 @@ function isRequestInput(value: unknown): value is Omit<SpawnAgentSessionRequestV
    : model.mode==="explicit" && Object.keys(model).length===2 && typeof model.spec==="string" && !!model.spec.trim();
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
+const HANDSHAKE_TIMEOUT_MS=45_000;
 export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string):Promise<void> {
  const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), nonce=envString("OMP_RUNTIME_NONCE"), paneId=envString("OMP_RUNTIME_PANE_ID"), instanceRef=envString("OMP_RUNTIME_INSTANCE"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION");
  if(!launchId||!nonce||!paneId||!instanceRef||!parentSessionId) return Promise.resolve();
@@ -164,7 +165,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"unsupported runtime host"})}],details:{status:"unsupported",reason:"unsupported runtime host"}};
       const value=request as LaunchRequest;
       const adapter=createWezTermAdapter();
-      const result=await launchAgent(value,{adapter,signal,timeoutMs:30_000,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",
+      const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",
         buildChild:async(_request,env)=>({
           program:"bun",
           args:[CHILD_BOOTSTRAP,...createBootstrapArgv({
