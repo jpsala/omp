@@ -9,10 +9,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Config local: `.omp/config.yml` enlaza `wezterm-attention`,
   `agent-runtime-habitat` y las tres extensiones globales de browser/atención
   porque las listas project-local reemplazan, no fusionan, `extensions` del
-  perfil. El wrapper global de Habitat fue restaurado el 2026-08-16 para que
-  `agent_runtime_session` y `/plan-implement-short` reaparezcan tras
-  `/reload-plugins` o en una sesión nueva. Fleet vive en
-  `extensions/omp-fleet.ts` y el perfil lo descubre mediante su wrapper global.
+  perfil. Como el `config.yml` global también declara una lista explícita, ahora
+  enlaza directamente la fuente durable de Habitat; el wrapper global queda
+  como fallback para perfiles sin lista. Fleet vive en `extensions/omp-fleet.ts`
+  y el perfil lo descubre mediante su wrapper global.
   El editor Windows vive en `extensions/windows-input.ts`; `Ctrl+Alt+M` recorre
   GPT-5.6 Sol/medium, GPT-5.6 Luna/xhigh y GPT-5.6 Luna/max.
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.

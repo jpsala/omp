@@ -32,8 +32,10 @@ WezTerm y `fleet-observer.ts` son observadores de artifacts, no propietarios de 
 ## 2026-08-11 — Runtime Habitat global, launch explícito y fast fail
 
 `extensions/agent-runtime-habitat.ts` es la fuente durable del contexto runtime
-y del lanzamiento de sesiones hijas. El perfil OMP carga un wrapper mínimo; los
-repos de producto no copian la implementación ni construyen comandos WezTerm.
+y del lanzamiento de sesiones hijas. El `config.yml` global declara esa fuente
+directamente porque su lista explícita de extensiones reemplaza discovery; el
+wrapper mínimo queda como fallback para perfiles sin lista. Los repos de
+producto no copian la implementación ni construyen comandos WezTerm.
 
 Harness y host son independientes. La primera implementación soporta OMP sobre
 WezTerm, usa pane e instancia explícitos, separa `fresh` de `persistence` y
