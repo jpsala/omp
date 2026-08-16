@@ -113,8 +113,13 @@ adapter no repite ese preflight antes de `split-pane`/`spawn`: la propia CLI
 recibe instancia y pane explícitos y falla si dejaron de existir. Después de
 crear, `list --format json` puede quedar brevemente detrás del resultado de la
 CLI; el adapter reintenta de forma acotada sólo la aparición del pane nuevo
-antes de registrar ownership o ejecutar rollback. Los dos acks siguen siendo la
-readiness de la sesión OMP.
+antes de registrar ownership o ejecutar rollback.
+
+Los dos acks siguen siendo la readiness de la sesión OMP. Cada etapa admite
+hasta 45 segundos para absorber startups transitorios sin abrir un segundo
+pane. El polling limita la última espera al deadline y realiza una lectura final
+en ese borde; si el ack no llega, cierra exactamente el pane owned y limpia el
+canal y los markers. No existe retry que cree otro pane.
 
 Antes de crear el pane, el parent abre un endpoint HTTP efímero, one-shot y
 tokenizado sobre `127.0.0.1`. El entorno del child recibe sólo la URL opaca y el
