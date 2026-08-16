@@ -13,7 +13,12 @@ Para abrir OMP desde este workspace:
 omp
 ```
 
-`extensions/omp-fleet.ts` es la fuente durable de `/fleet`. El perfil OMP instala un puntero mínimo en `~/.omp/agent/extensions/omp-fleet.ts`, por lo que el comando y su autocomplete sobreviven reinicios y aparecen desde cualquier repo. `.omp/config.yml` conserva sólo `extensions/wezterm-attention.ts`, que sí es project-local.
+`extensions/omp-fleet.ts` es la fuente durable de `/fleet` y
+`extensions/sync-close-prompt.ts` la de `/cerrar-computadora`. El perfil OMP
+instala punteros mínimos en `~/.omp/agent/extensions/`, por lo que ambos
+comandos sobreviven reinicios y aparecen desde cualquier repo. `.omp/config.yml`
+conserva la lista explícita de extensiones project-local y globales requerida
+para probar este workspace sin copiar sus fuentes.
 
 ## Mapa
 
@@ -39,6 +44,12 @@ bun examples/rpc-once.ts "Responde sólo: ok"
 ```
 
 Dentro de OMP, `/fleet status` comprueba el discovery sin iniciar workers. El ejemplo multi-repo listo para adaptar se ejecuta con `/fleet run examples/fleet-publication.json`; sus `cwd` deben existir.
+
+`/cerrar-computadora [foco opcional]` no ejecuta el cierre: reemplaza el
+contenido del editor con una instrucción revisable que delega el procedimiento
+al runbook canónico de Infra. Recién al enviarla el agente puede auditar,
+preparar commits y publicar ramas no productivas; merge, deploy y reparación
+destructiva permanecen fuera de alcance.
 
 El ejemplo RPC y `/fleet run` invocan modelos configurados y pueden tener coste. El índice, el audit, los tests y `/fleet status` sin runs no contactan proveedores.
 

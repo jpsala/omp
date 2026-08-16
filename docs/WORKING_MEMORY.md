@@ -18,6 +18,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
+- Cierre multi-repo: `extensions/sync-close-prompt.ts` registra
+  `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
+  enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra. El
+  wrapper global permite usarlo desde cualquier repo.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime, lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]` para entregar un plan mínimo a un implementador y `/promote-context [foco]` con el alias `/guardar-sesion [foco]` para consolidar deltas durables en las fuentes canónicas del repo. Todo launch declara nombre y conducta al salir; el handoff corto usa un split `Implementador · <objetivo>` que vuelve a PowerShell al terminar OMP. Wrapper global activo; handshake usa `scripts/runtime-child-bootstrap.ts` para metadata y `src/runtime-prompt-channel.ts` para entregar el prompt por un endpoint loopback efímero autenticado, nunca por argv, env ni input del pane. Smoke vivo 2026-08-11 verde: pane `76` -> `118`, mismo tab `33`, nueva session id, prompt Unicode de 9165 caracteres, acks exactos y shell limpio post-exit. El wrapper `~/.omp/agent/extensions/agent-runtime-habitat.ts` reexporta la fuente local.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
@@ -28,6 +32,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - El workspace contiene fuentes, no auth, sesiones, stores ni caches.
 - `extensions/` es canónico; `.omp/` sólo contiene configuración project-local fina.
 - La extensión Windows instalada delega el render completo a OMP y añade selección visual mediante `decorateText`, sin reemplazar el popup de autocomplete; el ciclo de presets usa únicamente las APIs públicas de modelos y thinking.
+- `/cerrar-computadora` sólo reemplaza el draft del editor. Ejecutar el comando
+  no inicia un turno, no invoca Git y no convierte merge/deploy en parte del
+  cierre cotidiano.
 - Una respuesta RPC acepta un comando; no necesariamente termina un turno.
 - Un `agent_end` sólo finaliza cuando `isTerminal !== false`.
 - Los prompts locales pueden finalizar sin `agent_end` mediante `agentInvoked: false`.

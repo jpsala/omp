@@ -117,3 +117,22 @@ descartan.
 demanda desde `agent-runtime-habitat`. Actualizan fuentes existentes, preservan
 certeza, riesgos y gates, y ejecutan los checks documentales definidos por el
 repo. No introducen una auto-memory ni otra fuente de verdad.
+
+## 2026-08-16 — Cierre multi-repo revisable y gobernado por Infra
+
+`/cerrar-computadora [foco]` es una extensión UX pequeña, no un sincronizador.
+Precarga mediante `ctx.ui.setEditorText()` una instrucción para cerrar el trabajo
+versionable del host y deja el envío bajo control humano. No llama
+`sendUserMessage`, Git, workers ni proveedores al ejecutar el slash command.
+
+La política vive únicamente en
+`C:\dev\infra\docs\runbooks\sync-multi-repo.md`; la extensión conserva un prompt
+compacto que remite a esa autoridad y fija los límites necesarios para una
+sesión sin contexto: auditoría inicial/final, revisión semántica por repo,
+checks focales, commits y push no productivos, y bloqueo explícito de
+divergencias, artifacts privados o riesgo de producción. Merge/rebase a `main`,
+release, deploy y reparación destructiva quedan fuera del cierre cotidiano.
+
+La fuente durable es `extensions/sync-close-prompt.ts`; el perfil global carga
+un wrapper mínimo. Así el comando queda disponible desde cualquier repo sin
+copiar reglas de Infra ni estado privado al laboratorio.

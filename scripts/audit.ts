@@ -25,6 +25,7 @@ const requiredFiles = [
 	"extensions/windows-input.ts",
 	"extensions/omp-fleet.ts",
 	"extensions/agent-runtime-habitat.ts",
+	"extensions/sync-close-prompt.ts",
 	"src/omp-rpc-client.ts",
 	"src/omp-fleet-config.ts",
 	"src/omp-fleet.ts",
@@ -51,6 +52,7 @@ const requiredFiles = [
 	"tests/omp-fleet.test.ts",
 	"tests/omp-fleet-wezterm.test.ts",
 	"tests/agent-runtime-habitat.test.ts",
+	"tests/sync-close-prompt.test.ts",
 	"tests/runtime-host-wezterm.test.ts",
 	"tests/runtime-harness-omp.test.ts",
 	"tests/runtime-handshake.test.ts",
@@ -128,6 +130,11 @@ async function auditProjectExtensionLoad(): Promise<void> {
 		await writeFile(
 			join(profileExtensions, "agent-runtime-habitat.ts"),
 			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "agent-runtime-habitat.ts")).href)};\n`,
+			"utf8",
+		);
+		await writeFile(
+			join(profileExtensions, "sync-close-prompt.ts"),
+			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "sync-close-prompt.ts")).href)};\n`,
 			"utf8",
 		);
 		const childEnv = { ...process.env };
@@ -233,7 +240,13 @@ async function auditProjectExtensionLoad(): Promise<void> {
 					typeof data === "object" && data !== null && !Array.isArray(data)
 						? (data as Record<string, unknown>).commands
 						: undefined;
-				for (const requiredCommand of ["wezterm-attention-status", "fleet", "plan-implement-short", "promote-context"]) {
+				for (const requiredCommand of [
+					"wezterm-attention-status",
+					"fleet",
+					"plan-implement-short",
+					"promote-context",
+					"cerrar-computadora",
+				]) {
 					const discovered =
 						Array.isArray(commands) &&
 						commands.some(
@@ -325,6 +338,7 @@ const normalizedConfig = config.replaceAll("\r\n", "\n").trim();
 const expectedConfig = [
 	"extensions:",
 	"  - extensions/wezterm-attention.ts",
+	"  - extensions/agent-runtime-habitat.ts",
 	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-notification.ts",
