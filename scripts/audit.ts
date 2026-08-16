@@ -325,9 +325,12 @@ const normalizedConfig = config.replaceAll("\r\n", "\n").trim();
 const expectedConfig = [
 	"extensions:",
 	"  - extensions/wezterm-attention.ts",
+	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
+	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",
+	"  - C:/dev/os/runtime/omp-extensions/user-notification.ts",
 ].join("\n");
 if (normalizedConfig !== expectedConfig) {
-	issues.push(".omp/config.yml must load exactly the project-local WezTerm attention extension");
+	issues.push(".omp/config.yml must preserve project-local and global workstation extensions");
 }
 
 const readme = await readFile(join(workspace, "README.md"), "utf8").catch(

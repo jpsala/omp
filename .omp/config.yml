@@ -1,2 +1,5 @@
 extensions:
   - extensions/wezterm-attention.ts
+  - C:/dev/os/runtime/omp-extensions/axi-browser.ts
+  - C:/dev/os/runtime/omp-extensions/user-attention.ts
+  - C:/dev/os/runtime/omp-extensions/user-notification.ts
