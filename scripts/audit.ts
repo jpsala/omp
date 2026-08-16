@@ -24,15 +24,25 @@ const requiredFiles = [
 	"extensions/wezterm-attention.ts",
 	"extensions/windows-input.ts",
 	"extensions/omp-fleet.ts",
+	"extensions/agent-runtime-habitat.ts",
 	"src/omp-rpc-client.ts",
 	"src/omp-fleet-config.ts",
 	"src/omp-fleet.ts",
 	"src/omp-fleet-wezterm.ts",
+	"src/agent-runtime-context.ts",
+	"src/runtime-host-detect.ts",
+	"src/runtime-host-wezterm.ts",
+	"src/runtime-harness-omp.ts",
+	"src/runtime-handshake.ts",
+	"src/runtime-launcher.ts",
+	"runtime/omp-fresh-session.yml",
 	"topics/rpc-client.md",
 	"topics/ux-matrix.md",
 	"topics/wezterm-attention.md",
+	"topics/agent-runtime-habitat.md",
 	"scripts/update-index.ts",
 	"scripts/fleet-observer.ts",
+	"scripts/runtime-child-bootstrap.ts",
 	"scripts/audit.ts",
 	"examples/rpc-once.ts",
 	"examples/fleet-publication.json",
@@ -40,6 +50,12 @@ const requiredFiles = [
 	"tests/omp-fleet-config.test.ts",
 	"tests/omp-fleet.test.ts",
 	"tests/omp-fleet-wezterm.test.ts",
+	"tests/agent-runtime-habitat.test.ts",
+	"tests/runtime-host-wezterm.test.ts",
+	"tests/runtime-harness-omp.test.ts",
+	"tests/runtime-handshake.test.ts",
+	"tests/runtime-child-bootstrap.test.ts",
+	"tests/runtime-launcher.test.ts",
 	"package.json",
 	"tsconfig.json",
 ];
@@ -107,6 +123,11 @@ async function auditProjectExtensionLoad(): Promise<void> {
 		await writeFile(
 			join(profileExtensions, "omp-fleet.ts"),
 			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "omp-fleet.ts")).href)};\n`,
+			"utf8",
+		);
+		await writeFile(
+			join(profileExtensions, "agent-runtime-habitat.ts"),
+			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "agent-runtime-habitat.ts")).href)};\n`,
 			"utf8",
 		);
 		const childEnv = { ...process.env };
@@ -212,7 +233,7 @@ async function auditProjectExtensionLoad(): Promise<void> {
 					typeof data === "object" && data !== null && !Array.isArray(data)
 						? (data as Record<string, unknown>).commands
 						: undefined;
-				for (const requiredCommand of ["wezterm-attention-status", "fleet"]) {
+				for (const requiredCommand of ["wezterm-attention-status", "fleet", "plan-implement-short", "promote-context"]) {
 					const discovered =
 						Array.isArray(commands) &&
 						commands.some(
@@ -304,9 +325,12 @@ const normalizedConfig = config.replaceAll("\r\n", "\n").trim();
 const expectedConfig = [
 	"extensions:",
 	"  - extensions/wezterm-attention.ts",
+	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
+	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",
+	"  - C:/dev/os/runtime/omp-extensions/user-notification.ts",
 ].join("\n");
 if (normalizedConfig !== expectedConfig) {
-	issues.push(".omp/config.yml must load exactly the project-local WezTerm attention extension");
+	issues.push(".omp/config.yml must preserve project-local and global workstation extensions");
 }
 
 const readme = await readFile(join(workspace, "README.md"), "utf8").catch(
