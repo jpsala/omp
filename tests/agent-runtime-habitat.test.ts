@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, compactRuntimeFragment } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
@@ -85,6 +85,12 @@ test("extension registers context and an explicit nested launch contract", async
     await promoteCommand!.handler(" ", {});
     expect(sentMessages).toHaveLength(4);
     expect(sentMessages[3]).toContain("Revisá toda la sesión");
+    const saveSessionCommand = commands.get(SAVE_SESSION_COMMAND);
+    expect(saveSessionCommand?.description).toContain("deltas durables");
+    await saveSessionCommand!.handler('Zulip y "Event Router"', {});
+    expect(sentMessages).toHaveLength(5);
+    expect(sentMessages[4]).toContain(JSON.stringify('Zulip y "Event Router"'));
+    expect(sentMessages[4]).toContain("No guardes transcripts");
 
     const prior = ["existing"]; const result = await handlers.before_agent_start({ systemPrompt: prior }, { cwd: "C:\\dev\\omp", hasUI: true });
     expect(result.systemPrompt.slice(0, 1)).toEqual(prior); expect(result.systemPrompt).toHaveLength(2); expect(result.systemPrompt.filter((x: string) => x === "existing")).toHaveLength(1);

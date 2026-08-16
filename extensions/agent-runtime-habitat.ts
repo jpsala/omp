@@ -32,6 +32,7 @@ Construí un único prompt autocontenido para un agente sin acceso a esta conver
 No implementes aquí. Invocá agent_runtime_session exactamente una vez con el cwd actual, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:false. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Pasá el handoff como prompt. No abras otras sesiones ni monitorees el pane. Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
 export const PROMOTE_CONTEXT_COMMAND = "promote-context";
+export const SAVE_SESSION_COMMAND = "guardar-sesion";
 export function buildPromoteContextPrompt(focus: string): string {
  const explicitFocus=focus.trim();
  const focusInstruction=explicitFocus
@@ -116,6 +117,10 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
  pi.registerCommand(PROMOTE_CONTEXT_COMMAND,{
    description:"Promote missing durable session context into canonical repository docs",
+   handler:(args)=>{pi.sendUserMessage(buildPromoteContextPrompt(String(args??"")));},
+ });
+ pi.registerCommand(SAVE_SESSION_COMMAND,{
+   description:"Guardar deltas durables de la sesión en la documentación canónica",
    handler:(args)=>{pi.sendUserMessage(buildPromoteContextPrompt(String(args??"")));},
  });
   pi.registerTool({

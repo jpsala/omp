@@ -110,7 +110,8 @@ faltante y una única vez; ausencia de delta no crea archivos. Transcripts,
 intentos, logs, resultados crudos de tools y hechos derivables del código se
 descartan.
 
-`/promote-context [foco]` complementa ese gate con una curaduría profunda bajo
-demanda desde `agent-runtime-habitat`. El comando actualiza fuentes existentes,
-preserva certeza, riesgos y gates, y ejecuta los checks documentales definidos
-por el repo. No introduce una auto-memory ni otra fuente de verdad.
+`/promote-context [foco]` y su alias en español
+`/guardar-sesion [foco]` complementan ese gate con una curaduría profunda bajo
+demanda desde `agent-runtime-habitat`. Actualizan fuentes existentes, preservan
+certeza, riesgos y gates, y ejecutan los checks documentales definidos por el
+repo. No introducen una auto-memory ni otra fuente de verdad.

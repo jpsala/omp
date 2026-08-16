@@ -30,7 +30,8 @@ adicionales ni monitorea al child después del handshake.
 
 ### Promoción de contexto durable
 
-`/promote-context [foco]` dispara una curaduría semántica en la sesión actual.
+`/promote-context [foco]` y su alias en español `/guardar-sesion [foco]`
+disparan una curaduría semántica en la sesión actual.
 Compara conversación y estado comprobado con las fuentes canónicas del repo,
 promueve una sola vez únicamente deltas durables y prefiere actualizar
 documentos existentes. Rutea reglas a `AGENTS.md`, estado vivo a Working
