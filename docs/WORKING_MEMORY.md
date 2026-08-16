@@ -6,7 +6,15 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 
 ## Estado actual
 
-- Config local: `.omp/config.yml` enlaza `extensions/wezterm-attention.ts` y conserva explícitamente las tres extensiones globales de browser/atención porque las listas project-local reemplazan, no fusionan, `extensions` del perfil. Fleet vive en `extensions/omp-fleet.ts` y el perfil lo descubre globalmente mediante el wrapper `~/.omp/agent/extensions/omp-fleet.ts`, con autocomplete contextual durable entre repos y reinicios. El editor Windows vive en `extensions/windows-input.ts` y la copia instalada en el perfil conserva el renderer/autocomplete nativo. `Ctrl+Alt+M` recorre GPT-5.6 Sol/medium, GPT-5.6 Luna/xhigh y GPT-5.6 Luna/max.
+- Config local: `.omp/config.yml` enlaza `wezterm-attention`,
+  `agent-runtime-habitat` y las tres extensiones globales de browser/atención
+  porque las listas project-local reemplazan, no fusionan, `extensions` del
+  perfil. El wrapper global de Habitat fue restaurado el 2026-08-16 para que
+  `agent_runtime_session` y `/plan-implement-short` reaparezcan tras
+  `/reload-plugins` o en una sesión nueva. Fleet vive en
+  `extensions/omp-fleet.ts` y el perfil lo descubre mediante su wrapper global.
+  El editor Windows vive en `extensions/windows-input.ts`; `Ctrl+Alt+M` recorre
+  GPT-5.6 Sol/medium, GPT-5.6 Luna/xhigh y GPT-5.6 Luna/max.
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
