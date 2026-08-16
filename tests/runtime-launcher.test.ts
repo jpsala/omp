@@ -4,14 +4,20 @@ import { promptSha256, type HandshakeAck, type MarkerStore } from "../src/runtim
 const request: LaunchRequest = { cwd: "C:\\work", placement: { kind: "split", direction: "right", percent: 40 }, pane: { title: "Implementador · framing", onExit: "keep-open" }, fresh: true, persistence: "ephemeral", model: { mode: "explicit", spec: "openai/gpt-5" }, prompt: "héllo\nsecond", focus: true };
 
 const ack = (stage: "session_start" | "before_agent_start", extra: Partial<HandshakeAck> = {}): HandshakeAck => ({ version: 1, stage, launchId: "01010101010101010101010101010101", nonce: "nonce", paneId: "child-pane", sessionId: "child-session", model: "openai/gpt-5", timestamp: Date.now(), parentSessionId: "parent", instanceRef: "wez-instance", ...extra });
-function harness(acks: HandshakeAck[], opts: { timeoutMs?: number } = {}) {
+function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: number; deferSessionStartMs?: number } = {}) {
   const events: string[] = [];
   const channelPrompts: string[] = [];
   const childEnvironments: Array<Record<string, string | undefined> | undefined> = [];
+  const clockStartedAt = Date.now();
+  let clock = clockStartedAt;
   let cleaned = false;
   let killed = false;
   let channelClosed = false;
-  const markers: MarkerStore = { publish: async () => {}, consume: async (_id, stage) => { const i = acks.findIndex(a => a.stage === stage); return i < 0 ? undefined : acks.splice(i, 1)[0]; }, cleanup: async () => { cleaned = true; } };
+  const markers: MarkerStore = { publish: async () => {}, consume: async (_id, stage) => {
+    if (stage === "session_start" && clock < clockStartedAt + (opts.deferSessionStartMs ?? 0)) return undefined;
+    const i = acks.findIndex(a => a.stage === stage);
+    return i < 0 ? undefined : acks.splice(i, 1)[0];
+  }, cleanup: async () => { cleaned = true; } };
   const adapter = {
     split: async (value: { env?: Record<string, string | undefined> }) => { events.push("split"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
     tab: async (value: { env?: Record<string, string | undefined> }) => { events.push("tab"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
@@ -25,9 +31,10 @@ function harness(acks: HandshakeAck[], opts: { timeoutMs?: number } = {}) {
     parentSessionId: "parent",
     random: () => new Uint8Array(16).fill(1),
     nonce: () => "nonce",
+    now: () => clock,
     timeoutMs: opts.timeoutMs ?? 100,
-    pollMs: 0,
-    sleep: async () => {},
+    pollMs: opts.pollMs ?? 20,
+    sleep: async ms => { clock += ms; },
     openPromptChannel: async prompt => {
       channelPrompts.push(prompt);
       return {
@@ -78,6 +85,17 @@ test("rejects stale nonce, pane, session, and model acknowledgements and rolls b
 
 test("times out and cleans marker state when no handshake arrives", async () => {
   const h = harness([], { timeoutMs: 1 }); await expect(launchAgent(request, h.deps)).rejects.toThrow(); expect(h.cleaned).toBe(true); expect(h.killed).toBe(true);
+});
+
+test("reconciles an acknowledgement that arrives on the timeout boundary without opening another pane", async () => {
+  const h = harness(
+    [ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })],
+    { timeoutMs: 100, pollMs: 70, deferSessionStartMs: 100 },
+  );
+  const result = await launchAgent(request, h.deps);
+  expect(result.paneId).toBe("child-pane");
+  expect(h.events.filter(event => event === "split")).toHaveLength(1);
+  expect(h.killed).toBe(false);
 });
 
 test("uses tab placement and does not replay consumed acknowledgements", async () => {
