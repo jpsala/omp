@@ -75,6 +75,7 @@ Dentro de OMP:
 /profiles list
 /profiles show study-sol-luna
 /profiles activate study-sol-luna
+/profiles prepare study-sol-luna
 ```
 
 `list` enumera los perfiles activos, `show` muestra nombre, overlay, padre,
@@ -83,10 +84,15 @@ nombres se completan por autocomplete y se validan contra la allowlist del
 catálogo. Un nombre arbitrario, path absoluto, traversal o sustitución por
 modelo se rechaza.
 
-`activate` no muta una sesión viva ni afirma que el perfil quedó activo:
-precarga en el editor el comando exacto `omp --config profiles/<archivo>.yml`
-para revisar y enviar en una sesión nueva. Cambiar `prewalk`, proveedor, modelo
-o política de delegación requiere ese nuevo proceso.
+`activate` cambia explícitamente el modelo padre y el nivel de thinking de la
+sesión OMP actual mediante la API nativa. Por ejemplo, `study-sol-luna` activa
+Sol `medium`. También informa Task, `prewalk` y concurrencia del catálogo, pero
+no finge cambiar esos parámetros si la API de la sesión no los expone.
+
+`prepare` conserva la alternativa de sesión nueva: precarga en el editor el
+comando exacto `omp --config profiles/<archivo>.yml`. El overlay completo sigue
+siendo la única forma de cambiar simultáneamente proveedor, Task, `prewalk` y
+política de delegación.
 
 Para agregar, modificar o retirar una combinación:
 

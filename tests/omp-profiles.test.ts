@@ -7,7 +7,7 @@ import {
 	validateProfileCatalog,
 } from "../src/profile-catalog.ts";
 import ompProfiles from "../extensions/omp-profiles.ts";
-import { parseProfileCommand, profileArgumentCompletions } from "../extensions/omp-profiles.ts";
+import { parseProfileCommand, profileArgumentCompletions, splitModelSelector } from "../extensions/omp-profiles.ts";
 
  test("catalogs the four existing overlays without secrets", () => {
 	expect(PROFILE_CATALOG.map(profile => profile.name)).toEqual([
@@ -49,10 +49,47 @@ test("parses list, show, and explicit activation commands", () => {
 	expect(parseProfileCommand("list")).toEqual({ subcommand: "list" });
 	expect(parseProfileCommand("show study-sol-luna")).toEqual({ subcommand: "show", name: "study-sol-luna" });
 	expect(parseProfileCommand("activate deepseek-lab")).toEqual({ subcommand: "activate", name: "deepseek-lab" });
+	expect(parseProfileCommand("prepare deepseek-lab")).toEqual({ subcommand: "prepare", name: "deepseek-lab" });
+	expect(splitModelSelector("openai-codex/gpt-5.6-sol:medium")).toEqual({
+		model: "openai-codex/gpt-5.6-sol",
+		thinking: "medium",
+	});
 	expect(() => resolveProfile(parseProfileCommand("activate openrouter/foo").name)).toThrow("Unknown profile");
 });
 
-test("activation prepares the allowlisted overlay without mutating a live session", async () => {
+test("activation changes the current parent model explicitly", async () => {
+	let registered: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
+	const notices: string[] = [];
+	const models = {
+		resolve(value: string) {
+			return value === "openai-codex/gpt-5.6-sol" ? { id: value } : undefined;
+		},
+	};
+	let selected: unknown;
+	let thinking: string | undefined;
+	ompProfiles({
+		setModel(value: unknown) {
+			selected = value;
+			return Promise.resolve(true);
+		},
+		setThinkingLevel(value: string) {
+			thinking = value;
+		},
+		registerCommand(_name: string, definition: typeof registered) {
+			registered = definition;
+		},
+	} as never);
+	await registered?.handler("activate study-sol-luna", {
+		hasUI: true,
+		models,
+		ui: { notify(value: string) { notices.push(value); } },
+	});
+	expect(selected).toEqual({ id: "openai-codex/gpt-5.6-sol" });
+	expect(thinking).toBe("medium");
+	expect(notices.at(-1)).toContain("Current session changed");
+});
+
+test("prepare still offers the exact allowlisted overlay for a new session", async () => {
 	let registered: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 	ompProfiles({
 		registerCommand(_name: string, definition: typeof registered) {
@@ -60,20 +97,14 @@ test("activation prepares the allowlisted overlay without mutating a live sessio
 		},
 	} as never);
 	const inserted: string[] = [];
-	const notices: string[] = [];
-	await registered?.handler("activate study-sol-luna", {
+	await registered?.handler("prepare study-sol-luna", {
 		hasUI: true,
 		ui: {
-			setEditorText(value: string) {
-				inserted.push(value);
-			},
-			notify(value: string) {
-				notices.push(value);
-			},
+			setEditorText(value: string) { inserted.push(value); },
+			notify() {},
 		},
 	});
 	expect(inserted).toEqual(["omp --config profiles/study-sol-luna.yml"]);
-	expect(notices[0]).toContain("next session");
 });
 
 test("activation resolves only the catalog overlay and does not claim live mutation", () => {

@@ -48,9 +48,12 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Las solicitudes UI del fleet requieren approve/deny explícito con run id; no se persisten texto crudo de resultados o errores.
 - Habitat falla como `unsupported` cuando falta provider/capability; no investiga ni construye launchers ad hoc. Sólo opera panes creados por la operación y nunca el pane origen.
 - La persistencia de sesión OMP y la vida del pane son independientes: `pane.onExit` decide entre cerrar o volver a un shell limpio; `pane.title` nombra el pane mediante `OSC 1`.
-- Catálogo mantenible en `profiles/catalog.json`; `/profiles list|show|activate`
-  vive en `extensions/omp-profiles.ts`, se descubre desde `.omp/config.yml` y
-  prepara `omp --config profiles/<overlay>.yml` sin mutar sesiones vivas.
+- Catálogo mantenible en `profiles/catalog.json`; `/profiles list|show|activate|prepare`
+  vive en `extensions/omp-profiles.ts`, se descubre desde `.omp/config.yml`.
+  `activate` cambia explícitamente el padre y thinking de la sesión actual;
+  `prepare` conserva `omp --config profiles/<overlay>.yml` para una sesión nueva.
+- El catálogo no promete cambios vivos de Task, `prewalk` o concurrencia si la
+  API nativa no los expone; esos parámetros requieren el overlay completo.
 - Los cuatro overlays actuales (`deepseek-lab`, `study-deepseek`,
   `study-luna-max`, `study-sol-luna`) están allowlisteados; agregar o retirar
   combinaciones sólo requiere overlay y registro.

@@ -219,11 +219,12 @@ de padre e hijo por separado antes de decidir el routing por defecto.
 
 `profiles/catalog.json` separa la metadata mantenible de los cuatro overlays
 YAML nativos. `extensions/omp-profiles.ts` registra una única superficie
-`/profiles` con `list`, `show <name>` y `activate <name>`, y deriva el
-autocomplete de las entradas del catálogo.
+`/profiles` con `list`, `show <name>`, `activate <name>` y `prepare <name>`, y
+deriva el autocomplete de las entradas del catálogo.
 
 La allowlist valida nombres estables y overlays relativos directos dentro de
 `profiles/`; no acepta traversal, paths absolutos ni modelos arbitrarios.
-`activate` sólo precarga `omp --config profiles/<overlay>.yml` en el editor
-nativo para una sesión nueva. No cambia silenciosamente una sesión viva ni
-declara activo un perfil que sólo fue inspeccionado o seleccionado.
+`activate` cambia explícitamente el modelo padre y thinking de la sesión viva
+mediante `setModel`/`setThinkingLevel`, sin fingir cambios de Task, `prewalk` o
+concurrencia. `prepare` conserva el launcher exacto del overlay para una sesión
+nueva cuando se necesita aplicar la combinación completa.

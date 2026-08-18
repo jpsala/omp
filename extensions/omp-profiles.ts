@@ -11,6 +11,7 @@ export const PROFILE_USAGE = [
 	"/profiles list",
 	"/profiles show <name>",
 	"/profiles activate <name>",
+	"/profiles prepare <name>",
 ].join("\n");
 
 export interface ProfileAutocompleteItem {
@@ -27,7 +28,8 @@ function completion(value: string, label: string, description?: string, hint?: s
 const SUBCOMMANDS = [
 	{ name: "list", syntax: "list", description: "List available model combinations" },
 	{ name: "show", syntax: "show <name>", description: "Show effective profile metadata" },
-	{ name: "activate", syntax: "activate <name>", description: "Prepare the exact command for a new OMP session" },
+	{ name: "activate", syntax: "activate <name>", description: "Activate the profile parent in this session" },
+	{ name: "prepare", syntax: "prepare <name>", description: "Prepare the overlay for a new OMP session" },
 ] as const;
 
 export function profileArgumentCompletions(
@@ -44,7 +46,7 @@ export function profileArgumentCompletions(
 	}
 	const tokens = trimmed.length === 0 ? [] : trimmed.split(/\s+/u);
 	const subcommand = tokens[0];
-	if (subcommand !== "show" && subcommand !== "activate") return null;
+	if (subcommand !== "show" && subcommand !== "activate" && subcommand !== "prepare") return null;
 	const partial = tokens[1] ?? "";
 	if (tokens.length > 2 || (tokens.length === 2 && /\s$/u.test(argumentPrefix))) return null;
 	return catalog
@@ -52,13 +54,21 @@ export function profileArgumentCompletions(
 		.map(profile => completion(`${subcommand} ${profile.name}`, profile.name, profile.description));
 }
 
-export function parseProfileCommand(input: string): { subcommand: "list" } | { subcommand: "show" | "activate"; name: string } {
+export function parseProfileCommand(input: string): { subcommand: "list" } | { subcommand: "show" | "activate" | "prepare"; name: string } {
 	const tokens = input.trim().split(/\s+/u).filter(Boolean);
 	if (tokens.length === 1 && tokens[0] === "list") return { subcommand: "list" };
-	if (tokens.length === 2 && (tokens[0] === "show" || tokens[0] === "activate")) {
+	if (tokens.length === 2 && (tokens[0] === "show" || tokens[0] === "activate" || tokens[0] === "prepare")) {
 		return { subcommand: tokens[0], name: tokens[1] };
 	}
 	throw new Error(`Usage:\n${PROFILE_USAGE}`);
+}
+
+export type ProfileThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto";
+
+export function splitModelSelector(selector: string): { model: string; thinking: ProfileThinkingLevel } {
+	const separator = selector.lastIndexOf(":");
+	if (separator <= 0 || separator === selector.length - 1) throw new Error(`Invalid parent model selector: ${selector}`);
+	return { model: selector.slice(0, separator), thinking: selector.slice(separator + 1) as ProfileThinkingLevel };
 }
 
 function listProfiles(catalog: readonly ProfileRecord[]): string {
@@ -88,10 +98,22 @@ export default function ompProfiles(omp: ExtensionAPI): void {
 					ctx.ui.notify(profileDetails(profile), "info");
 					return;
 				}
-				if (!ctx.hasUI) throw new Error("Activation requires the native OMP editor");
-				const commandLine = profileOverlayCommand(profile);
-				ctx.ui.setEditorText(commandLine);
-				ctx.ui.notify(`Prepared ${profile.name} for the next session: ${commandLine}`, "info");
+				if (!ctx.hasUI) throw new Error("This command requires the native OMP UI");
+				if (command.subcommand === "prepare") {
+					const commandLine = profileOverlayCommand(profile);
+					ctx.ui.setEditorText(commandLine);
+					ctx.ui.notify(`Prepared ${profile.name} overlay for a new session: ${commandLine}`, "info");
+					return;
+				}
+				const parent = splitModelSelector(profile.parent);
+				const model = ctx.models.resolve(parent.model);
+				if (!model) throw new Error(`Parent model is unavailable: ${parent.model}`);
+				if (!(await omp.setModel(model))) throw new Error(`Could not activate parent model: ${parent.model}`);
+				omp.setThinkingLevel(parent.thinking);
+				ctx.ui.notify(
+					`Activated ${profile.name} parent: ${profile.parent}. Current session changed; Task=${profile.task}, prewalk=${profile.prewalk ? "on" : "off"}, concurrency=${profile.maxConcurrency ?? "OMP default"}.`,
+					"info",
+				);
 			} catch (error) {
 				notifyFailure(ctx, error);
 			}
