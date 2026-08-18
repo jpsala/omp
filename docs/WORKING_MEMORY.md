@@ -24,6 +24,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia, no calidad; DeepSeek directo sigue en 0 requests/$0.
 - Smoke comparativo 2026-08-18: Luna Max padre+hijo pasó 3 tests en 165.51 s; DeepSeek Pro `max` padre + Flash `low` hijo pasó los mismos 3 tests en 138.33 s (-16.4%). DeepSeek padre reportó `$0.08508346308`; Codex sólo expuso cuota gruesa 96%, sin costo unitario. Fixture temporal en `tmp/`, no durable.
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
+- Barra de estado global ajustada: tema `dark-poimandres-compact` con effort textual (`min`, `low`, `med`, `hgh`, `xhi`, `max`), ruta completa sin abreviar, y sólo `context_pct` para evitar duplicar la ventana máxima; `context_total` fue retirado.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
 - Cierre multi-repo: `extensions/sync-close-prompt.ts` registra
