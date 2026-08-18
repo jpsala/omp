@@ -67,5 +67,17 @@
     "status": "active",
     "prewalk": false,
     "costWarning": "DeepSeek directo: el uso puede generar costo según tu cuenta."
+  },
+  {
+    "name": "glm-flash-qwen-coder-minimax",
+    "overlay": "profiles/glm-flash-qwen-coder-minimax.yml",
+    "description": "GLM 4.7 Flash para lo cotidiano, Qwen3 Coder Next para cambios reales y MiniMax M3 para problemas difíciles.",
+    "parent": "openrouter/z-ai/glm-4.7-flash:low",
+    "task": "openrouter/qwen/qwen3-coder-next:off",
+    "tags": ["glm", "qwen", "minimax", "delegation"],
+    "status": "active",
+    "prewalk": false,
+    "maxConcurrency": 1,
+    "costWarning": "OpenRouter: GLM Flash, Qwen3 Coder Next y MiniMax M3 pueden generar costo según tu cuenta."
   }
 ]

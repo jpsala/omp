@@ -58,11 +58,13 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `prepare` conserva `omp --config profiles/<overlay>.yml` para una sesión nueva.
 - El catálogo no promete cambios vivos de Task, `prewalk` o concurrencia si la
   API nativa no los expone; esos parámetros requieren el overlay completo.
-- Los seis overlays actuales (`deepseek-lab`, `study-deepseek`,
-  `study-luna-max`, `study-sol-luna`, `deepseek-pro-high` y
-  `deepseek-flash-high`) están allowlisteados. Los dos últimos usan el provider
-  directo `deepseek` en `high`; agregar o retirar combinaciones sólo requiere
-  overlay y registro.
+- Los siete overlays actuales (`deepseek-lab`, `study-deepseek`,
+  `study-luna-max`, `study-sol-luna`, `deepseek-pro-high`,
+  `deepseek-flash-high` y `glm-flash-qwen-coder-minimax`) están allowlisteados.
+  El preset mixto usa GLM 4.7 Flash `low` para lo cotidiano, Qwen3 Coder Next
+  `off` para Task y MiniMax M3 `high` para `slow/plan`; mantiene `prewalk` off y
+  `deepseek-pro-high` y `deepseek-flash-high` usan el provider directo `deepseek`
+  en `high`; agregar o retirar combinaciones sólo requiere overlay y registro.
 
 ## Próxima lectura
 

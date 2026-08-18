@@ -273,3 +273,17 @@ terminal que consume `µ` y ejecuta el mismo ciclo del catálogo; el shortcut
 `ctrl+alt+m` sigue cubriendo la representación nativa. El wrapper conserva el
 hotkey aunque el editor opcional falle y expone `/windows-input` como diagnóstico
 de esa disponibilidad.
+
+## 2026-08-18 — Preset mixto GLM Flash, Qwen Coder y MiniMax
+
+Se agrega `profiles/glm-flash-qwen-coder-minimax.yml` y su entrada en
+`profiles/catalog.json` como combinación explícita de tres roles: GLM 4.7 Flash
+`low` para `default` y `minimal` para `smol/tiny`, Qwen3 Coder Next `off` para
+`task`, y MiniMax M3 `high` para `slow/plan`. Los selectores corresponden a
+modelos presentes en el catálogo local de OMP vía OpenRouter; no se incorporan
+credenciales, fallback ni routing automático.
+
+`prewalk` queda desactivado para que los cambios reales delegados conserven
+Qwen como implementador, y Task queda limitado a una ejecución concurrente.
+`activate` sólo puede cambiar el padre GLM de la sesión viva; el overlay sigue
+siendo necesario para aplicar Task, `slow/plan`, `prewalk` y concurrencia.

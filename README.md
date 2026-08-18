@@ -62,10 +62,22 @@ usa DeepSeek V4 Pro `max` como padre y V4 Flash `low` como implementador. Ambos
 desactivan `prewalk`, limitan la concurrencia a uno y delegan una sola tarea para
 que la comparación no mezcle orquestación con un handoff automático.
 
+## Preset mixto GLM, Qwen y MiniMax
+
+`profiles/glm-flash-qwen-coder-minimax.yml` combina GLM 4.7 Flash para el uso
+cotidiano, Qwen3 Coder Next para las tareas `task` que hacen cambios reales y
+MiniMax M3 `high` para `slow` y `plan` cuando el problema requiere más
+razonamiento. Desactiva `prewalk` y limita la concurrencia de Task a uno para
+que el handoff a Qwen sea explícito.
+
+```powershell
+omp --config profiles/glm-flash-qwen-coder-minimax.yml
+```
+
 ## Catálogo de perfiles
 
 `profiles/catalog.json` es el catálogo mantenible y
-`extensions/omp-profiles.ts` expone el comando nativo `/profiles`. Los cuatro
+`extensions/omp-profiles.ts` expone el comando nativo `/profiles`. Los siete
 overlays existentes siguen siendo YAML nativo de OMP; la metadata no se mezcla
 con ese schema.
 

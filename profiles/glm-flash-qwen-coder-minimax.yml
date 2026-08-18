@@ -1,0 +1,20 @@
+# Mixed profile: GLM Flash for daily work, Qwen Coder Next for real edits, MiniMax for hard problems.
+# Launch with: omp --config profiles/glm-flash-qwen-coder-minimax.yml
+# Prewalk is off so delegated Task work stays on Qwen Coder Next.
+modelRoles:
+  default: openrouter/z-ai/glm-4.7-flash:low
+  slow: openrouter/minimax/minimax-m3:high
+  plan: openrouter/minimax/minimax-m3:high
+  smol: openrouter/z-ai/glm-4.7-flash:minimal
+  task: openrouter/qwen/qwen3-coder-next:off
+  tiny: openrouter/z-ai/glm-4.7-flash:minimal
+cycleOrder:
+  - default
+  - slow
+  - smol
+prewalk:
+  enabled: false
+task:
+  agentModelOverrides:
+    task: openrouter/qwen/qwen3-coder-next:off
+  maxConcurrency: 1

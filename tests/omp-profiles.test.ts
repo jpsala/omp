@@ -20,6 +20,7 @@ test("catalogs every maintained overlay without secrets", () => {
 		"study-sol-luna",
 		"deepseek-pro-high",
 		"deepseek-flash-high",
+		"glm-flash-qwen-coder-minimax",
 	]);
 	for (const profile of PROFILE_CATALOG) {
 		expect(profile.overlay.startsWith("profiles/")).toBe(true);
@@ -32,6 +33,15 @@ test("exposes direct DeepSeek Pro and Flash high parents for activation and hotk
 	expect(resolveProfile("deepseek-flash-high").parent).toBe("deepseek/deepseek-v4-flash:high");
 	expect(resolveProfile("deepseek-pro-high").task).toBe("deepseek/deepseek-v4-pro:high");
 	expect(resolveProfile("deepseek-flash-high").task).toBe("deepseek/deepseek-v4-flash:high");
+});
+
+test("maps daily, coding, and hard-problem roles to the requested models", () => {
+	const profile = resolveProfile("glm-flash-qwen-coder-minimax");
+	expect(profile.parent).toBe("openrouter/z-ai/glm-4.7-flash:low");
+	expect(profile.task).toBe("openrouter/qwen/qwen3-coder-next:off");
+	expect(profile.prewalk).toBe(false);
+	expect(profile.maxConcurrency).toBe(1);
+	expect(profile.description).toContain("MiniMax M3");
 });
 
 test("rejects duplicate names, traversal, absolute paths, and model substitution", () => {
@@ -56,6 +66,7 @@ test("completes subcommands and allowlisted profile names", () => {
 		"activate study-sol-luna",
 		"activate deepseek-pro-high",
 		"activate deepseek-flash-high",
+		"activate glm-flash-qwen-coder-minimax",
 	]);
 });
 
