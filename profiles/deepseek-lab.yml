@@ -1,0 +1,15 @@
+# OMP config overlay for a reversible DeepSeek model experiment.
+# Launch with: omp --config profiles/deepseek-lab.yml
+# It changes only this process; credentials remain in OMP user state.
+modelRoles:
+  default: openrouter/deepseek/deepseek-v4-pro-0813:high
+  slow: openrouter/deepseek/deepseek-v4-pro-0813:high
+  plan: openrouter/deepseek/deepseek-v4-pro-0813:high
+  smol: openrouter/deepseek/deepseek-v4-flash-0731:low
+  task: openrouter/deepseek/deepseek-v4-flash-0731:low
+  tiny: openrouter/deepseek/deepseek-v4-flash-0731:low
+cycleOrder:
+  - default
+  - smol
+prewalk:
+  enabled: true

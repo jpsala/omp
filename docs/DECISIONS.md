@@ -151,3 +151,41 @@ handoff son configuración runtime del agente project-local. AOS conserva sólo
 esta razón durable y el repositorio sigue sin almacenar credenciales. El provider
 directo `deepseek` queda como primera opción cuando exista una credencial OMP
 válida; no se copia ningún secreto al repositorio.
+
+## 2026-08-18 — Perfil reversible para investigar DeepSeek
+
+El workspace incorpora `profiles/deepseek-lab.yml` como overlay OMP de proceso,
+no como un `--profile` de almacenamiento. Esa elección evita separar sesiones,
+auth y caches: el objetivo es cambiar modelos, no crear otro perfil de usuario.
+
+El overlay usa V4 Pro `high` como `default`, `slow` y `plan`; V4 Flash `low`
+como `smol`, `task` y `tiny`; y `cycleOrder: [default, smol]` para alternar la
+calidad normal y la implementación guiada. `prewalk.enabled` queda activo para
+que el modelo fuerte pueda planificar y el modelo económico tomar la edición
+cuando existe un todo-list de implementación.
+
+La investigación mide costo efectivo, tokens, latencia, tool calls y tasa de
+reparación con `omp bench` y el uso del provider. No se agregan scripts de API,
+claves ni un segundo runtime; `--config` permite retirar el experimento sin
+alterar la configuración global.
+
+## 2026-08-18 — Baseline de costo y latencia DeepSeek vía OpenRouter
+
+Se ejecutó un benchmark controlado con una solicitud normal por modelo (`maxTokens`
+128, `par=1`) y un par cold/warm de cache (`maxTokens` 64), usando los selectors
+OpenRouter V4 Pro 0813 `high` y V4 Flash 0731 `low`. Las cuatro solicitudes
+terminaron correctamente.
+
+La corrida normal observó TTFT de 1732 ms y duración de 2297 ms para Pro, frente
+a 690 ms y 1557 ms para Flash. En el par de cache, Pro costó `$0.0022842864`
+en frío y `$0.00034394976` en caliente, con 1536 tokens leídos de cache; Flash
+costó `$0.00024965325` tanto en frío como en caliente y no expuso cache hit en
+esa ruta. El par completo fue `$0.00262823616` para Pro y `$0.0004993065` para
+Flash, aproximadamente 5.26x más caro para Pro en esta muestra.
+
+Es un baseline de precio/latencia, no una comparación de calidad: una sola corrida
+no prueba superioridad para coding. El prompt de cache tenía aproximadamente
+1555 tokens de input y 64 de output por fase. Las solicitudes fueron vía
+OpenRouter; el panel oficial de DeepSeek permaneció en `$0.00`, 0 requests y 0
+tokens. Repetir con tareas de programación equivalentes, éxito de primera pasada,
+reparaciones y costo por tarea cerrada antes de fijar una política definitiva.

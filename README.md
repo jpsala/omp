@@ -34,6 +34,22 @@ para probar este workspace sin copiar sus fuentes.
 - `scripts/update-index.ts`: regeneración determinista del índice.
 - `scripts/audit.ts`: límites, higiene y contratos del workspace.
 
+## Perfil experimental DeepSeek
+
+`profiles/deepseek-lab.yml` es un overlay reversible de OMP para investigar el
+costo y el comportamiento de DeepSeek sin cambiar el perfil global ni copiar
+credenciales. Arranca el modelo por defecto en V4 Pro `high`, usa V4 Flash
+`low` para `smol` y subagentes `task`, y deja `Ctrl+P`/el selector de modelo
+alternar entre `default` y `smol`.
+
+```powershell
+omp --config profiles/deepseek-lab.yml
+```
+
+El overlay sólo afecta ese proceso; para volver a la configuración normal se
+abre OMP sin `--config`. Las pruebas de costo usan `omp bench` con pocas
+solicitudes y un límite de salida pequeño.
+
 ## Inicio rápido
 
 ```powershell
