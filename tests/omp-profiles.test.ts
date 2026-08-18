@@ -169,6 +169,34 @@ test("registers the profile cycle on the native shortcut without CustomEditor", 
 	expect(sessionStart).toBeDefined();
 });
 
+test("cycles the mixed GLM profile through Ctrl+Alt+M", async () => {
+	let handler: ((ctx: unknown) => Promise<void>) | undefined;
+	const resolvedModels: string[] = [];
+	let thinking: string | undefined;
+	profileHotkey({
+		registerShortcut(_shortcut: string, options: { handler: (ctx: unknown) => Promise<void> }) {
+			handler = options.handler;
+		},
+		on() {},
+		setModel(value: { id: string }) {
+			resolvedModels.push(value.id);
+			return Promise.resolve(true);
+		},
+		setThinkingLevel(value: string) {
+			thinking = value;
+		},
+	} as never);
+	const mixedProfileIndex = PROFILE_CATALOG.findIndex(profile => profile.name === "glm-flash-qwen-coder-minimax");
+	for (let index = 0; index <= mixedProfileIndex; index++) {
+		await handler?.({
+			models: { resolve(model: string) { return { id: model }; } },
+			ui: { notify() {} },
+		});
+	}
+	expect(resolvedModels.at(-1)).toBe("openrouter/z-ai/glm-4.7-flash");
+	expect(thinking).toBe("low");
+});
+
 test("consumes the terminal µ fallback and cycles the profile", () => {
 	let terminalInput: ((data: string) => { consume?: boolean } | undefined) | undefined;
 	let selected: unknown;

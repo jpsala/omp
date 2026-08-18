@@ -345,6 +345,7 @@ const expectedConfig = [
 	"  - extensions/wezterm-attention.ts",
 	"  - extensions/agent-runtime-habitat.ts",
 	"  - extensions/omp-profiles.ts",
+	"  - extensions/windows-input.ts",
 	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-notification.ts",
