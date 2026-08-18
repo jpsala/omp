@@ -50,6 +50,18 @@ El overlay sólo afecta ese proceso; para volver a la configuración normal se
 abre OMP sin `--config`. Las pruebas de costo usan `omp bench` con pocas
 solicitudes y un límite de salida pequeño.
 
+Para comparar una baseline de un solo modelo con una arquitectura delegada:
+
+```powershell
+omp --config profiles/study-luna-max.yml
+omp --config profiles/study-deepseek.yml
+```
+
+`study-luna-max` usa Luna Max como padre y como implementador. `study-deepseek`
+usa DeepSeek V4 Pro `max` como padre y V4 Flash `low` como implementador. Ambos
+desactivan `prewalk`, limitan la concurrencia a uno y delegan una sola tarea para
+que la comparación no mezcle orquestación con un handoff automático.
+
 ## Inicio rápido
 
 ```powershell

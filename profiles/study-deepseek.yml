@@ -1,0 +1,19 @@
+# Controlled study profile: DeepSeek V4 Pro max orchestrator + V4 Flash implementer.
+# Launch with: omp --config profiles/study-deepseek.yml
+# Prewalk is off so the parent remains the orchestrator and delegates to Task.
+modelRoles:
+  default: openrouter/deepseek/deepseek-v4-pro-0813:max
+  slow: openrouter/deepseek/deepseek-v4-pro-0813:max
+  plan: openrouter/deepseek/deepseek-v4-pro-0813:max
+  smol: openrouter/deepseek/deepseek-v4-flash-0731:low
+  task: openrouter/deepseek/deepseek-v4-flash-0731:low
+  tiny: openrouter/deepseek/deepseek-v4-flash-0731:low
+cycleOrder:
+  - default
+  - smol
+prewalk:
+  enabled: false
+task:
+  agentModelOverrides:
+    task: openrouter/deepseek/deepseek-v4-flash-0731:low
+  maxConcurrency: 1

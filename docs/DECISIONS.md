@@ -189,3 +189,28 @@ no prueba superioridad para coding. El prompt de cache tenía aproximadamente
 OpenRouter; el panel oficial de DeepSeek permaneció en `$0.00`, 0 requests y 0
 tokens. Repetir con tareas de programación equivalentes, éxito de primera pasada,
 reparaciones y costo por tarea cerrada antes de fijar una política definitiva.
+
+## 2026-08-18 — Primer smoke Luna Max frente a DeepSeek Pro Max + Flash
+
+La comparación cambió la baseline solicitada: Luna Max actúa como padre y como
+implementador; el perfil DeepSeek usa V4 Pro `max` como padre y V4 Flash `low`
+como hijo `task`. Ambos perfiles desactivan `prewalk`, fijan una sola tarea hija
+y trabajan sobre `tmp/deepseek-study-fixture`, que se excluye del repositorio.
+
+La tarea fue implementar `summarizeQueue` con invariantes de conteo, tasa de
+completitud, cola vacía, primer queued por `createdAt` y no mutación. Ambos padres
+delegaron exactamente una tarea y ambos dejaron `3 pass, 0 fail`; las
+implementaciones fueron equivalentes en complejidad y pasaron el mismo fixture.
+
+Luna Max tardó 165.51 s de extremo a extremo. DeepSeek Pro + Flash tardó
+138.33 s, aproximadamente 16.4% menos en esta corrida. El stream DeepSeek
+expuso seis turnos del padre, 56,334 tokens de input, 2,388 de output y un costo
+observado del padre de `$0.08508346308`; el hijo Flash quedó asignado por
+`task.agentModelOverrides`, pero esta ejecución sin sesión no expuso su receipt
+de uso separado. El provider openai-codex conservó el reporte grueso de 96% de
+cuota semanal usada antes y después, por lo que no permite atribuir un costo
+unitario a Luna Max.
+
+Este smoke prueba coordinación, compilación/tests y latencia, no superioridad de
+calidad. La siguiente iteración debe repetir varias tareas y capturar receipts
+de padre e hijo por separado antes de decidir el routing por defecto.
