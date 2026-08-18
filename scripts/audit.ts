@@ -25,7 +25,6 @@ const requiredFiles = [
 	"extensions/windows-input.ts",
 	"extensions/omp-fleet.ts",
 	"extensions/agent-runtime-habitat.ts",
-	"extensions/profile-hotkey.ts",
 	"extensions/windows-input-native.ts",
 	"extensions/sync-close-prompt.ts",
 	"src/omp-rpc-client.ts",

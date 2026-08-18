@@ -2,16 +2,14 @@
  * Windows-like input editor for OMP.
  * Windows/VS Code-style selection semantics over OMP's native editor.
  *
- * This file is the durable source. The installed profile wrapper lives at
- * `~/.omp/agent/extensions/windows-input.ts` and re-exports this source.
+ * This file is the durable source; the installed wrapper re-exports it.
  *
  * The extension delegates rendering to `CustomEditor`, preserving slash/file/
  * skill autocomplete, and adds selection highlighting through `decorateText`.
  *
  * Load/reload: restart OMP or run `/reload` after updating this source.
  * Toggle: `/windows-input on|off|toggle|status`.
- * Model profiles: `Ctrl+Alt+M` cycles the `profiles/catalog.json` parents.
- * WezTerm/Windows may encode that chord as U+00B5 under the active layout.
+ * Model selection stays on OMP's native model hub and keybindings.
  */
 
 import { spawnSync } from "node:child_process";
@@ -25,7 +23,6 @@ import {
 	matchesKey,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
-import { PROFILE_CATALOG, splitModelSelector } from "../src/profile-catalog.ts";
 
 type Pos = { line: number; col: number };
 type Range = { start: Pos; end: Pos };
@@ -158,11 +155,6 @@ function readClipboardTextSync(): string | null {
 
 class WindowsInputEditor extends CustomEditor {
 	private selectionAnchor: Pos | null = null;
-	private onProfileHotkey?: () => void;
-
-	setProfileHotkey(handler: (() => void) | undefined): void {
-		this.onProfileHotkey = handler;
-	}
 
 	private get lines(): string[] {
 		return this.getLines();
@@ -325,10 +317,6 @@ class WindowsInputEditor extends CustomEditor {
 			return;
 		}
 
-		if (matchesKey(data, "ctrl+alt+m") || data === "\u00b5") {
-			this.onProfileHotkey?.();
-			return;
-		}
 
 		if (matchesKey(data, "ctrl+c")) {
 			const selected = this.selectedText();
@@ -544,42 +532,13 @@ class WindowsInputEditor extends CustomEditor {
 
 export default function (pi: ExtensionAPI) {
 	let enabled = true;
-	const cycleProfiles = PROFILE_CATALOG.filter((profile) => profile.status !== "retired");
-	let profileIndex = -1;
-	let cyclingProfile = false;
 
 	const apply = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
-		const cycleProfile = async (): Promise<void> => {
-			if (cyclingProfile) return;
-			cyclingProfile = true;
-			try {
-				profileIndex = (profileIndex + 1) % cycleProfiles.length;
-				const profile = cycleProfiles.at(profileIndex);
-				if (!profile) return;
-				const parent = splitModelSelector(profile.parent);
-				const model = ctx.models.resolve(parent.model);
-				if (!model) {
-					ctx.ui.notify(`No se pudo resolver ${parent.model}`, "error");
-					return;
-				}
-				if (!(await pi.setModel(model))) {
-					ctx.ui.notify(`No se pudo activar ${profile.name}`, "error");
-					return;
-				}
-				pi.setThinkingLevel(parent.thinking);
-				ctx.ui.notify(`Perfil: ${profile.name} — ${profile.parent}`, "info");
-			} finally {
-				cyclingProfile = false;
-			}
-		};
 		ctx.ui.setEditorComponent(
 			enabled
-				? (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
-						const editor = new WindowsInputEditor(tui, theme, keybindings);
-						editor.setProfileHotkey(() => void cycleProfile());
-						return editor;
-					}
+				? (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) =>
+						new WindowsInputEditor(tui, theme, keybindings)
 				: undefined,
 		);
 		ctx.ui.setStatus?.("windows-input", undefined);

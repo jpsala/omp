@@ -9,16 +9,13 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Config local: `.omp/config.yml` enlaza `wezterm-attention`,
   `agent-runtime-habitat`, `omp-profiles`, `windows-input` y las tres
   extensiones globales de browser/atención porque las listas project-local
-  reemplazan, no fusionan, `extensions` del perfil. El hotkey vive en el
-  wrapper estable `extensions/windows-input.ts`, que registra el shortcut y el
-  listener de terminal para consumir `U+00B5` (`µ`) cuando ConPTY codifica
-  `Ctrl+Alt+M` así. También carga bajo demanda `windows-input-native.ts`; si
-  falta `pi_natives`, omite sólo el editor Windows y conserva el ciclo del
-  catálogo. `/windows-input` permite diagnosticar esa disponibilidad.
-- La configuración global de OMP (`~/.omp/agent/config.yml`) ahora incluye el
+  reemplazan, no fusionan, `extensions` del perfil. `windows-input` conserva
+  sólo el editor Windows opcional y `/windows-input`; no registra hotkeys de
+  perfiles ni intercepta la selección de modelos.
+- La configuración global de OMP (`~/.omp/agent/config.yml`) incluye el
   wrapper estable `~/.omp/agent/extensions/windows-input.ts`, que reexporta la
   fuente de `C:\dev\omp`; así repos sin `.omp/config.yml`, como
-  `C:\dev\dictation-tauri`, también descubren el hotkey.
+  `C:\dev\dictation-tauri`, también descubren el editor opcional.
 - Agente OMP project-local en `.omp/agents/deepseek-pro.md`: prioriza DeepSeek V4 Pro `high`, usa OpenRouter V4 Pro 0813 como fallback disponible y hace `prewalk` al V4 Flash económico en el primer edit/write. No almacena credenciales.
 - Perfil experimental reversible en `profiles/deepseek-lab.yml`: Pro `high` como `default/slow/plan`, Flash `low` como `smol/task/tiny`, cycling `default -> smol` y prewalk activo. Se lanza con `omp --config profiles/deepseek-lab.yml`; el overlay no cambia auth, sesiones ni configuración global.
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; el par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia de esa corrida, no el costo actual de la cuenta DeepSeek.
@@ -26,7 +23,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Estado de costo DeepSeek 2026-08-18: el usuario confirmó una única API key y que el plan comenzó ese día; el panel del proveedor mostró `$4.31` y 1.180 requests. `omp stats` usa 24 horas por defecto y mostró 527 filas/$1.25; el panel DeepSeek es la autoridad de facturación y OMP puede subcontar requests no persistidas.
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
 - Barra de estado global ajustada: tema `dark-poimandres-compact` con effort textual (`min`, `low`, `med`, `hgh`, `xhi`, `max`), ruta completa sin abreviar, y sólo `context_pct` para evitar duplicar la ventana máxima; `context_total` fue retirado.
-- Favoritos globales nativos: `Ctrl+P` / `Ctrl+Shift+P` recorren `flash` (`deepseek/deepseek-v4-flash:low`), `pro` (`deepseek/deepseek-v4-pro:high`) y `pro-max` (`deepseek/deepseek-v4-pro:max`). `Alt+M` abre el selector de sesión; `/models` abre el hub completo. En Roles, `Enter` reasigna modelo, `t` ajusta effort, `c` agrega/quita del ciclo, `Shift+Up`/`Shift+Down` o `[`/`]` reordenan.
+- Selección de modelos: el mecanismo elegido es el hub nativo de OMP
+  (`Alt+M`/`/models`, Roles). Se retiraron los favoritos y el ciclo custom;
+  `Ctrl+P` queda con el comportamiento nativo de OMP, salvo overrides de un
+  overlay. Los perfiles siguen reservados para overlays completos de sesión.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
 - Cierre multi-repo: `extensions/sync-close-prompt.ts` registra
@@ -42,7 +42,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 
 - El workspace contiene fuentes, no auth, sesiones, stores ni caches.
 - `extensions/` es canónico; `.omp/` sólo contiene configuración project-local fina.
-- La extensión Windows instalada delega el render completo a OMP y añade selección visual mediante `decorateText`, sin reemplazar el popup de autocomplete; el ciclo de perfiles usa únicamente las APIs públicas de modelos y thinking.
+- La extensión Windows delega el render completo a OMP y añade selección
+  visual mediante `decorateText`, sin reemplazar el popup de autocomplete ni
+  interceptar hotkeys de selección de modelos.
 - `/cerrar-computadora` sólo reemplaza el draft del editor. Ejecutar el comando
   no inicia un turno, no invoca Git y no convierte merge/deploy en parte del
   cierre cotidiano.

@@ -8,7 +8,6 @@ import {
 	validateProfileCatalog,
 } from "../src/profile-catalog.ts";
 import ompProfiles from "../extensions/omp-profiles.ts";
-import profileHotkey, { PROFILE_HOTKEY } from "../extensions/profile-hotkey.ts";
 import { parseProfileCommand, profileArgumentCompletions } from "../extensions/omp-profiles.ts";
 import windowsInput from "../extensions/windows-input.ts";
 
@@ -137,97 +136,16 @@ test("activation resolves only the catalog overlay and does not claim live mutat
 	expect(profileOverlayCommand(profile)).toBe("omp --config profiles/study-sol-luna.yml");
 });
 
-test("registers the profile cycle on the native shortcut without CustomEditor", async () => {
-	let registeredShortcut: string | undefined;
-	let handler: ((ctx: unknown) => Promise<void>) | undefined;
-	let sessionStart: ((event: unknown, ctx: unknown) => void) | undefined;
-	let selected: unknown;
-	let thinking: string | undefined;
-	profileHotkey({
-		registerShortcut(shortcut: string, options: { handler: (ctx: unknown) => Promise<void> }) {
-			registeredShortcut = shortcut;
-			handler = options.handler;
-		},
-		on(event: string, listener: (event: unknown, ctx: unknown) => void) {
-			if (event === "session_start") sessionStart = listener;
-		},
-		setModel(value: unknown) {
-			selected = value;
-			return Promise.resolve(true);
-		},
-		setThinkingLevel(value: string) {
-			thinking = value;
-		},
-	} as never);
-	await handler?.({
-		models: { resolve() { return { id: "deepseek/deepseek-v4-pro" }; } },
-		ui: { notify() {} },
-	});
-	expect(registeredShortcut).toBe(PROFILE_HOTKEY);
-	expect(selected).toEqual({ id: "deepseek/deepseek-v4-pro" });
-	expect(thinking).toBe("high");
-	expect(sessionStart).toBeDefined();
-});
 
-test("cycles the mixed GLM profile through Ctrl+Alt+M", async () => {
-	let handler: ((ctx: unknown) => Promise<void>) | undefined;
-	const resolvedModels: string[] = [];
-	let thinking: string | undefined;
-	profileHotkey({
-		registerShortcut(_shortcut: string, options: { handler: (ctx: unknown) => Promise<void> }) {
-			handler = options.handler;
-		},
-		on() {},
-		setModel(value: { id: string }) {
-			resolvedModels.push(value.id);
-			return Promise.resolve(true);
-		},
-		setThinkingLevel(value: string) {
-			thinking = value;
-		},
-	} as never);
-	const mixedProfileIndex = PROFILE_CATALOG.findIndex(profile => profile.name === "glm-flash-qwen-coder-minimax");
-	for (let index = 0; index <= mixedProfileIndex; index++) {
-		await handler?.({
-			models: { resolve(model: string) { return { id: model }; } },
-			ui: { notify() {} },
-		});
-	}
-	expect(resolvedModels.at(-1)).toBe("openrouter/z-ai/glm-4.7-flash");
-	expect(thinking).toBe("low");
-});
-
-test("consumes the terminal µ fallback and cycles the profile", () => {
-	let terminalInput: ((data: string) => { consume?: boolean } | undefined) | undefined;
-	let selected: unknown;
-	let sessionStart: ((event: unknown, ctx: unknown) => void) | undefined;
-	profileHotkey({
-		registerShortcut() {},
-		on(event: string, listener: (event: unknown, ctx: unknown) => void) {
-			if (event === "session_start") sessionStart = listener;
-		},
-		setModel(value: unknown) {
-			selected = value;
-			return Promise.resolve(true);
-		},
-		setThinkingLevel() {},
-	} as never);
-	sessionStart?.({}, {
-		models: { resolve() { return { id: "deepseek/deepseek-v4-pro" }; } },
-		ui: {
-			notify() {},
-			onTerminalInput(handler: (data: string) => { consume?: boolean } | undefined) {
-				terminalInput = handler;
-				return () => {};
-			},
-		},
-	});
-	expect(terminalInput?.("\u00b5")).toEqual({ consume: true });
-	expect(selected).toEqual({ id: "deepseek/deepseek-v4-pro" });
-});
-
-test("keeps the stable Windows editor wrapper loadable without pi_natives", async () => {
+test("keeps the Windows editor wrapper native without a model shortcut", async () => {
+	const shortcuts: string[] = [];
 	await expect(
-		windowsInput({ registerShortcut() {}, registerCommand() {}, on() {}, logger: { warn() {} } } as never),
+		windowsInput({
+			registerShortcut(shortcut: string) { shortcuts.push(shortcut); },
+			registerCommand() {},
+			on() {},
+			logger: { warn() {} },
+		} as never),
 	).resolves.toBeUndefined();
+	expect(shortcuts).toEqual([]);
 });

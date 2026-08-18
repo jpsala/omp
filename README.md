@@ -107,9 +107,9 @@ siendo la única forma de cambiar simultáneamente proveedor, Task, `prewalk` y
 política de delegación.
 
 Los perfiles `deepseek-pro-high` y `deepseek-flash-high` usan el provider
-directo `deepseek` con thinking `high` en padre y Task. También forman parte del
-recorrido de `Ctrl+Alt+M`, porque el hotkey consume el catálogo en vez de una
-lista hardcodeada.
+directo `deepseek` con thinking `high` en padre y Task. No forman parte de
+ningún hotkey de selección rápida: el cambio de modelo vive en el selector
+nativo de OMP (`Alt+M`/`/models`).
 
 Para agregar, modificar o retirar una combinación:
 

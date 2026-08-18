@@ -229,7 +229,7 @@ mediante `setModel`/`setThinkingLevel`, sin fingir cambios de Task, `prewalk` o
 concurrencia. `prepare` conserva el launcher exacto del overlay para una sesión
 nueva cuando se necesita aplicar la combinación completa.
 
-## 2026-08-18 — Hotkey `Ctrl+Alt+M` cicla los padres del catálogo de perfiles
+## 2026-08-18 — Hotkey `Ctrl+Alt+M` cicla los padres del catálogo de perfiles (reemplazada)
 
 `extensions/profile-hotkey.ts` recorre los padres de `profiles/catalog.json`
 mediante `PROFILE_CATALOG` + `splitModelSelector`. Cada pulsación activa el
@@ -254,7 +254,7 @@ hotkey para todos los repos que lo descubren y carga bajo demanda
 `windows-input-native.ts`; si falta `pi_natives`, omite sólo el editor Windows
 sin romper el hotkey ni la sesión OMP.
 
-## 2026-08-18 — Discovery global del hotkey de perfiles
+## 2026-08-18 — Discovery global del hotkey de perfiles (histórica)
 
 El wrapper `~/.omp/agent/extensions/windows-input.ts` quedó declarado también
 en `~/.omp/agent/config.yml`, no sólo en el config project-local de este
@@ -263,7 +263,7 @@ descubre el mismo hotkey sin exigir `omp --extension ...` en cada arranque.
 La fuente continúa siendo `C:\dev\omp`; no se copian código, credenciales ni
 estado privado a otros repos.
 
-## 2026-08-18 — Fallback de terminal para `Ctrl+Alt+M`
+## 2026-08-18 — Fallback de terminal para `Ctrl+Alt+M` (reemplazada)
 
 En Windows, ConPTY/WezTerm puede entregar `Ctrl+Alt+M` como el carácter
 `U+00B5` (`µ`). El editor nativo ya reconocía esa representación, pero si
@@ -310,7 +310,7 @@ El catálogo en `profiles/catalog.json` mantiene la metadata mantenible (`parent
 
 No se promueve persistencia automática porque la autoridad de autorización y credenciales (`~/.omp`) permanece separada del workspace. La elección de perfil sigue siendo una decisión del usuario por launcher o hotkey.
 
-## 2026-08-18 — Favoritos de modelo nativos
+## 2026-08-18 — Favoritos de modelo nativos (reemplazada)
 
 Para cambiar rápidamente modelo y esfuerzo sin escribir `/model`, se eligió el
 contrato nativo `modelRoles` + `modelTags` + `cycleOrder` en lugar de otra
@@ -321,6 +321,19 @@ completo para editar Roles.
 
 La configuración global actual mantiene tres favoritos directos de DeepSeek:
 `flash` (`deepseek-v4-flash:low`), `pro` (`deepseek-v4-pro:high`) y `pro-max`
-(`deepseek-v4-pro:max`). `Ctrl+Alt+M` conserva el ciclo de perfiles completos,
+(`deepseek-v4-pro:max`). `Ctrl+Alt+M` conservaba el ciclo de perfiles completos,
 porque los overlays también gobiernan Task, `prewalk` y concurrencia. El cambio
 rápido de favoritos no promete modificar esos parámetros de orquestación.
+
+## 2026-08-18 — Selección de modelos sólo por hub nativo
+
+Se retira el hotkey custom `Ctrl+Alt+M` y la capa de favoritos propia. La
+selección rápida queda en `Alt+M`/`/models` y en el editor de Roles nativo de
+OMP. Se eliminan los roles `flash`, `pro` y `pro-max` agregados por el
+workspace, sus `modelTags` y el override global de `cycleOrder`; `Ctrl+P`
+queda sujeto al ciclo nativo de OMP.
+
+Los perfiles y overlays permanecen porque representan configuración completa de
+sesión (`Task`, `prewalk`, proveedor y concurrencia), no un segundo selector
+rápido de modelo. El editor Windows opcional sigue disponible, pero ya no
+intercepta teclas de selección ni registra un ciclo paralelo.
