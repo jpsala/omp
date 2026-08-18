@@ -94,6 +94,11 @@ comando exacto `omp --config profiles/<archivo>.yml`. El overlay completo sigue
 siendo la única forma de cambiar simultáneamente proveedor, Task, `prewalk` y
 política de delegación.
 
+Los perfiles `deepseek-pro-high` y `deepseek-flash-high` usan el provider
+directo `deepseek` con thinking `high` en padre y Task. También forman parte del
+recorrido de `Ctrl+Alt+M`, porque el hotkey consume el catálogo en vez de una
+lista hardcodeada.
+
 Para agregar, modificar o retirar una combinación:
 
 1. Crear o editar el overlay YAML nativo dentro de `profiles/`.

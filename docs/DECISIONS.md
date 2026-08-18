@@ -217,7 +217,7 @@ de padre e hijo por separado antes de decidir el routing por defecto.
 
 ## 2026-08-18 — Catálogo de overlays y activación honesta
 
-`profiles/catalog.json` separa la metadata mantenible de los cuatro overlays
+`profiles/catalog.json` separa la metadata mantenible de los seis overlays
 YAML nativos. `extensions/omp-profiles.ts` registra una única superficie
 `/profiles` con `list`, `show <name>`, `activate <name>` y `prepare <name>`, y
 deriva el autocomplete de las entradas del catálogo.
@@ -228,3 +228,48 @@ La allowlist valida nombres estables y overlays relativos directos dentro de
 mediante `setModel`/`setThinkingLevel`, sin fingir cambios de Task, `prewalk` o
 concurrencia. `prepare` conserva el launcher exacto del overlay para una sesión
 nueva cuando se necesita aplicar la combinación completa.
+
+## 2026-08-18 — Hotkey `Ctrl+Alt+M` cicla los padres del catálogo de perfiles
+
+`extensions/profile-hotkey.ts` recorre los padres de `profiles/catalog.json`
+mediante `PROFILE_CATALOG` + `splitModelSelector`. Cada pulsación activa el
+modelo padre y thinking de la sesión viva con `setModel`/`setThinkingLevel`,
+igual que `/profiles activate`; no promete cambios de Task, `prewalk` ni
+concurrencia.
+
+El catálogo incorpora `deepseek-pro-high` y `deepseek-flash-high` como presets
+directos, ambos con thinking `high`. Sus overlays usan respectivamente
+`deepseek/deepseek-v4-pro` y `deepseek/deepseek-v4-flash` en todos los roles; no
+introducen fallback ni routing automático.
+
+`splitModelSelector` y el tipo `ProfileThinkingLevel` viven en
+`src/profile-catalog.ts` para que el catálogo sea la única fuente del parseo de
+selectores `modelo:thinking`. El hotkey usa `registerShortcut` y no depende de
+`CustomEditor` ni de la carga de `pi_natives`; esto evita que un OMP nuevo quede
+sin el handler cuando el addon nativo opcional no está instalado.
+
+`.omp/config.yml` carga `extensions/windows-input.ts` directamente porque su
+lista explícita reemplaza el discovery ambient. Ese wrapper estable registra el
+hotkey para todos los repos que lo descubren y carga bajo demanda
+`windows-input-native.ts`; si falta `pi_natives`, omite sólo el editor Windows
+sin romper el hotkey ni la sesión OMP.
+
+## 2026-08-18 — Discovery global del hotkey de perfiles
+
+El wrapper `~/.omp/agent/extensions/windows-input.ts` quedó declarado también
+en `~/.omp/agent/config.yml`, no sólo en el config project-local de este
+workspace. Así un repo sin `.omp/config.yml`, como `C:\dev\dictation-tauri`,
+descubre el mismo hotkey sin exigir `omp --extension ...` en cada arranque.
+La fuente continúa siendo `C:\dev\omp`; no se copian código, credenciales ni
+estado privado a otros repos.
+
+## 2026-08-18 — Fallback de terminal para `Ctrl+Alt+M`
+
+En Windows, ConPTY/WezTerm puede entregar `Ctrl+Alt+M` como el carácter
+`U+00B5` (`µ`). El editor nativo ya reconocía esa representación, pero si
+falta el addon opcional `pi_natives` ese editor no se instala y el carácter
+terminaba en el editor OMP. `profile-hotkey.ts` registra ahora un listener de
+terminal que consume `µ` y ejecuta el mismo ciclo del catálogo; el shortcut
+`ctrl+alt+m` sigue cubriendo la representación nativa. El wrapper conserva el
+hotkey aunque el editor opcional falle y expone `/windows-input` como diagnóstico
+de esa disponibilidad.

@@ -45,5 +45,27 @@
     "prewalk": false,
     "maxConcurrency": 1,
     "costWarning": "OpenAI Codex: Sol y Luna pueden consumir cuota o generar costo según tu cuenta."
+  },
+  {
+    "name": "deepseek-pro-high",
+    "overlay": "profiles/deepseek-pro-high.yml",
+    "description": "DeepSeek V4 Pro high directo en padre y Task.",
+    "parent": "deepseek/deepseek-v4-pro:high",
+    "task": "deepseek/deepseek-v4-pro:high",
+    "tags": ["deepseek", "direct", "single-model"],
+    "status": "active",
+    "prewalk": false,
+    "costWarning": "DeepSeek directo: el uso puede generar costo según tu cuenta."
+  },
+  {
+    "name": "deepseek-flash-high",
+    "overlay": "profiles/deepseek-flash-high.yml",
+    "description": "DeepSeek V4 Flash high directo en padre y Task.",
+    "parent": "deepseek/deepseek-v4-flash:high",
+    "task": "deepseek/deepseek-v4-flash:high",
+    "tags": ["deepseek", "direct", "single-model"],
+    "status": "active",
+    "prewalk": false,
+    "costWarning": "DeepSeek directo: el uso puede generar costo según tu cuenta."
   }
 ]

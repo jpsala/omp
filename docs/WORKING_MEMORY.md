@@ -7,14 +7,18 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 ## Estado actual
 
 - Config local: `.omp/config.yml` enlaza `wezterm-attention`,
-  `agent-runtime-habitat` y las tres extensiones globales de browser/atención
-  porque las listas project-local reemplazan, no fusionan, `extensions` del
-  perfil. Como el `config.yml` global también declara una lista explícita, ahora
-  enlaza directamente la fuente durable de Habitat; el wrapper global queda
-  como fallback para perfiles sin lista. Fleet vive en `extensions/omp-fleet.ts`
-  y el perfil lo descubre mediante su wrapper global.
-  El editor Windows vive en `extensions/windows-input.ts`; `Ctrl+Alt+M` recorre
-  GPT-5.6 Sol/medium, GPT-5.6 Luna/xhigh y GPT-5.6 Luna/max.
+  `agent-runtime-habitat`, `omp-profiles`, `windows-input` y las tres
+  extensiones globales de browser/atención porque las listas project-local
+  reemplazan, no fusionan, `extensions` del perfil. El hotkey vive en el
+  wrapper estable `extensions/windows-input.ts`, que registra el shortcut y el
+  listener de terminal para consumir `U+00B5` (`µ`) cuando ConPTY codifica
+  `Ctrl+Alt+M` así. También carga bajo demanda `windows-input-native.ts`; si
+  falta `pi_natives`, omite sólo el editor Windows y conserva el ciclo del
+  catálogo. `/windows-input` permite diagnosticar esa disponibilidad.
+- La configuración global de OMP (`~/.omp/agent/config.yml`) ahora incluye el
+  wrapper estable `~/.omp/agent/extensions/windows-input.ts`, que reexporta la
+  fuente de `C:\dev\omp`; así repos sin `.omp/config.yml`, como
+  `C:\dev\dictation-tauri`, también descubren el hotkey.
 - Agente OMP project-local en `.omp/agents/deepseek-pro.md`: prioriza DeepSeek V4 Pro `high`, usa OpenRouter V4 Pro 0813 como fallback disponible y hace `prewalk` al V4 Flash económico en el primer edit/write. No almacena credenciales.
 - Perfil experimental reversible en `profiles/deepseek-lab.yml`: Pro `high` como `default/slow/plan`, Flash `low` como `smol/task/tiny`, cycling `default -> smol` y prewalk activo. Se lanza con `omp --config profiles/deepseek-lab.yml`; el overlay no cambia auth, sesiones ni configuración global.
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia, no calidad; DeepSeek directo sigue en 0 requests/$0.
@@ -35,7 +39,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 
 - El workspace contiene fuentes, no auth, sesiones, stores ni caches.
 - `extensions/` es canónico; `.omp/` sólo contiene configuración project-local fina.
-- La extensión Windows instalada delega el render completo a OMP y añade selección visual mediante `decorateText`, sin reemplazar el popup de autocomplete; el ciclo de presets usa únicamente las APIs públicas de modelos y thinking.
+- La extensión Windows instalada delega el render completo a OMP y añade selección visual mediante `decorateText`, sin reemplazar el popup de autocomplete; el ciclo de perfiles usa únicamente las APIs públicas de modelos y thinking.
 - `/cerrar-computadora` sólo reemplaza el draft del editor. Ejecutar el comando
   no inicia un turno, no invoca Git y no convierte merge/deploy en parte del
   cierre cotidiano.
@@ -54,9 +58,11 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `prepare` conserva `omp --config profiles/<overlay>.yml` para una sesión nueva.
 - El catálogo no promete cambios vivos de Task, `prewalk` o concurrencia si la
   API nativa no los expone; esos parámetros requieren el overlay completo.
-- Los cuatro overlays actuales (`deepseek-lab`, `study-deepseek`,
-  `study-luna-max`, `study-sol-luna`) están allowlisteados; agregar o retirar
-  combinaciones sólo requiere overlay y registro.
+- Los seis overlays actuales (`deepseek-lab`, `study-deepseek`,
+  `study-luna-max`, `study-sol-luna`, `deepseek-pro-high` y
+  `deepseek-flash-high`) están allowlisteados. Los dos últimos usan el provider
+  directo `deepseek` en `high`; agregar o retirar combinaciones sólo requiere
+  overlay y registro.
 
 ## Próxima lectura
 

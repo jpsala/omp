@@ -4,22 +4,34 @@ import {
 	profileDetails,
 	profileOverlayCommand,
 	resolveProfile,
+	splitModelSelector,
 	validateProfileCatalog,
 } from "../src/profile-catalog.ts";
 import ompProfiles from "../extensions/omp-profiles.ts";
-import { parseProfileCommand, profileArgumentCompletions, splitModelSelector } from "../extensions/omp-profiles.ts";
+import profileHotkey, { PROFILE_HOTKEY } from "../extensions/profile-hotkey.ts";
+import { parseProfileCommand, profileArgumentCompletions } from "../extensions/omp-profiles.ts";
+import windowsInput from "../extensions/windows-input.ts";
 
- test("catalogs the four existing overlays without secrets", () => {
+test("catalogs every maintained overlay without secrets", () => {
 	expect(PROFILE_CATALOG.map(profile => profile.name)).toEqual([
 		"deepseek-lab",
 		"study-deepseek",
 		"study-luna-max",
 		"study-sol-luna",
+		"deepseek-pro-high",
+		"deepseek-flash-high",
 	]);
 	for (const profile of PROFILE_CATALOG) {
 		expect(profile.overlay.startsWith("profiles/")).toBe(true);
 		expect(profileDetails(profile)).not.toMatch(/api[_ -]?key|secret|token|session/i);
 	}
+});
+
+test("exposes direct DeepSeek Pro and Flash high parents for activation and hotkey cycling", () => {
+	expect(resolveProfile("deepseek-pro-high").parent).toBe("deepseek/deepseek-v4-pro:high");
+	expect(resolveProfile("deepseek-flash-high").parent).toBe("deepseek/deepseek-v4-flash:high");
+	expect(resolveProfile("deepseek-pro-high").task).toBe("deepseek/deepseek-v4-pro:high");
+	expect(resolveProfile("deepseek-flash-high").task).toBe("deepseek/deepseek-v4-flash:high");
 });
 
 test("rejects duplicate names, traversal, absolute paths, and model substitution", () => {
@@ -42,6 +54,8 @@ test("completes subcommands and allowlisted profile names", () => {
 		"activate study-deepseek",
 		"activate study-luna-max",
 		"activate study-sol-luna",
+		"activate deepseek-pro-high",
+		"activate deepseek-flash-high",
 	]);
 });
 
@@ -110,4 +124,71 @@ test("prepare still offers the exact allowlisted overlay for a new session", asy
 test("activation resolves only the catalog overlay and does not claim live mutation", () => {
 	const profile = resolveProfile("study-sol-luna");
 	expect(profileOverlayCommand(profile)).toBe("omp --config profiles/study-sol-luna.yml");
+});
+
+test("registers the profile cycle on the native shortcut without CustomEditor", async () => {
+	let registeredShortcut: string | undefined;
+	let handler: ((ctx: unknown) => Promise<void>) | undefined;
+	let sessionStart: ((event: unknown, ctx: unknown) => void) | undefined;
+	let selected: unknown;
+	let thinking: string | undefined;
+	profileHotkey({
+		registerShortcut(shortcut: string, options: { handler: (ctx: unknown) => Promise<void> }) {
+			registeredShortcut = shortcut;
+			handler = options.handler;
+		},
+		on(event: string, listener: (event: unknown, ctx: unknown) => void) {
+			if (event === "session_start") sessionStart = listener;
+		},
+		setModel(value: unknown) {
+			selected = value;
+			return Promise.resolve(true);
+		},
+		setThinkingLevel(value: string) {
+			thinking = value;
+		},
+	} as never);
+	await handler?.({
+		models: { resolve() { return { id: "deepseek/deepseek-v4-pro" }; } },
+		ui: { notify() {} },
+	});
+	expect(registeredShortcut).toBe(PROFILE_HOTKEY);
+	expect(selected).toEqual({ id: "deepseek/deepseek-v4-pro" });
+	expect(thinking).toBe("high");
+	expect(sessionStart).toBeDefined();
+});
+
+test("consumes the terminal µ fallback and cycles the profile", () => {
+	let terminalInput: ((data: string) => { consume?: boolean } | undefined) | undefined;
+	let selected: unknown;
+	let sessionStart: ((event: unknown, ctx: unknown) => void) | undefined;
+	profileHotkey({
+		registerShortcut() {},
+		on(event: string, listener: (event: unknown, ctx: unknown) => void) {
+			if (event === "session_start") sessionStart = listener;
+		},
+		setModel(value: unknown) {
+			selected = value;
+			return Promise.resolve(true);
+		},
+		setThinkingLevel() {},
+	} as never);
+	sessionStart?.({}, {
+		models: { resolve() { return { id: "deepseek/deepseek-v4-pro" }; } },
+		ui: {
+			notify() {},
+			onTerminalInput(handler: (data: string) => { consume?: boolean } | undefined) {
+				terminalInput = handler;
+				return () => {};
+			},
+		},
+	});
+	expect(terminalInput?.("\u00b5")).toEqual({ consume: true });
+	expect(selected).toEqual({ id: "deepseek/deepseek-v4-pro" });
+});
+
+test("keeps the stable Windows editor wrapper loadable without pi_natives", async () => {
+	await expect(
+		windowsInput({ registerShortcut() {}, registerCommand() {}, on() {}, logger: { warn() {} } } as never),
+	).resolves.toBeUndefined();
 });

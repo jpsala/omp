@@ -1,0 +1,14 @@
+# Direct DeepSeek profile: V4 Pro high in every model role.
+# Launch with: omp --config profiles/deepseek-pro-high.yml
+# Credentials remain in private OMP user state.
+modelRoles:
+  default: deepseek/deepseek-v4-pro:high
+  slow: deepseek/deepseek-v4-pro:high
+  plan: deepseek/deepseek-v4-pro:high
+  smol: deepseek/deepseek-v4-pro:high
+  task: deepseek/deepseek-v4-pro:high
+  tiny: deepseek/deepseek-v4-pro:high
+cycleOrder:
+  - default
+prewalk:
+  enabled: false

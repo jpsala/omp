@@ -78,6 +78,14 @@ export function resolveProfile(name: string, catalog: readonly ProfileRecord[] =
 	return profile;
 }
 
+export type ProfileThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto";
+
+export function splitModelSelector(selector: string): { model: string; thinking: ProfileThinkingLevel } {
+	const separator = selector.lastIndexOf(":");
+	if (separator <= 0 || separator === selector.length - 1) throw new Error(`Invalid parent model selector: ${selector}`);
+	return { model: selector.slice(0, separator), thinking: selector.slice(separator + 1) as ProfileThinkingLevel };
+}
+
 export function profileOverlayCommand(profile: ProfileRecord): string {
 	return `omp --config ${profile.overlay}`;
 }

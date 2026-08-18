@@ -1,0 +1,14 @@
+# Direct DeepSeek profile: V4 Flash high in every model role.
+# Launch with: omp --config profiles/deepseek-flash-high.yml
+# Credentials remain in private OMP user state.
+modelRoles:
+  default: deepseek/deepseek-v4-flash:high
+  slow: deepseek/deepseek-v4-flash:high
+  plan: deepseek/deepseek-v4-flash:high
+  smol: deepseek/deepseek-v4-flash:high
+  task: deepseek/deepseek-v4-flash:high
+  tiny: deepseek/deepseek-v4-flash:high
+cycleOrder:
+  - default
+prewalk:
+  enabled: false

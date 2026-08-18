@@ -4,6 +4,7 @@ import {
 	profileDetails,
 	profileOverlayCommand,
 	resolveProfile,
+	splitModelSelector,
 	type ProfileRecord,
 } from "../src/profile-catalog.ts";
 
@@ -61,14 +62,6 @@ export function parseProfileCommand(input: string): { subcommand: "list" } | { s
 		return { subcommand: tokens[0], name: tokens[1] };
 	}
 	throw new Error(`Usage:\n${PROFILE_USAGE}`);
-}
-
-export type ProfileThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto";
-
-export function splitModelSelector(selector: string): { model: string; thinking: ProfileThinkingLevel } {
-	const separator = selector.lastIndexOf(":");
-	if (separator <= 0 || separator === selector.length - 1) throw new Error(`Invalid parent model selector: ${selector}`);
-	return { model: selector.slice(0, separator), thinking: selector.slice(separator + 1) as ProfileThinkingLevel };
 }
 
 function listProfiles(catalog: readonly ProfileRecord[]): string {
