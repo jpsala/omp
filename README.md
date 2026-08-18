@@ -62,6 +62,43 @@ usa DeepSeek V4 Pro `max` como padre y V4 Flash `low` como implementador. Ambos
 desactivan `prewalk`, limitan la concurrencia a uno y delegan una sola tarea para
 que la comparación no mezcle orquestación con un handoff automático.
 
+## Catálogo de perfiles
+
+`profiles/catalog.json` es el catálogo mantenible y
+`extensions/omp-profiles.ts` expone el comando nativo `/profiles`. Los cuatro
+overlays existentes siguen siendo YAML nativo de OMP; la metadata no se mezcla
+con ese schema.
+
+Dentro de OMP:
+
+```text
+/profiles list
+/profiles show study-sol-luna
+/profiles activate study-sol-luna
+```
+
+`list` enumera los perfiles activos, `show` muestra nombre, overlay, padre,
+Task, `prewalk`, concurrencia, tags y advertencia de proveedor/costo. Los
+nombres se completan por autocomplete y se validan contra la allowlist del
+catálogo. Un nombre arbitrario, path absoluto, traversal o sustitución por
+modelo se rechaza.
+
+`activate` no muta una sesión viva ni afirma que el perfil quedó activo:
+precarga en el editor el comando exacto `omp --config profiles/<archivo>.yml`
+para revisar y enviar en una sesión nueva. Cambiar `prewalk`, proveedor, modelo
+o política de delegación requiere ese nuevo proceso.
+
+Para agregar, modificar o retirar una combinación:
+
+1. Crear o editar el overlay YAML nativo dentro de `profiles/`.
+2. Agregar o actualizar su entrada en `profiles/catalog.json`.
+3. Mantener `name` estable, `overlay` relativo directo a `profiles/` y completar
+   padre, Task, tags, estado, `prewalk` y concurrencia.
+4. Ejecutar `bun run audit && bun test`.
+
+Retirar un perfil significa marcarlo `retired` o quitarlo del registro después
+de retirar su overlay; la lógica de autocomplete no cambia.
+
 ## Inicio rápido
 
 ```powershell

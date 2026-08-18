@@ -1,0 +1,49 @@
+[
+  {
+    "name": "deepseek-lab",
+    "overlay": "profiles/deepseek-lab.yml",
+    "description": "DeepSeek Pro para orquestar y Flash económico para edición con prewalk.",
+    "parent": "openrouter/deepseek/deepseek-v4-pro-0813:high",
+    "task": "openrouter/deepseek/deepseek-v4-flash-0731:low",
+    "tags": ["deepseek", "prewalk", "experimental"],
+    "status": "active",
+    "prewalk": true,
+    "costWarning": "OpenRouter: Pro y Flash pueden generar costo según tu cuenta."
+  },
+  {
+    "name": "study-deepseek",
+    "overlay": "profiles/study-deepseek.yml",
+    "description": "Estudio controlado: DeepSeek Pro max padre y Flash low para Task.",
+    "parent": "openrouter/deepseek/deepseek-v4-pro-0813:max",
+    "task": "openrouter/deepseek/deepseek-v4-flash-0731:low",
+    "tags": ["deepseek", "study", "delegation"],
+    "status": "active",
+    "prewalk": false,
+    "maxConcurrency": 1,
+    "costWarning": "OpenRouter: Pro y Flash pueden generar costo según tu cuenta."
+  },
+  {
+    "name": "study-luna-max",
+    "overlay": "profiles/study-luna-max.yml",
+    "description": "Estudio controlado: Luna Max en padre y Task.",
+    "parent": "openai-codex/gpt-5.6-luna:max",
+    "task": "openai-codex/gpt-5.6-luna:max",
+    "tags": ["luna", "study", "single-model"],
+    "status": "active",
+    "prewalk": false,
+    "maxConcurrency": 1,
+    "costWarning": "OpenAI Codex: el uso puede consumir cuota o generar costo según tu cuenta."
+  },
+  {
+    "name": "study-sol-luna",
+    "overlay": "profiles/study-sol-luna.yml",
+    "description": "Estudio controlado: Sol medium padre y Luna Max para Task.",
+    "parent": "openai-codex/gpt-5.6-sol:medium",
+    "task": "openai-codex/gpt-5.6-luna:max",
+    "tags": ["sol", "luna", "study", "delegation"],
+    "status": "active",
+    "prewalk": false,
+    "maxConcurrency": 1,
+    "costWarning": "OpenAI Codex: Sol y Luna pueden consumir cuota o generar costo según tu cuenta."
+  }
+]
