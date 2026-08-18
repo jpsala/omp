@@ -136,3 +136,18 @@ release, deploy y reparación destructiva quedan fuera del cierre cotidiano.
 La fuente durable es `extensions/sync-close-prompt.ts`; el perfil global carga
 un wrapper mínimo. Así el comando queda disponible desde cualquier repo sin
 copiar reglas de Infra ni estado privado al laboratorio.
+
+## 2026-08-18 — Agente DeepSeek project-local con prewalk económico
+
+El workspace incorpora `.omp/agents/deepseek-pro.md`. Su lista de modelos
+prioriza `deepseek/deepseek-v4-pro:high` cuando existe una credencial directa y
+usa `openrouter/deepseek/deepseek-v4-pro-0813:high` como fallback actualmente
+disponible en el catálogo efectivo del workspace. `prewalk` transfiere el primer
+`edit` o `write` al selector económico
+`openrouter/deepseek/deepseek-v4-flash-0731:low`.
+
+La elección permanece en OMP, no en AOS: el modelo, provider, effort, tools y
+handoff son configuración runtime del agente project-local. AOS conserva sólo
+esta razón durable y el repositorio sigue sin almacenar credenciales. El provider
+directo `deepseek` queda como primera opción cuando exista una credencial OMP
+válida; no se copia ningún secreto al repositorio.

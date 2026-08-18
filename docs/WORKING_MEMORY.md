@@ -15,6 +15,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   y el perfil lo descubre mediante su wrapper global.
   El editor Windows vive en `extensions/windows-input.ts`; `Ctrl+Alt+M` recorre
   GPT-5.6 Sol/medium, GPT-5.6 Luna/xhigh y GPT-5.6 Luna/max.
+- Agente OMP project-local en `.omp/agents/deepseek-pro.md`: prioriza DeepSeek V4 Pro `high`, usa OpenRouter V4 Pro 0813 como fallback disponible y hace `prewalk` al V4 Flash económico en el primer edit/write. No almacena credenciales.
 - Perfil visual global: `display.hideToolActivity: false` mantiene visibles las llamadas/resultados de tools y `terminal.showProgress: true` publica progreso nativo mientras el agente o el mantenimiento de contexto siguen activos. Las sesiones ya abiertas conservan su snapshot; `Ctrl+Shift+O` alterna la actividad de tools en una sesión viva.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.

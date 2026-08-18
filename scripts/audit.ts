@@ -324,9 +324,12 @@ for (const file of files) {
 const ompFiles = files
 	.filter((file) => file.relativePath.startsWith(".omp/"))
 	.map((file) => file.relativePath);
-if (ompFiles.length !== 1 || ompFiles[0] !== ".omp/config.yml") {
+const allowedOmpFile = (relativePath: string): boolean =>
+	relativePath === ".omp/config.yml" || /^\.omp\/agents\/[^/]+\.md$/.test(relativePath);
+const invalidOmpFiles = ompFiles.filter((relativePath) => !allowedOmpFile(relativePath));
+if (!ompFiles.includes(".omp/config.yml") || invalidOmpFiles.length > 0) {
 	issues.push(
-		`.omp must contain only config.yml; found: ${ompFiles.join(", ") || "nothing"}`,
+		`.omp must contain config.yml and optional agents/*.md; found: ${ompFiles.join(", ") || "nothing"}`,
 	);
 }
 
