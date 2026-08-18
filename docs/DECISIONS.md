@@ -287,3 +287,40 @@ credenciales, fallback ni routing automático.
 Qwen como implementador, y Task queda limitado a una ejecución concurrente.
 `activate` sólo puede cambiar el padre GLM de la sesión viva; el overlay sigue
 siendo necesario para aplicar Task, `slow/plan`, `prewalk` y concurrencia.
+
+## 2026-08-18 — Activación de perfiles y persistencia de modelos
+
+`/profiles activate <name>` activa un perfil en la sesión viva mediante `omp.setModel()`, pero **no persiste** entre reinicios ni cambia la configuración global `~/.omp/agent/config.yml`. Los procesos heredan el modelo por defecto de la configuración global a menos que se lance explícitamente con el overlay correcto.
+
+Para usar un perfil de forma persistente en nuevas sesiones:
+
+1. **Iniciar con el overlay**:
+   ```bash
+   omp --config profiles/<overlay>.yml
+   ```
+
+2. **Crear alias global (opcional)**:
+   ```bash
+   omp --profile <name> --alias omp-<profile>
+   ```
+
+3. **Hotkey `Ctrl+Alt+M` cicla padres** sin cambiar Task, `prewalk` ni concurrencia. Solo cambia `default/slow/plan/smol/task/tiny` al padre del perfil.
+
+El catálogo en `profiles/catalog.json` mantiene la metadata mantenible (`parent`, `task`, `tags`, `status`). Los overlays YAML contienen la configuración runtime efectiva (`modelRoles`, `cycleOrder`, `prewalk`). Los procesos heredan del overlay si se lanza con `--config`, de lo contrario usan `~/.omp/agent/config.yml` global.
+
+No se promueve persistencia automática porque la autoridad de autorización y credenciales (`~/.omp`) permanece separada del workspace. La elección de perfil sigue siendo una decisión del usuario por launcher o hotkey.
+
+## 2026-08-18 — Favoritos de modelo nativos
+
+Para cambiar rápidamente modelo y esfuerzo sin escribir `/model`, se eligió el
+contrato nativo `modelRoles` + `modelTags` + `cycleOrder` en lugar de otra
+extensión o renderer. Cada role favorito es un selector atómico
+`provider/model:effort`; `Ctrl+P` y `Ctrl+Shift+P` recorren sólo el ciclo
+seleccionado. `Alt+M` queda como selector de sesión y `/models` como hub
+completo para editar Roles.
+
+La configuración global actual mantiene tres favoritos directos de DeepSeek:
+`flash` (`deepseek-v4-flash:low`), `pro` (`deepseek-v4-pro:high`) y `pro-max`
+(`deepseek-v4-pro:max`). `Ctrl+Alt+M` conserva el ciclo de perfiles completos,
+porque los overlays también gobiernan Task, `prewalk` y concurrencia. El cambio
+rápido de favoritos no promete modificar esos parámetros de orquestación.
