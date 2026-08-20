@@ -57,10 +57,12 @@ checks.
 
 ### Ciclo de vida y nombre de panes
 
-Todo request de `agent_runtime_session`, tanto para `tab` como para `split`,
-declara `pane: { title, onExit }`. `title` es un nombre breve, sin caracteres de
-control, que el bootstrap publica mediante `OSC 1`; con la configuración actual
-de WezTerm aparece como título del tab cuando ese pane está activo.
+Todo request de `agent_runtime_session` declara `pane: { title, onExit }`.
+`placement` es opcional: si se omite, el runtime abre un split derecho al 50%;
+una ubicación explícita conserva soporte para tab u otra dirección. `title` es
+un nombre breve, sin caracteres de control, que el bootstrap publica mediante
+`OSC 1`; con la configuración actual de WezTerm aparece como título del tab
+cuando ese pane está activo.
 
 `onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
 termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
@@ -128,21 +130,35 @@ el primer ack, consume el prompt por loopback, valida longitud y hash, elimina
 las variables del proceso y llama `pi.sendUserMessage()`. Esto inicia el turno
 sin simular input de teclado.
 
-`before_agent_start` publica un segundo ack con SHA-256, nunca con el texto. El
-parent valida launch id, nonce, pane, session id distinta, modelo y hash antes de
-devolver éxito. El canal se cierra después de una única lectura válida o durante
-rollback; el prompt no aparece en argv, env, terminal, logs, artifacts ni
-markers.
+Los procesos auxiliares pueden heredar metadata `OMP_RUNTIME_*` capturada antes
+de que el proceso OMP principal la limpie. Todo probe que lance otro OMP debe
+retirarla de su entorno; `scripts/audit.ts` lo hace antes del smoke RPC. Esto
+evita que un proceso anidado intente reutilizar una URL one-shot ya cerrada.
 
-La tool publica el schema anidado completo de `placement`, `pane` y `model`;
-todos los campos de lanzamiento son requeridos. Esto evita que el agente
-improvise sinónimos como `type`/`size`, que el traductor V1 rechaza. Un request
-inválido devuelve además la forma exacta esperada.
+Si el canal falla, el child publica `prompt_channel_failed` en el segundo marker
+y el parent falla inmediatamente en vez de esperar un timeout opaco.
+`before_agent_start` publica el segundo ack normal con SHA-256, nunca con el
+texto. El parent valida launch id, nonce, pane, session id distinta, modelo y
+hash antes de devolver éxito. Un ack rechazado conserva sólo el código de la
+validación fallida (`model_mismatch`, `prompt_hash_mismatch`, etc.); no persiste
+valores, prompt, URL ni nonce.
+
+La tool devuelve fallos estructurados con etapa, creación del pane, confirmación
+de `session_start`, rollback y último código de ack rechazado. El canal se cierra
+después de una única lectura válida o durante rollback; el prompt no aparece en
+argv, env, terminal, logs, artifacts ni markers.
+
+El schema mantiene `cwd`, `prompt`, `pane`, freshness, persistencia, modelo y
+focus obligatorios. `placement` es el único campo opcional y su ausencia se
+normaliza a `{ kind: "split", direction: "right", percent: 50 }`. Un objeto
+explícito inválido sigue fallando cerrado y devuelve la forma esperada.
 
 ## Ownership y rollback
 
-El adapter sólo puede enfocar o cerrar un pane creado por esa instancia de la operación. Si la creación funciona pero la validación posterior falla, intenta cerrar exactamente ese pane. Si también falla el rollback, devuelve ambos errores en un `AggregateError` y elimina cualquier ownership lógico.
-
+El adapter sólo puede enfocar o cerrar un pane creado por esa instancia de la
+operación. Si la creación funciona pero la validación posterior falla, intenta
+cerrar exactamente ese pane y devuelve `rollback: completed|failed` junto con el
+error primario. Nunca crea otro pane como retry.
 Nunca debe cerrar el pane origen ni usar el último pane enfocado como fallback.
 
 Cerrar un pane owned que ya terminó se considera rollback satisfecho. WezTerm

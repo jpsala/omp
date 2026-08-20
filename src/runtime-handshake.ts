@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 export type AckStage = "session_start" | "before_agent_start";
+export type HandshakeFailureCode = "prompt_channel_failed";
 export interface HandshakeAck {
   version: 1; stage: AckStage; launchId: string; nonce: string; paneId: string;
   sessionId: string; model: string; timestamp: number; promptHash?: string;
+  failureCode?: HandshakeFailureCode;
   parentSessionId?: string; instanceRef?: string;
 }
 export interface MarkerStore {
@@ -42,7 +44,8 @@ function validAck(value: unknown, stage: AckStage): value is HandshakeAck {
   return a.version === 1 && a.stage === stage && safe(a.launchId) && safe(a.nonce) &&
     safe(a.paneId) && safe(a.sessionId) && typeof a.model === "string" && /^[A-Za-z0-9._:/-]{1,200}$/.test(a.model) &&
     Number.isSafeInteger(a.timestamp) && Math.abs(Date.now() - a.timestamp) <= TTL_MS &&
-    (a.promptHash === undefined || /^[a-f0-9]{64}$/.test(a.promptHash));
+    (a.promptHash === undefined || /^[a-f0-9]{64}$/.test(a.promptHash)) &&
+    (a.failureCode === undefined || a.failureCode === "prompt_channel_failed");
 }
 export function createMarkerStore(root: string, fs: MarkerFs = nativeFs): MarkerStore {
   const pathFor = (id: string, stage: AckStage) => join(root, `${id}.${stage}.json`);

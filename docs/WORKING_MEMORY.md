@@ -33,7 +33,16 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
   enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra. El
   wrapper global permite usarlo desde cualquier repo.
-- Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime, lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]` para entregar un plan mínimo a un implementador y `/promote-context [foco]` con el alias `/guardar-sesion [foco]` para consolidar deltas durables en las fuentes canónicas del repo. Todo launch declara nombre y conducta al salir; el handoff corto usa un split `Implementador · <objetivo>` que vuelve a PowerShell al terminar OMP. Wrapper global activo; handshake usa `scripts/runtime-child-bootstrap.ts` para metadata y `src/runtime-prompt-channel.ts` para entregar el prompt por un endpoint loopback efímero autenticado, nunca por argv, env ni input del pane. Smoke vivo 2026-08-11 verde: pane `76` -> `118`, mismo tab `33`, nueva session id, prompt Unicode de 9165 caracteres, acks exactos y shell limpio post-exit. El wrapper `~/.omp/agent/extensions/agent-runtime-habitat.ts` reexporta la fuente local.
+- Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
+  lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]` y
+  promoción durable. Si se omite placement abre un split derecho al 50%; cada
+  launch declara nombre y conducta al salir. El handshake usa
+  `scripts/runtime-child-bootstrap.ts` y `src/runtime-prompt-channel.ts`; una
+  falla del canal se reporta inmediatamente, los timeouts devuelven etapa y
+  rollback estructurados, y nunca persisten prompt, URL o nonce. Wrapper global
+  activo. Smoke vivo 2026-08-11: pane `76` -> `118`, mismo tab `33`, nueva
+  session id, prompt Unicode de 9165 caracteres, acks exactos y shell limpio
+  post-exit.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.

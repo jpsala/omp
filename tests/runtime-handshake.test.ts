@@ -20,6 +20,19 @@ test("publishes atomically with restrictive modes and consumes once", async () =
   finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("persists only the allowlisted prompt channel failure code", async () => {
+  const root = await mkdtemp(join(tmpdir(), "omp-marker-"));
+  try {
+    const store = createMarkerStore(root);
+    const failure = ack({ stage: "before_agent_start", failureCode: "prompt_channel_failed" });
+    await store.publish(failure);
+    expect(await store.consume(failure.launchId, "before_agent_start")).toEqual(failure);
+    await expect(store.publish({ ...failure, failureCode: "private-error" } as HandshakeAck)).rejects.toThrow("invalid ack");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("rejects malformed schema, unsafe paths, replayed stages, and expired markers", async () => {
   const root = await mkdtemp(join(tmpdir(), "omp-marker-"));
   try { const store = createMarkerStore(root); await expect(store.publish(ack({ launchId: "../escape" }))).rejects.toThrow(); await writeFile(join(root, `${"b".repeat(32)}.session_start.json`), JSON.stringify(ack({ launchId: "b".repeat(32), timestamp: Date.now() - MARKER_TTL_MS - 1 }))); expect(await store.consume("b".repeat(32), "session_start")).toBeUndefined(); expect(await store.consume("../bad", "session_start")).toBeUndefined(); }

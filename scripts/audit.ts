@@ -139,6 +139,9 @@ async function auditProjectExtensionLoad(): Promise<void> {
 			"utf8",
 		);
 		const childEnv = { ...process.env };
+		for (const name of Object.keys(childEnv)) {
+			if (name.startsWith("OMP_RUNTIME_")) delete childEnv[name];
+		}
 		childEnv.PI_CODING_AGENT_DIR = join(sandbox, "agent");
 		childEnv.WEZTERM_PANE = "";
 

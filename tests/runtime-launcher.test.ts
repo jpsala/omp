@@ -1,4 +1,4 @@
-import { launchAgent, type LaunchDeps, type LaunchRequest } from "../src/runtime-launcher.ts";
+import { launchAgent, RuntimeLaunchError, type LaunchDeps, type LaunchRequest } from "../src/runtime-launcher.ts";
 import { PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { promptSha256, type HandshakeAck, type MarkerStore } from "../src/runtime-handshake.ts";
 const request: LaunchRequest = { cwd: "C:\\work", placement: { kind: "split", direction: "right", percent: 40 }, pane: { title: "Implementador · framing", onExit: "keep-open" }, fresh: true, persistence: "ephemeral", model: { mode: "explicit", spec: "openai/gpt-5" }, prompt: "héllo\nsecond", focus: true };
@@ -29,6 +29,7 @@ function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: numb
     markers,
     source: { instanceRef: "wez-instance", paneId: "source-pane" },
     parentSessionId: "parent",
+    model: "openai/gpt-5",
     random: () => new Uint8Array(16).fill(1),
     nonce: () => "nonce",
     now: () => clock,
@@ -76,15 +77,50 @@ test("merges prompt channel metadata into the child environment", async () => {
   expect(h.childEnvironments[0]?.[PROMPT_CHANNEL_HASH_ENV]).toBe(promptSha256(request.prompt));
   expect(h.childEnvironments[0]?.[PROMPT_CHANNEL_URL_ENV]).toContain("http://127.0.0.1:");
 });
-test("rejects stale nonce, pane, session, and model acknowledgements and rolls back owned pane", async () => {
-  for (const bad of [{ nonce: "wrong" }, { paneId: "other" }, { sessionId: "parent" }]) {
-    const h = harness([ack("session_start", bad)]); await expect(launchAgent(request, h.deps)).rejects.toThrow(); expect(h.killed).toBe(true); expect(h.cleaned).toBe(true);
+test("reports rejected acknowledgements and rolls back the owned pane", async () => {
+  for (const [bad, expected] of [[{ nonce: "wrong" }, "nonce_mismatch"], [{ paneId: "other" }, "pane_mismatch"], [{ sessionId: "parent" }, "session_mismatch"]] as const) {
+    const h = harness([ack("session_start", bad)]);
+    try {
+      await launchAgent(request, h.deps);
+      throw new Error("expected launch failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RuntimeLaunchError);
+      expect((error as RuntimeLaunchError).details.rejectedAck).toBe(expected);
+    }
+    expect(h.killed).toBe(true);
+    expect(h.cleaned).toBe(true);
   }
-  const h = harness([ack("session_start"), ack("before_agent_start", { model: "other/model" })]); await expect(launchAgent(request, h.deps)).rejects.toThrow(); expect(h.killed).toBe(true);
+  const h = harness([ack("session_start"), ack("before_agent_start", { model: "other/model" })]);
+  await expect(launchAgent(request, h.deps)).rejects.toThrow("last rejected ack: model_mismatch");
+  expect(h.killed).toBe(true);
 });
 
-test("times out and cleans marker state when no handshake arrives", async () => {
-  const h = harness([], { timeoutMs: 1 }); await expect(launchAgent(request, h.deps)).rejects.toThrow(); expect(h.cleaned).toBe(true); expect(h.killed).toBe(true);
+test("reports structured timeout diagnostics and cleans marker state", async () => {
+  const h = harness([], { timeoutMs: 1 });
+  try {
+    await launchAgent(request, h.deps);
+    throw new Error("expected launch failure");
+  } catch (error) {
+    expect(error).toBeInstanceOf(RuntimeLaunchError);
+    expect((error as RuntimeLaunchError).details).toMatchObject({
+      status: "failed",
+      stage: "session_start",
+      paneCreated: true,
+      sessionStartAck: false,
+      rollback: "completed",
+    });
+  }
+  expect(h.cleaned).toBe(true);
+  expect(h.killed).toBe(true);
+});
+
+test("fails fast when the child reports a prompt channel failure", async () => {
+  const h = harness([
+    ack("session_start"),
+    ack("before_agent_start", { failureCode: "prompt_channel_failed" }),
+  ]);
+  await expect(launchAgent(request, h.deps)).rejects.toThrow("before_agent_start failed: prompt_channel_failed");
+  expect(h.killed).toBe(true);
 });
 
 test("reconciles an acknowledgement that arrives on the timeout boundary without opening another pane", async () => {

@@ -5,7 +5,7 @@ import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
 import { createMarkerStore, markerRoot, promptSha256, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
-import { launchAgent, type LaunchRequest } from "../src/runtime-launcher.ts";
+import { launchAgent, RuntimeLaunchError, type LaunchRequest } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { translateOmpRequest } from "../src/runtime-harness-omp.ts";
 import { createBootstrapArgv } from "../scripts/runtime-child-bootstrap.ts";
@@ -57,40 +57,48 @@ Después regenerá los índices y ejecutá el audit documental que el repo defin
 }
 type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string}};
 type Event={systemPrompt?:readonly string[];prompt?:string};
-function isRequestInput(value: unknown): value is Omit<SpawnAgentSessionRequestV1, "version"> {
+export type SessionToolInput=Omit<SpawnAgentSessionRequestV1,"version"|"placement">&{placement?:SpawnAgentSessionRequestV1["placement"]};
+export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:50} as const;
+function isRequestInput(value: unknown): value is SessionToolInput {
  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
  const r=value as Record<string, unknown>;
  const allowed=["cwd","prompt","placement","pane","fresh","persistence","model","focus"];
- if (Object.keys(r).some(k=>!allowed.includes(k)) || Object.keys(r).length!==allowed.length) return false;
+ if (Object.keys(r).some(k=>!allowed.includes(k))) return false;
  if (typeof r.cwd!=="string" || !r.cwd.trim() || typeof r.prompt!=="string" || !r.prompt.trim()) return false;
  if (typeof r.fresh!=="boolean" || typeof r.focus!=="boolean" || (r.persistence!=="saved"&&r.persistence!=="ephemeral")) return false;
  if (!r.pane || typeof r.pane!=="object" || Array.isArray(r.pane)) return false;
  const pane=r.pane as Record<string, unknown>;
  if (Object.keys(pane).length!==2 || typeof pane.title!=="string" || !pane.title.trim() || pane.title.length>500
    || /[\u0000-\u001f\u007f]/.test(pane.title) || (pane.onExit!=="close"&&pane.onExit!=="keep-open")) return false;
- if (!r.placement || typeof r.placement!=="object" || Array.isArray(r.placement)) return false;
- const placement=r.placement as Record<string, unknown>;
- const validPlacement=placement.kind==="tab"
-   ? Object.keys(placement).length===1
-   : placement.kind==="split" && Object.keys(placement).length===3
-     && ["left","right","top","bottom"].includes(String(placement.direction))
-     && typeof placement.percent==="number" && Number.isFinite(placement.percent)
-     && placement.percent>0 && placement.percent<100;
+ const placement=r.placement;
+ const validPlacement=placement===undefined || (!!placement && typeof placement==="object" && !Array.isArray(placement) && (
+   (placement as Record<string,unknown>).kind==="tab"
+     ? Object.keys(placement).length===1
+     : (placement as Record<string,unknown>).kind==="split" && Object.keys(placement).length===3
+       && ["left","right","top","bottom"].includes(String((placement as Record<string,unknown>).direction))
+       && typeof (placement as Record<string,unknown>).percent==="number"
+       && Number.isFinite((placement as Record<string,unknown>).percent)
+       && ((placement as Record<string,unknown>).percent as number)>0
+       && ((placement as Record<string,unknown>).percent as number)<100
+ ));
  if (!validPlacement || !r.model || typeof r.model!=="object" || Array.isArray(r.model)) return false;
  const model=r.model as Record<string, unknown>;
  return model.mode==="inherit"
    ? Object.keys(model).length===1
    : model.mode==="explicit" && Object.keys(model).length===2 && typeof model.spec==="string" && !!model.spec.trim();
 }
+export function normalizeSessionToolInput(input: SessionToolInput): SpawnAgentSessionRequestV1 {
+ return {version:1,...input,placement:input.placement??DEFAULT_SESSION_PLACEMENT};
+}
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
-export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string):Promise<void> {
+export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"]):Promise<void> {
  const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), nonce=envString("OMP_RUNTIME_NONCE"), paneId=envString("OMP_RUNTIME_PANE_ID"), instanceRef=envString("OMP_RUNTIME_INSTANCE"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION");
  if(!launchId||!nonce||!paneId||!instanceRef||!parentSessionId) return Promise.resolve();
  const sessionId=ctx.sessionManager?.getSessionId?.(); const model=ctx.model?.provider&&ctx.model.id?`${ctx.model.provider}/${ctx.model.id}`:undefined;
  if(!sessionId||!model||sessionId===parentSessionId) return Promise.resolve();
- const ack:HandshakeAck={version:1,stage,launchId,nonce,paneId,sessionId,model,timestamp:Date.now(),parentSessionId,instanceRef};
- if(stage==="before_agent_start") ack.promptHash=promptSha256(prompt??"");
+ const ack:HandshakeAck={version:1,stage,launchId,nonce,paneId,sessionId,model,timestamp:Date.now(),parentSessionId,instanceRef,...(failureCode?{failureCode}:{})};
+ if(stage==="before_agent_start"&&!failureCode) ack.promptHash=promptSha256(prompt??"");
  return createMarkerStore(markerRoot()).publish(ack);
 }
 export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
@@ -105,6 +113,9 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    let prompt:string|undefined;
    try{
      prompt=await consumePromptChannel();
+   }catch(error){
+     await publishRuntimeAck("before_agent_start",ctx,undefined,"prompt_channel_failed");
+     throw error;
    }finally{
      delete process.env[PROMPT_CHANNEL_URL_ENV];
      delete process.env[PROMPT_CHANNEL_HASH_ENV];
@@ -126,7 +137,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. Pass every field explicitly. placement is {kind:'tab'} or {kind:'split',direction:'left'|'right'|'top'|'bottom',percent:1..99}; pane is {title,onExit:'close'|'keep-open'}; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}.",approval:"write",
+    description:"Launch one fresh child session. placement is optional and defaults to a right 50% split; explicit placement may be {kind:'tab'} or {kind:'split',direction:'left'|'right'|'top'|'bottom',percent:1..99}. pane is {title,onExit:'close'|'keep-open'}; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}.",approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
       prompt:{type:"string",minLength:1},
@@ -142,13 +153,13 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         {type:"object",properties:{mode:{const:"explicit"},spec:{type:"string",minLength:1}},required:["mode","spec"],additionalProperties:false}
       ]},
       focus:{type:"boolean"}
-    },required:["cwd","prompt","placement","pane","fresh","persistence","model","focus"],additionalProperties:false},
+    },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected explicit cwd, prompt, placement {kind:'tab'} or {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'}, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, and focus"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split) or explicit {kind:'tab'} / {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'}, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, and focus"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
-      const request={version:1,...raw} as SpawnAgentSessionRequestV1;
+      const request=normalizeSessionToolInput(raw);
       let cwdPath=request.cwd;
       try {
         if (cwdPath.startsWith("file:")) cwdPath=fileURLToPath(cwdPath);
@@ -165,19 +176,24 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"unsupported runtime host"})}],details:{status:"unsupported",reason:"unsupported runtime host"}};
       const value=request as LaunchRequest;
       const adapter=createWezTermAdapter();
-      const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",
-        buildChild:async(_request,env)=>({
-          program:"bun",
-          args:[CHILD_BOOTSTRAP,...createBootstrapArgv({
-            launchId:env.launchId,
-            nonce:env.nonce,
-            parentSessionId:env.parentSessionId,
-            title:_request.pane.title,
-            onExit:_request.pane.onExit,
-            ...(runtime.harness.agentDir?{agentDir:runtime.harness.agentDir}:{})
-          },translated.executable,translated.argv)]
-        })});
-      return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
+      try{
+        const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",
+          buildChild:async(_request,env)=>({
+            program:"bun",
+            args:[CHILD_BOOTSTRAP,...createBootstrapArgv({
+              launchId:env.launchId,
+              nonce:env.nonce,
+              parentSessionId:env.parentSessionId,
+              title:_request.pane.title,
+              onExit:_request.pane.onExit,
+              ...(runtime.harness.agentDir?{agentDir:runtime.harness.agentDir}:{})
+            },translated.executable,translated.argv)]
+          })});
+        return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
+      }catch(error){
+        if(!(error instanceof RuntimeLaunchError))throw error;
+        return {content:[{type:"text",text:JSON.stringify(error.details)}],details:error.details,isError:true};
+      }
     }
   });
  pi.registerTool({name:"agent_runtime_context",label:"Runtime context",description:"Read-only current agent runtime context",approval:"read",parameters:{type:"object",properties:{},additionalProperties:false},execute:async(_id,_params,_signal,_onUpdate,ctx)=>{const value=await context(ctx);return {content:[{type:"text",text:JSON.stringify(value)}],details:value};}});

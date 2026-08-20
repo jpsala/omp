@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment, normalizeSessionToolInput } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
@@ -58,8 +58,18 @@ test("extension registers context and an explicit nested launch contract", async
     expect(contextTool?.approval).toBe("read");
     expect(sessionTool?.approval).toBe("write");
     const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[] }> };
-    expect(schema.required).toEqual(["cwd", "prompt", "placement", "pane", "fresh", "persistence", "model", "focus"]);
+    expect(schema.required).toEqual(["cwd", "prompt", "pane", "fresh", "persistence", "model", "focus"]);
     expect(schema.properties?.placement.anyOf).toHaveLength(2);
+    expect(DEFAULT_SESSION_PLACEMENT).toEqual({ kind: "split", direction: "right", percent: 50 });
+    expect(normalizeSessionToolInput({
+      cwd: "C:\\dev\\omp",
+      prompt: "implement",
+      pane: { title: "Implementador", onExit: "keep-open" },
+      fresh: true,
+      persistence: "saved",
+      model: { mode: "inherit" },
+      focus: false,
+    }).placement).toEqual(DEFAULT_SESSION_PLACEMENT);
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
@@ -100,9 +110,9 @@ test("extension registers context and an explicit nested launch contract", async
     expect(details.harness.model).toEqual({ provider: "openai-codex", id: "gpt-5.6-sol", thinking: "medium" });
 
     const invalid = await sessionTool!.execute("id", { cwd: "C:\\tmp", prompt: "x", placement: { type: "split", direction: "right", size: 50 }, fresh: true, persistence: "saved", model: { type: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
-    expect(JSON.parse(invalid.content[0].text).reason).toContain("placement {kind:'tab'}");
+    expect(JSON.parse(invalid.content[0].text).reason).toContain("optional placement (default right 50% split)");
 
-    const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", placement: { kind: "split", direction: "right", percent: 50 }, pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
+    const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");
   } finally { await rm(agentDir, { recursive: true, force: true }); }
 });
