@@ -33,6 +33,10 @@ Construí un único prompt autocontenido para un agente sin acceso a esta conver
 No implementes aquí. Invocá agent_runtime_session exactamente una vez con el cwd actual, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:false. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Pasá el handoff como prompt. No abras otras sesiones ni monitorees el pane. Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
 export const HANDOFF_COMMAND = "handoff";
+export function parseAtomicHandoffInput(text: string): string | undefined {
+ const match=/^\/handoff(?:\s+(.*))?$/s.exec(text.trim());
+ return match ? (match[1]??"") : undefined;
+}
 export function nextHandoffTitle(currentName: string | undefined, focus: string): string {
  const current=(currentName??"").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim();
  const requested=focus.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim();
@@ -168,12 +172,11 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    description:"Plan the active objective and start one implementer in a right split",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
  });
- pi.registerCommand(HANDOFF_COMMAND,{
-   description:"Persist durable context and continue in a named adjacent tab",
-   handler:(args)=>{
-     const focus=String(args??"");
-     pi.sendUserMessage(buildHandoffPrompt(focus,nextHandoffTitle(pi.getSessionName(),focus)));
-   },
+ pi.on("input",(event)=>{
+   const focus=parseAtomicHandoffInput(event.text);
+   if(focus===undefined) return;
+   pi.sendUserMessage(buildHandoffPrompt(focus,nextHandoffTitle(pi.getSessionName(),focus)));
+   return {handled:true};
  });
  pi.registerCommand(PROMOTE_CONTEXT_COMMAND,{
    description:"Promote missing durable session context into canonical repository docs",

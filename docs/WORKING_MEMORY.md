@@ -44,10 +44,13 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   wrapper global permite usarlo desde cualquier repo.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
   lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]`,
-  `/handoff [foco]` y promoción durable. Handoff persiste primero el cierre
-  semántico, abre una hija fresh saved en un tab adyacente enfocado, usa el
-  mismo nombre generacional para sesión y tab, inyecta el kickoff y conserva el
-  origen como rollback. Si se omite placement en la tool, abre un split derecho
+  `/handoff [foco]` y promoción durable. Como el TUI despacha el builtin
+  homónimo antes que los comandos de extensión, la extensión intercepta el input
+  interactivo exacto antes del despacho nativo y no registra una colisión inerte.
+  Handoff persiste primero el cierre semántico y abre una hija fresh saved en
+  un tab adyacente enfocado, usa el mismo nombre
+  generacional para sesión y tab, inyecta el kickoff y conserva el origen como
+  rollback. Si se omite placement en la tool, abre un split derecho
   al 50%; cada launch declara nombre y conducta al salir. El handshake usa
   `scripts/runtime-child-bootstrap.ts` y `src/runtime-prompt-channel.ts`; una
   falla del canal, naming o posición se reporta inmediatamente y nunca persiste

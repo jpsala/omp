@@ -50,6 +50,13 @@ checks.
 durable faltante y construye un kickoff compacto con el sobre temporal necesario
 para arrancar sin la conversación origen. Una track se actualiza o crea sólo
 cuando existe trabajo vivo retomable que la necesita.
+El TUI de OMP despacha su builtin `handoff` antes que los comandos de extensión,
+por lo que un registro homónimo nunca se alcanza en el flujo interactivo. La
+extensión no conserva esa colisión inerte: intercepta únicamente el input exacto
+`/handoff [foco]` antes del despacho de builtins, lo consume y envía al agente el
+prompt coordinador atómico. Otros prefijos no coinciden. `/compact` conserva la
+compactación nativa en la sesión actual; el builtin nativo `/handoff` queda
+deliberadamente oculto por esta operación AOS.
 
 Si la persistencia o sus checks fallan, el comando no lanza otra sesión. Si
 cierran, abre exactamente una sesión fresh saved en un tab nuevo, inyecta y

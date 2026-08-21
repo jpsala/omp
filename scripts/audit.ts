@@ -244,11 +244,13 @@ async function auditProjectExtensionLoad(): Promise<void> {
 					typeof data === "object" && data !== null && !Array.isArray(data)
 						? (data as Record<string, unknown>).commands
 						: undefined;
+				// `/handoff` is a native TUI builtin. Habitat intercepts its exact
+				// interactive input before builtin dispatch and deliberately does not
+				// register an inert same-name extension command.
 				for (const requiredCommand of [
 					"wezterm-attention-status",
 					"fleet",
 					"plan-implement-short",
-					"handoff",
 					"promote-context",
 					"cerrar-computadora",
 				]) {

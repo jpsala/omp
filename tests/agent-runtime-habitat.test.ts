@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
@@ -102,14 +102,18 @@ test("extension registers context and an explicit nested launch contract", async
     expect(sentMessages).toHaveLength(5);
     expect(sentMessages[4]).toContain(JSON.stringify('Zulip y "Event Router"'));
     expect(sentMessages[4]).toContain("No guardes transcripts");
-    const handoffCommand = commands.get(HANDOFF_COMMAND);
-    expect(handoffCommand?.description).toContain("named adjacent tab");
-    await handoffCommand!.handler('continuar "runtime"', {});
+    expect(commands.has(HANDOFF_COMMAND)).toBeFalse();
+    expect(parseAtomicHandoffInput("/handoff")).toBe("");
+    expect(parseAtomicHandoffInput('/handoff continuar "runtime"')).toBe('continuar "runtime"');
+    expect(parseAtomicHandoffInput("/handoff-native")).toBeUndefined();
+    expect(await handlers.input({ text: '/handoff continuar "runtime"', source: "interactive" })).toEqual({ handled: true });
     expect(sentMessages).toHaveLength(6);
     expect(sentMessages[5]).toContain(JSON.stringify("OMP Habitat · 2"));
     expect(sentMessages[5]).toContain('placement {kind:"tab"}');
     expect(sentMessages[5]).toContain('persistence:"saved"');
     expect(sentMessages[5]).toContain("Si esta persistencia o sus checks fallan, no abras otra sesión");
+    expect(await handlers.input({ text: "/handoff-native", source: "interactive" })).toBeUndefined();
+    expect(sentMessages).toHaveLength(6);
 
     const prior = ["existing"]; const result = await handlers.before_agent_start({ systemPrompt: prior }, { cwd: "C:\\dev\\omp", hasUI: true });
     expect(result.systemPrompt.slice(0, 1)).toEqual(prior); expect(result.systemPrompt).toHaveLength(2); expect(result.systemPrompt.filter((x: string) => x === "existing")).toHaveLength(1);
