@@ -22,26 +22,23 @@ Summary: Matriz durable de Windows input, status/cuota, renderers y atención We
 
 ## Mouse en WinInput
 
-Desde el build local OMP 17.4.0 del 2026-08-21, el `Editor` ofrece hit-testing
-opt-in contra sus filas realmente renderizadas y el TUI enruta click/drag SGR
-al componente enfocado sin tocar WezTerm. `windows-input-native.ts` usa esa API:
-click mueve el caret y drag izquierdo crea una selección sobre la que funcionan
-copy, cut, delete, paste y reemplazo por escritura. Wrapping, Unicode ancho,
-scroll, padding y autocomplete quedan dentro del cálculo del editor; no se
-duplican en la extensión. Mientras el prompt captura mouse, la selección nativa
-del terminal se conserva mediante el modificador de bypass de WezTerm.
+El `Editor` ofrece hit-testing opt-in contra sus filas realmente renderizadas,
+pero WinInput no activa ese tracking en el prompt. La prueba sobre el hardware
+real mostró que mantener mouse reporting para click/drag impide el scroll
+continuo de la rueda sin modificador; los bindings de WezTerm con
+`mouse_reporting = true` no resolvieron el conflicto. Se prioriza la rueda
+nativa y la selección de texto del terminal.
 
 WinInput reserva `Ctrl+Z` para undo de texto y snapshots atómicos de selecciones.
 `Ctrl+C` copia una selección, limpia un draft no vacío como edición reversible
 y no hace nada sobre un draft vacío; un doble toque accidental ya no ejecuta la
 salida global. `Ctrl+D` conserva la salida explícita.
 
-WinInput mantiene mouse reporting activo para que click y clic-arrastre funcionen
-siempre. La configuración canónica de WezTerm intercepta la rueda sólo en la
-pantalla principal (`alt_screen = false`) aun con mouse reporting activo: rueda
-normal revisa el scrollback, arrastre normal conserva la selección editable del
-prompt y `Shift + arrastre` selecciona texto del terminal. Las TUIs fullscreen
-conservan sus propios eventos de rueda.
+La rueda normal revisa el scrollback de WezTerm. El mouse selecciona texto del
+terminal y la selección editable del prompt usa `Shift + flechas`; copy, cut,
+delete, paste y reemplazo siguen operando sobre esa selección. Las TUIs
+fullscreen activan su tracking separado y conservan sus propios eventos de
+rueda.
 
 
 ## Mercado de renderers y clientes (2026-08-15)

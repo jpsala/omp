@@ -17,14 +17,14 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   wrapper `~/.omp/agent/extensions/windows-input.ts`, cuya reexportación resuelve
   `@oh-my-pi/pi-natives` 17.4.0 sin addon Win32. El wrapper permanece como
   archivo inerte, no como discovery operativo.
-- WinInput soporta mouse y undo Windows sobre el prompt. Click mueve el caret;
-  drag izquierdo crea la misma selección editable que Shift+flechas; la rueda
-  normal recorre el scrollback de WezTerm aun con mouse reporting activo y
-  `Shift + drag` selecciona texto del terminal. `Ctrl+Z` deshace texto y
-  ediciones de rango. `Ctrl+C` copia una selección, limpia un draft no vacío
-  como edición reversible y es inerte cuando el draft ya está vacío, por lo que
-  un doble toque accidental no cierra OMP. Smoke real sobre el binario activo
-  restauró `recuperar esto` tras `Ctrl+C`, `Ctrl+C`, `Ctrl+Z`.
+- WinInput soporta selección editable por teclado y undo Windows sobre el
+  prompt. No activa mouse reporting: la rueda normal recorre el scrollback de
+  WezTerm y el mouse selecciona texto del terminal; `Shift + flechas` crea la
+  selección editable. `Ctrl+Z` deshace texto y ediciones de rango. `Ctrl+C`
+  copia una selección, limpia un draft no vacío como edición reversible y es
+  inerte cuando el draft ya está vacío, por lo que un doble toque accidental no
+  cierra OMP. Smoke real sobre el binario activo restauró `recuperar esto` tras
+  `Ctrl+C`, `Ctrl+C`, `Ctrl+Z`.
 - Agente OMP project-local en `.omp/agents/deepseek-pro.md`: prioriza DeepSeek V4 Pro `high`, usa OpenRouter V4 Pro 0813 como fallback disponible y hace `prewalk` al V4 Flash económico en el primer edit/write. No almacena credenciales.
 - Perfil experimental reversible en `profiles/deepseek-lab.yml`: Pro `high` como `default/slow/plan`, Flash `low` como `smol/task/tiny`, cycling `default -> smol` y prewalk activo. Se lanza con `omp --config profiles/deepseek-lab.yml`; el overlay no cambia auth, sesiones ni configuración global.
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; el par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia de esa corrida, no el costo actual de la cuenta DeepSeek.

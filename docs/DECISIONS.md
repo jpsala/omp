@@ -368,10 +368,12 @@ renderizado y enruta SGR mouse sólo al componente normal enfocado que declara
 `wantsMouseTracking`. Usa button-motion `1002` más coordenadas extendidas
 `1006`; los overlays fullscreen conservan su tracking separado `1003`.
 
-`WindowsInputEditor` consume ese contrato: click cancela autocomplete y mueve el
-caret; press/motion/release izquierdos crean la misma selección que ya usan
-copy, cut, delete, paste y reemplazo por escritura. El mapeo conserva wrapping,
-scroll, padding y límites de grafemas anchos.
+`WindowsInputEditor` inicialmente consumió ese contrato para click-to-caret y
+selección por drag. La prueba posterior sobre el hardware real mostró el costo:
+mouse reporting permanente impide el scroll continuo de la rueda sin
+modificador. Los bindings de WezTerm con `mouse_reporting = true`, tanto con
+delta fijo como con `ScrollByCurrentEventWheelDelta`, no resolvieron el
+conflicto.
 
 `Ctrl+Z` se reserva como undo de texto en WinInput, no como suspend POSIX.
 Las ediciones de rango guardan snapshots atómicos compatibles con el TUI 17.4
@@ -381,11 +383,11 @@ reversible y es inerte sobre un draft vacío. Así conserva el clear útil sin
 mantener el doble Ctrl+C accidental como salida destructiva; `Ctrl+D` sigue
 siendo la salida explícita.
 
-La rueda no se entrega a WinInput en la pantalla principal. WezTerm intercepta
-`WheelUp`/`WheelDown` con `mouse_reporting = true` y `alt_screen = false` para
-recorrer el scrollback; el drag normal sigue llegando al editor y
-`Shift + drag` conserva la selección del terminal. Las TUIs fullscreen quedan
-fuera de esos bindings y mantienen su rueda propia.
+Decisión final: WinInput no declara `wantsMouseTracking` ni consume eventos SGR
+en el prompt. La rueda y la selección con mouse pertenecen a WezTerm; la
+selección editable usa `Shift + flechas`. Los overlays fullscreen conservan su
+tracking separado. Se prioriza el comportamiento cotidiano verificable sobre
+click-to-caret y drag editable.
 
 El paquete oficial OMP 17.4.0 aporta el addon Win32 correcto. El override
 actual de mouse tiene SHA-256
