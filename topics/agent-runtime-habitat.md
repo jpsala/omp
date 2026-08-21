@@ -44,6 +44,27 @@ un delta durable no edita archivos. Tras cambios documentales ejecuta el índice
 y audit definidos por el repo y reporta promociones, omisiones deliberadas y
 checks.
 
+### Handoff atómico de continuidad
+
+`/handoff [foco]` cierra semánticamente el corte actual, promueve sólo el valor
+durable faltante y construye un kickoff compacto con el sobre temporal necesario
+para arrancar sin la conversación origen. Una track se actualiza o crea sólo
+cuando existe trabajo vivo retomable que la necesita.
+
+Si la persistencia o sus checks fallan, el comando no lanza otra sesión. Si
+cierran, abre exactamente una sesión fresh saved en un tab nuevo, inyecta y
+envía el kickoff, enfoca la hija y conserva el origen intacto como rollback.
+El nombre de la hija deriva del nombre actual con generación incremental
+(`<nombre> · 2`, `<nombre> · 3`); el mismo valor se persiste como nombre de
+sesión OMP y título explícito de tab.
+
+El tab nace en la misma ventana e inmediatamente después del tab origen. El
+bootstrap emite `OMP_HANDOFF_AFTER_TAB_ID` como user var con el id decimal del
+origen; la configuración WezTerm canónica mueve sólo el tab que contiene al pane
+emisor. El parent confirma nombre, adyacencia, session id distinta y hash exacto
+antes de considerar exitoso el lanzamiento. Un fallo revierte únicamente el
+pane owned.
+
 ## Primera implementación
 
 - Harness: OMP 17.2.13.
@@ -59,10 +80,10 @@ checks.
 
 Todo request de `agent_runtime_session` declara `pane: { title, onExit }`.
 `placement` es opcional: si se omite, el runtime abre un split derecho al 50%;
-una ubicación explícita conserva soporte para tab u otra dirección. `title` es
-un nombre breve, sin caracteres de control, que el bootstrap publica mediante
-`OSC 1`; con la configuración actual de WezTerm aparece como título del tab
-cuando ese pane está activo.
+`{ kind: "tab" }` crea un tab inmediatamente después del origen. Una ubicación
+split explícita conserva soporte para otra dirección. `title` se persiste como
+nombre de sesión OMP; para tab placement también se aplica mediante
+`wezterm cli set-tab-title`.
 
 `onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
 termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`

@@ -20,14 +20,17 @@ test("publishes atomically with restrictive modes and consumes once", async () =
   finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("persists only the allowlisted prompt channel failure code", async () => {
+test("persists only allowlisted structured failure codes", async () => {
   const root = await mkdtemp(join(tmpdir(), "omp-marker-"));
   try {
     const store = createMarkerStore(root);
-    const failure = ack({ stage: "before_agent_start", failureCode: "prompt_channel_failed" });
-    await store.publish(failure);
-    expect(await store.consume(failure.launchId, "before_agent_start")).toEqual(failure);
-    await expect(store.publish({ ...failure, failureCode: "private-error" } as HandshakeAck)).rejects.toThrow("invalid ack");
+    const promptFailure = ack({ stage: "before_agent_start", failureCode: "prompt_channel_failed" });
+    await store.publish(promptFailure);
+    expect(await store.consume(promptFailure.launchId, "before_agent_start")).toEqual(promptFailure);
+    const nameFailure = ack({ sessionName: "os · Handoff · 2", failureCode: "session_name_failed" });
+    await store.publish(nameFailure);
+    expect(await store.consume(nameFailure.launchId, "session_start")).toEqual(nameFailure);
+    await expect(store.publish({ ...promptFailure, failureCode: "private-error" } as HandshakeAck)).rejects.toThrow("invalid ack");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

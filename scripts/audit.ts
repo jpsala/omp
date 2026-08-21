@@ -248,6 +248,7 @@ async function auditProjectExtensionLoad(): Promise<void> {
 					"wezterm-attention-status",
 					"fleet",
 					"plan-implement-short",
+					"handoff",
 					"promote-context",
 					"cerrar-computadora",
 				]) {

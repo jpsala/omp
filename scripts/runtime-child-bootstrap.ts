@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { HANDOFF_AFTER_TAB_ENV, RUNTIME_SESSION_TITLE_ENV, handoffTabPlacementSequence } from "../src/runtime-tab-placement.ts";
 
 export interface BootstrapMetadata {
   launchId: string;
@@ -118,6 +119,7 @@ export function buildChildEnvironment(
   environment.OMP_RUNTIME_PARENT_SESSION = metadata.parentSessionId;
   environment.OMP_RUNTIME_PANE_ID = paneId;
   environment.OMP_RUNTIME_INSTANCE = instanceRef;
+  environment[RUNTIME_SESSION_TITLE_ENV] = metadata.title;
   if (metadata.agentDir) environment.PI_CODING_AGENT_DIR = metadata.agentDir;
   return environment;
 }
@@ -170,7 +172,9 @@ export async function runBootstrap(
   writeTitle: (sequence: string) => unknown = sequence => process.stdout.write(sequence),
 ): Promise<number> {
   const environment = buildChildEnvironment(command.metadata, base);
-  writeTitle(paneTitleSequence(command.metadata.title));
+  const sourceTabId = environment[HANDOFF_AFTER_TAB_ENV];
+  delete environment[HANDOFF_AFTER_TAB_ENV];
+  writeTitle(paneTitleSequence(command.metadata.title) + (sourceTabId ? handoffTabPlacementSequence(sourceTabId) : ""));
   const code = await runProcess(spawnProcess, command.program, command.args, environment);
   if (command.metadata.onExit === "close") return code;
   const shell = interactiveShellCommand(process.platform, base);

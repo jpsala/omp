@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { HANDOFF_AFTER_TAB_ENV } from "./runtime-tab-placement.ts";
 
 export interface ProcessResult { exitCode: number; stdout: string; stderr: string }
 export interface ProcessRunOptions { stdin?: string | Uint8Array; timeoutMs?: number; env?: NodeJS.ProcessEnv }
@@ -30,8 +31,8 @@ export class WezTermHostAdapter {
   private readonly run: ProcessRunner; private readonly executable: string; private readonly timeoutMs: number; private readonly owned = new Map<string, WezTermPaneHandle>();
   constructor(options: WezTermAdapterOptions = {}) { this.run = options.runner ?? defaultRunner; this.executable = options.executable ?? (process.platform === "win32" ? "wezterm.exe" : "wezterm"); this.timeoutMs = options.timeoutMs ?? 5000; }
   private opts(instanceRef: string, extra: ProcessRunOptions = {}): ProcessRunOptions { return { ...extra, timeoutMs: this.timeoutMs, env: { ...process.env, ...(extra.env ?? {}), WEZTERM_UNIX_SOCKET: instanceRef } }; }
-  async describe(source: WezTermSource): Promise<WezTermLocation> {
-    const result = await this.run(this.executable, ["cli", "list", "--format", "json"], this.opts(source.instanceRef));
+  private async listRows(instanceRef: string): Promise<unknown[]> {
+    const result = await this.run(this.executable, ["cli", "list", "--format", "json"], this.opts(instanceRef));
     if (result.exitCode !== 0) fail("wezterm list", result);
     let rows: unknown;
     try {
@@ -40,7 +41,10 @@ export class WezTermHostAdapter {
       throw new Error("wezterm list returned invalid JSON");
     }
     if (!Array.isArray(rows)) throw new Error("wezterm list returned incomplete JSON");
-    const candidates: unknown[] = rows;
+    return rows;
+  }
+  async describe(source: WezTermSource): Promise<WezTermLocation> {
+    const candidates = await this.listRows(source.instanceRef);
     const row = candidates.find(candidate =>
       candidate !== null
       && typeof candidate === "object"
@@ -136,7 +140,48 @@ export class WezTermHostAdapter {
       throw primaryError;
     }
   }
-  split(request: SplitRequest) { return this.open({ kind: "split", request }); } tab(request: TabRequest) { return this.open({ kind: "tab", request }); }
+  split(request: SplitRequest) { return this.open({ kind: "split", request }); }
+  async tab(request: TabRequest) {
+    const source = await this.describe(request.source);
+    return this.open({
+      kind: "tab",
+      request: {
+        ...request,
+        env: { ...request.env, [HANDOFF_AFTER_TAB_ENV]: source.tabId },
+      },
+    });
+  }
+  async finalizeTab(h: WezTermPaneHandle, title: string): Promise<void> {
+    this.assertOwned(h);
+    if (!title.trim() || title.length > 500 || /[\u0000-\u001f\u007f]/.test(title)) throw new Error("invalid tab title");
+    const renamed = await this.run(
+      this.executable,
+      ["cli", "set-tab-title", "--tab-id", h.location.tabId, title],
+      this.opts(h.instanceRef),
+    );
+    if (renamed.exitCode !== 0) fail("wezterm set-tab-title", renamed);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const rows = await this.listRows(h.instanceRef);
+      const source = rows.find(row => row !== null && typeof row === "object" && !Array.isArray(row) && "pane_id" in row && String(row.pane_id) === h.sourcePaneId);
+      const owned = rows.find(row => row !== null && typeof row === "object" && !Array.isArray(row) && "pane_id" in row && String(row.pane_id) === h.ownedPaneId);
+      if (source && owned && "window_id" in source && "window_id" in owned && String(source.window_id) === String(owned.window_id) && "tab_id" in source && "tab_id" in owned) {
+        const order: string[] = [];
+        for (const row of rows) {
+          if (row === null || typeof row !== "object" || Array.isArray(row) || !("window_id" in row) || !("tab_id" in row) || String(row.window_id) !== String(source.window_id)) continue;
+          const tabId = String(row.tab_id);
+          if (!order.includes(tabId)) order.push(tabId);
+        }
+        const sourceIndex = order.indexOf(String(source.tab_id));
+        if (sourceIndex >= 0 && order[sourceIndex + 1] === String(owned.tab_id)) return;
+      }
+      if (attempt < 39) {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        setTimeout(resolve, 25);
+        await promise;
+      }
+    }
+    throw new Error("created tab did not move immediately after its source tab");
+  }
   async focus(h: WezTermPaneHandle) { this.assertOwned(h); const r = await this.run(this.executable, ["cli", "activate-pane", "--pane-id", h.ownedPaneId], this.opts(h.instanceRef)); if (r.exitCode) fail("wezterm activate-pane", r); }
   async killOwnedPane(h: WezTermPaneHandle) { this.assertOwned(h); const r = await this.run(this.executable, ["cli", "kill-pane", "--pane-id", h.ownedPaneId], this.opts(h.instanceRef)); if (r.exitCode && !paneAlreadyGone(r)) fail("wezterm kill-pane", r); this.owned.delete(this.key(h)); }
 }

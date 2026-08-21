@@ -43,15 +43,15 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra. El
   wrapper global permite usarlo desde cualquier repo.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
-  lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]` y
-  promoción durable. Si se omite placement abre un split derecho al 50%; cada
-  launch declara nombre y conducta al salir. El handshake usa
+  lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]`,
+  `/handoff [foco]` y promoción durable. Handoff persiste primero el cierre
+  semántico, abre una hija fresh saved en un tab adyacente enfocado, usa el
+  mismo nombre generacional para sesión y tab, inyecta el kickoff y conserva el
+  origen como rollback. Si se omite placement en la tool, abre un split derecho
+  al 50%; cada launch declara nombre y conducta al salir. El handshake usa
   `scripts/runtime-child-bootstrap.ts` y `src/runtime-prompt-channel.ts`; una
-  falla del canal se reporta inmediatamente, los timeouts devuelven etapa y
-  rollback estructurados, y nunca persisten prompt, URL o nonce. Wrapper global
-  activo. Smoke vivo 2026-08-11: pane `76` -> `118`, mismo tab `33`, nueva
-  session id, prompt Unicode de 9165 caracteres, acks exactos y shell limpio
-  post-exit.
+  falla del canal, naming o posición se reporta inmediatamente y nunca persiste
+  prompt, URL o nonce.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.
@@ -74,7 +74,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Los observers WezTerm sólo leen artifacts: no poseen workers y cerrarlos no cancela un run.
 - Las solicitudes UI del fleet requieren approve/deny explícito con run id; no se persisten texto crudo de resultados o errores.
 - Habitat falla como `unsupported` cuando falta provider/capability; no investiga ni construye launchers ad hoc. Sólo opera panes creados por la operación y nunca el pane origen.
-- La persistencia de sesión OMP y la vida del pane son independientes: `pane.onExit` decide entre cerrar o volver a un shell limpio; `pane.title` nombra el pane mediante `OSC 1`.
+- La persistencia de sesión OMP y la vida del pane son independientes: `pane.onExit` decide entre cerrar o volver a un shell limpio; `pane.title` es además el nombre persistido de la sesión y, en tab placement, el título explícito del tab.
 - Catálogo mantenible en `profiles/catalog.json`; `/profiles list|show|activate|prepare`
   vive en `extensions/omp-profiles.ts`, se descubre desde `.omp/config.yml`.
   `activate` cambia explícitamente el padre y thinking de la sesión actual;

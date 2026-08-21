@@ -8,6 +8,7 @@ import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError, type LaunchRequest } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { translateOmpRequest } from "../src/runtime-harness-omp.ts";
+import { RUNTIME_SESSION_TITLE_ENV } from "../src/runtime-tab-placement.ts";
 import { createBootstrapArgv } from "../scripts/runtime-child-bootstrap.ts";
 export const MAX_RUNTIME_FRAGMENT_LENGTH = 500;
 const CHILD_BOOTSTRAP = fileURLToPath(new URL("../scripts/runtime-child-bootstrap.ts", import.meta.url));
@@ -30,6 +31,34 @@ Investigá sólo lo necesario para cerrar alcance y dependencias. Diseñá el pl
 Construí un único prompt autocontenido para un agente sin acceso a esta conversación. Debe incluir objetivo, cwd, contexto comprobado, archivos o superficies afectadas cuando se conozcan, plan mínimo, límites y verificación esperada. Indicá al implementador que empiece inmediatamente y que puede usar subagentes en paralelo sólo para slices independientes con contratos ya cerrados.
 
 No implementes aquí. Invocá agent_runtime_session exactamente una vez con el cwd actual, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:false. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Pasá el handoff como prompt. No abras otras sesiones ni monitorees el pane. Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
+}
+export const HANDOFF_COMMAND = "handoff";
+export function nextHandoffTitle(currentName: string | undefined, focus: string): string {
+ const current=(currentName??"").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim();
+ const requested=focus.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim();
+ const source=current||requested||"Continuación";
+ const numbered=/^(.*) · (\d+)$/.exec(source);
+ const base=numbered?.[1]?.trim()||source;
+ const generation=numbered ? BigInt(numbered[2])+1n : 2n;
+ const suffix=` · ${generation}`;
+ return `${base.slice(0,Math.max(1,500-suffix.length))}${suffix}`;
+}
+export function buildHandoffPrompt(focus: string, title: string): string {
+ const focusInstruction=focus.trim()
+   ? `Foco explícito del corte (JSON string): ${JSON.stringify(focus.trim())}`
+   : "Derivá el objetivo y el próximo corte de esta conversación y del estado comprobado del repositorio.";
+ return `Ejecutá un handoff atómico a una sesión OMP nueva.
+
+${focusInstruction}
+El nombre exacto de la sesión nueva y de su tab es ${JSON.stringify(title)}.
+
+Primero alcanzá un safe cut y compará esta conversación con las fuentes canónicas del repo. Promové una sola vez todo valor durable faltante: reglas e invariantes, estado vivo y próximo paso, decisiones con razones, conocimiento reusable y trabajo incompleto retomable. Actualizá una track sólo si existe trabajo vivo que realmente la necesita; no crees una por ceremonia. No guardes transcript, intentos, logs ni hechos derivables del código. Si cambia la capa documental, regenerá sus índices y ejecutá el audit aplicable. Si esta persistencia o sus checks fallan, no abras otra sesión.
+
+Después construí un kickoff autocontenido y compacto para un agente sin acceso a esta conversación. Debe nombrar cwd, objetivo, fuentes autoritativas en orden de lectura, invariantes, límites, estado transferido, próximo paso exacto y verificación esperada. Referenciá lo durable en vez de duplicarlo; incluí inline sólo el sobre temporal necesario para arrancar.
+
+Finalmente invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"tab"}, pane {title:${JSON.stringify(title)},onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. La tool debe persistir el mismo nombre en la sesión OMP, nombrar el tab, colocarlo inmediatamente a la derecha de este tab y enfocarlo. Conservá esta sesión intacta como rollback. No compactes, no abras splits, no monitorees la hija y no construyas comandos WezTerm o fallbacks ad hoc.
+
+Si el lanzamiento funciona, respondé sólo con nombre, pane y session id nuevos. Si falla, permanecé en esta sesión e informá etapa y error exactos.`;
 }
 export const PROMOTE_CONTEXT_COMMAND = "promote-context";
 export const SAVE_SESSION_COMMAND = "guardar-sesion";
@@ -92,12 +121,12 @@ export function normalizeSessionToolInput(input: SessionToolInput): SpawnAgentSe
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
-export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"]):Promise<void> {
+export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"], sessionName?:string):Promise<void> {
  const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), nonce=envString("OMP_RUNTIME_NONCE"), paneId=envString("OMP_RUNTIME_PANE_ID"), instanceRef=envString("OMP_RUNTIME_INSTANCE"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION");
  if(!launchId||!nonce||!paneId||!instanceRef||!parentSessionId) return Promise.resolve();
  const sessionId=ctx.sessionManager?.getSessionId?.(); const model=ctx.model?.provider&&ctx.model.id?`${ctx.model.provider}/${ctx.model.id}`:undefined;
  if(!sessionId||!model||sessionId===parentSessionId) return Promise.resolve();
- const ack:HandshakeAck={version:1,stage,launchId,nonce,paneId,sessionId,model,timestamp:Date.now(),parentSessionId,instanceRef,...(failureCode?{failureCode}:{})};
+ const ack:HandshakeAck={version:1,stage,launchId,nonce,paneId,sessionId,...(sessionName?{sessionName}:{}),model,timestamp:Date.now(),parentSessionId,instanceRef,...(failureCode?{failureCode}:{})};
  if(stage==="before_agent_start"&&!failureCode) ack.promptHash=promptSha256(prompt??"");
  return createMarkerStore(markerRoot()).publish(ack);
 }
@@ -109,12 +138,24 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    return detectRuntimeContext({cwd:ctx.cwd,harness:{id:"omp",hasUI:ctx.hasUI??false,sessionId:ctx.sessionManager?.getSessionId?.(),agentDir:pi.pi.getAgentDir(),...(model?{model}:{})}});
  };
  pi.on("session_start",async(_event,ctx)=>{
-   await publishRuntimeAck("session_start",ctx);
+   const desiredTitle=process.env[RUNTIME_SESSION_TITLE_ENV];
+   if(desiredTitle){
+     try{
+       await pi.setSessionName(desiredTitle);
+       if(pi.getSessionName()!==desiredTitle) throw new Error("session name was not persisted");
+     }catch(error){
+       await publishRuntimeAck("session_start",ctx,undefined,"session_name_failed",desiredTitle);
+       delete process.env[RUNTIME_SESSION_TITLE_ENV];
+       throw error;
+     }
+     delete process.env[RUNTIME_SESSION_TITLE_ENV];
+   }
+   await publishRuntimeAck("session_start",ctx,undefined,undefined,pi.getSessionName());
    let prompt:string|undefined;
    try{
      prompt=await consumePromptChannel();
    }catch(error){
-     await publishRuntimeAck("before_agent_start",ctx,undefined,"prompt_channel_failed");
+     await publishRuntimeAck("before_agent_start",ctx,undefined,"prompt_channel_failed",pi.getSessionName());
      throw error;
    }finally{
      delete process.env[PROMPT_CHANNEL_URL_ENV];
@@ -122,10 +163,17 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    }
    if(prompt!==undefined) pi.sendUserMessage(prompt);
  });
- pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt);return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
+ pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
    description:"Plan the active objective and start one implementer in a right split",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
+ });
+ pi.registerCommand(HANDOFF_COMMAND,{
+   description:"Persist durable context and continue in a named adjacent tab",
+   handler:(args)=>{
+     const focus=String(args??"");
+     pi.sendUserMessage(buildHandoffPrompt(focus,nextHandoffTitle(pi.getSessionName(),focus)));
+   },
  });
  pi.registerCommand(PROMOTE_CONTEXT_COMMAND,{
    description:"Promote missing durable session context into canonical repository docs",
@@ -137,7 +185,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. placement is optional and defaults to a right 50% split; explicit placement may be {kind:'tab'} or {kind:'split',direction:'left'|'right'|'top'|'bottom',percent:1..99}. pane is {title,onExit:'close'|'keep-open'}; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}.",approval:"write",
+    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}.",approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
       prompt:{type:"string",minLength:1},
@@ -156,7 +204,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
     },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split) or explicit {kind:'tab'} / {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'}, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, and focus"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split; {kind:'tab'} means adjacent named tab) or explicit {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, and focus"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       const request=normalizeSessionToolInput(raw);

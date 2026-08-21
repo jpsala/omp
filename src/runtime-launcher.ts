@@ -3,9 +3,9 @@ import type { WezTermPaneHandle, WezTermHostAdapter } from "./runtime-host-wezte
 import { openPromptChannel, type PromptChannelHandle } from "./runtime-prompt-channel.ts";
 export interface LaunchRequest { cwd:string; placement:{kind:"split";direction:"left"|"right"|"top"|"bottom";percent:number}|{kind:"tab"}; pane:{title:string;onExit:"close"|"keep-open"}; fresh:boolean; persistence:"saved"|"ephemeral"; model:{mode:"inherit"}|{mode:"explicit";spec:string}; prompt:string; focus:boolean }
 export interface LaunchEnvironment { launchId:string; nonce:string; promptHash:string; sourcePaneId:string; instanceRef:string; parentSessionId:string }
-export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; source:{instanceRef:string;paneId:string}; parentSessionId:string; model?:string }
+export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
 export interface LaunchResult { ok:true; launchId:string; paneId:string; sessionId:string; model:string }
-export type LaunchFailureStage = "prompt_channel" | "build_child" | "create_pane" | AckStage | "focus";
+export type LaunchFailureStage = "prompt_channel" | "build_child" | "create_pane" | "finalize_tab" | AckStage | "focus";
 export type RollbackStatus = "not-needed" | "completed" | "failed";
 export interface LaunchFailureDetails {
   status: "failed";
@@ -29,7 +29,7 @@ const wait=(ms:number)=>{
 };
 const unsafe=(value:string)=>/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
 
-function rejectionReason(a: HandshakeAck, stage: AckStage, e: LaunchEnvironment, pane: string, model?: string, hash?: string): string | undefined {
+function rejectionReason(a: HandshakeAck, stage: AckStage, e: LaunchEnvironment, pane: string, title: string, model?: string, hash?: string): string | undefined {
   const x=a as HandshakeAck&{parentSessionId?:string;instanceRef?:string};
   if(a.version!==1)return "version_mismatch";
   if(a.stage!==stage)return "stage_mismatch";
@@ -37,6 +37,7 @@ function rejectionReason(a: HandshakeAck, stage: AckStage, e: LaunchEnvironment,
   if(a.nonce!==e.nonce)return "nonce_mismatch";
   if(a.paneId!==pane)return "pane_mismatch";
   if(a.sessionId===e.parentSessionId)return "session_mismatch";
+  if(a.sessionName!==title)return "session_name_mismatch";
   if(model&&a.model!==model)return "model_mismatch";
   if(x.parentSessionId!==e.parentSessionId)return "parent_session_mismatch";
   if(x.instanceRef!==e.instanceRef)return "instance_mismatch";
@@ -87,6 +88,10 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
     h=request.placement.kind==="split"
       ?await deps.adapter.split({...req,direction:request.placement.direction,percent:request.placement.percent})
       :await deps.adapter.tab(req);
+    if(request.placement.kind==="tab"){
+      stage="finalize_tab";
+      await deps.adapter.finalizeTab(h,request.pane.title);
+    }
     const get=async(expectedStage:AckStage,window:number):Promise<HandshakeAck>=>{
       stage=expectedStage;
       const end=now()+window;
@@ -94,7 +99,7 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
         if(deps.signal?.aborted)throw new Error("launch aborted");
         const a=await deps.markers.consume(id,expectedStage);
         if(a){
-          const issue=rejectionReason(a,expectedStage,env,h!.ownedPaneId,deps.model,expectedStage==="before_agent_start"&&!a.failureCode?env.promptHash:undefined);
+          const issue=rejectionReason(a,expectedStage,env,h!.ownedPaneId,request.pane.title,deps.model,expectedStage==="before_agent_start"&&!a.failureCode?env.promptHash:undefined);
           if(!issue){
             if(a.failureCode)throw new Error(`${expectedStage} failed: ${a.failureCode}`);
             return a;

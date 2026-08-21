@@ -3,7 +3,7 @@ import { PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-
 import { promptSha256, type HandshakeAck, type MarkerStore } from "../src/runtime-handshake.ts";
 const request: LaunchRequest = { cwd: "C:\\work", placement: { kind: "split", direction: "right", percent: 40 }, pane: { title: "Implementador · framing", onExit: "keep-open" }, fresh: true, persistence: "ephemeral", model: { mode: "explicit", spec: "openai/gpt-5" }, prompt: "héllo\nsecond", focus: true };
 
-const ack = (stage: "session_start" | "before_agent_start", extra: Partial<HandshakeAck> = {}): HandshakeAck => ({ version: 1, stage, launchId: "01010101010101010101010101010101", nonce: "nonce", paneId: "child-pane", sessionId: "child-session", model: "openai/gpt-5", timestamp: Date.now(), parentSessionId: "parent", instanceRef: "wez-instance", ...extra });
+const ack = (stage: "session_start" | "before_agent_start", extra: Partial<HandshakeAck> = {}): HandshakeAck => ({ version: 1, stage, launchId: "01010101010101010101010101010101", nonce: "nonce", paneId: "child-pane", sessionId: "child-session", sessionName: request.pane.title, model: "openai/gpt-5", timestamp: Date.now(), parentSessionId: "parent", instanceRef: "wez-instance", ...extra });
 function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: number; deferSessionStartMs?: number } = {}) {
   const events: string[] = [];
   const channelPrompts: string[] = [];
@@ -21,6 +21,7 @@ function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: numb
   const adapter = {
     split: async (value: { env?: Record<string, string | undefined> }) => { events.push("split"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
     tab: async (value: { env?: Record<string, string | undefined> }) => { events.push("tab"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
+    finalizeTab: async (_handle: unknown, title: string) => { events.push(`finalize:${title}`); },
     focus: async () => { events.push("focus"); },
     killOwnedPane: async () => { killed = true; events.push("kill"); },
   };
@@ -78,7 +79,7 @@ test("merges prompt channel metadata into the child environment", async () => {
   expect(h.childEnvironments[0]?.[PROMPT_CHANNEL_URL_ENV]).toContain("http://127.0.0.1:");
 });
 test("reports rejected acknowledgements and rolls back the owned pane", async () => {
-  for (const [bad, expected] of [[{ nonce: "wrong" }, "nonce_mismatch"], [{ paneId: "other" }, "pane_mismatch"], [{ sessionId: "parent" }, "session_mismatch"]] as const) {
+  for (const [bad, expected] of [[{ nonce: "wrong" }, "nonce_mismatch"], [{ paneId: "other" }, "pane_mismatch"], [{ sessionId: "parent" }, "session_mismatch"], [{ sessionName: "wrong" }, "session_name_mismatch"]] as const) {
     const h = harness([ack("session_start", bad)]);
     try {
       await launchAgent(request, h.deps);
@@ -134,6 +135,20 @@ test("reconciles an acknowledgement that arrives on the timeout boundary without
   expect(h.killed).toBe(false);
 });
 
-test("uses tab placement and does not replay consumed acknowledgements", async () => {
-  const r = { ...request, placement: { kind: "tab" as const } }; const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]); const result = await launchAgent(r, h.deps); expect(result.paneId).toBe("child-pane"); expect(h.events).toContain("tab");
+test("uses adjacent named tab placement and does not replay consumed acknowledgements", async () => {
+  const r = { ...request, placement: { kind: "tab" as const } }; const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]); const result = await launchAgent(r, h.deps); expect(result.paneId).toBe("child-pane"); expect(h.events).toContain("tab"); expect(h.events).toContain(`finalize:${request.pane.title}`);
+});
+
+test("rolls back the owned pane when adjacent tab finalization fails", async () => {
+  const r = { ...request, placement: { kind: "tab" as const } };
+  const h = harness([]);
+  h.deps.adapter.finalizeTab = async () => { throw new Error("tab order mismatch"); };
+  try {
+    await launchAgent(r, h.deps);
+    throw new Error("expected launch failure");
+  } catch (error) {
+    expect(error).toBeInstanceOf(RuntimeLaunchError);
+    expect((error as RuntimeLaunchError).details.stage).toBe("finalize_tab");
+  }
+  expect(h.killed).toBe(true);
 });

@@ -1,23 +1,26 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { WezTermHostAdapter, type ProcessResult, type ProcessRunner } from "../src/runtime-host-wezterm.ts";
+import { HANDOFF_AFTER_TAB_ENV } from "../src/runtime-tab-placement.ts";
 
 type Call = { executable: string; argv: string[]; options?: { stdin?: string | Uint8Array; timeoutMs?: number; env?: NodeJS.ProcessEnv } };
 
 function fakeRunner(calls: Call[], result?: ProcessResult): ProcessRunner {
   let createdPanePendingDescribe = false;
+  let createdKind: "split" | "tab" | undefined;
   return async (executable, argv, options) => {
     calls.push({ executable, argv: [...argv], options });
     if (argv.includes("split-pane") || argv.includes("spawn")) {
       createdPanePendingDescribe = true;
+      createdKind = argv.includes("spawn") ? "tab" : "split";
       return { exitCode: 0, stdout: " 9\r\n", stderr: "" };
     }
-    if (argv.includes("send-text") || argv.includes("activate-pane") || argv.includes("kill-pane")) {
+    if (argv.includes("send-text") || argv.includes("activate-pane") || argv.includes("kill-pane") || argv.includes("set-tab-title")) {
       return result ?? { exitCode: 0, stdout: "", stderr: "" };
     }
     if (!argv.includes("list")) throw new Error(`fake runner sequencing exhausted: unexpected argv ${argv.join(" ")}`);
     const rows = createdPanePendingDescribe
-      ? [{ pane_id: "7", window_id: 1, tab_id: 2, workspace: "main" }, { pane_id: "9", window_id: 1, tab_id: 2, workspace: "main" }]
+      ? [{ pane_id: "7", window_id: 1, tab_id: 2, workspace: "main" }, { pane_id: "9", window_id: 1, tab_id: createdKind === "tab" ? 3 : 2, workspace: "main" }]
       : [{ pane_id: "7", window_id: 1, tab_id: 2, workspace: "main" }];
     createdPanePendingDescribe = false;
     return { exitCode: 0, stdout: JSON.stringify(rows), stderr: "" };
@@ -41,7 +44,37 @@ test("split and tab use distinct commands and executable argv", async () => {
   expect(split?.argv).not.toContain("--socket-name");
   expect(tab?.argv).toContain("spawn");
   for (const call of calls) expectSocket(call, "inst");
+  expect(tab?.options?.env?.[HANDOFF_AFTER_TAB_ENV]).toBe("2");
   expect(calls[0].argv).toContain("split-pane");
+});
+
+test("names a created tab and verifies it immediately follows the source", async () => {
+  const calls: Call[] = [];
+  let created = false;
+  let postRename = false;
+  const runner: ProcessRunner = async (executable, argv, options) => {
+    calls.push({ executable, argv: [...argv], options });
+    if (argv.includes("spawn")) {
+      created = true;
+      return { exitCode: 0, stdout: "9\n", stderr: "" };
+    }
+    if (argv.includes("set-tab-title")) {
+      postRename = true;
+      return { exitCode: 0, stdout: "", stderr: "" };
+    }
+    if (argv.includes("list")) {
+      const source = { pane_id: 7, window_id: 1, tab_id: 2 };
+      if (!created) return { exitCode: 0, stdout: JSON.stringify([source, { pane_id: 8, window_id: 1, tab_id: 4 }]), stderr: "" };
+      const owned = { pane_id: 9, window_id: 1, tab_id: 5 };
+      const rows = postRename ? [source, owned, { pane_id: 8, window_id: 1, tab_id: 4 }] : [source, { pane_id: 8, window_id: 1, tab_id: 4 }, owned];
+      return { exitCode: 0, stdout: JSON.stringify(rows), stderr: "" };
+    }
+    throw new Error(`unexpected argv ${argv.join(" ")}`);
+  };
+  const adapter = new WezTermHostAdapter({ runner });
+  const handle = await adapter.tab({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:/dev/omp", program: "omp" });
+  await adapter.finalizeTab(handle, "os · Handoff · 2");
+  expect(calls.find(call => call.argv.includes("set-tab-title"))?.argv).toEqual(["cli", "set-tab-title", "--tab-id", "5", "os · Handoff · 2"]);
 });
 
 test("retries until a newly created pane becomes visible in the mux list", async () => {

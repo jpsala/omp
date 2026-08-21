@@ -9,6 +9,7 @@ import {
   runBootstrap,
   type BootstrapSpawner,
 } from "../scripts/runtime-child-bootstrap.ts";
+import { HANDOFF_AFTER_TAB_ENV, RUNTIME_SESSION_TITLE_ENV, handoffTabPlacementSequence } from "../src/runtime-tab-placement.ts";
 
 const metadata = {
   launchId: "launch-1",
@@ -50,6 +51,7 @@ test("sets runtime markers from the actual child pane and scrubs recursion marke
     OMP_RUNTIME_PANE_ID: "91",
     OMP_RUNTIME_INSTANCE: "socket-1",
     PI_CODING_AGENT_DIR: "C:/Users/test/.omp/agent",
+    [RUNTIME_SESSION_TITLE_ENV]: metadata.title,
   });
   for (const name of ["AGENT", "OMPCODE", "CLAUDECODE", "CI", "PI_CODING_AGENT_SESSION_DIR"]) {
     expect(environment[name]).toBeUndefined();
@@ -79,6 +81,7 @@ test("keeps the pane open in a clean interactive shell after OMP exits", async (
     OMP_RUNTIME_PROMPT_SHA256: "hash",
     AGENT: "1",
     KEEP: "yes",
+    [HANDOFF_AFTER_TAB_ENV]: "8",
   };
   const code = await runBootstrap(
     { metadata, program: "omp", args: ["--cwd", "C:/dev/omp"] },
@@ -90,11 +93,13 @@ test("keeps the pane open in a clean interactive shell after OMP exits", async (
   expect(calls.map(call => call.program)).toEqual(["omp", "pwsh.exe"]);
   expect(calls[1].args).toEqual(["-NoLogo"]);
   expect(calls[0].env.OMP_RUNTIME_LAUNCH_ID).toBe("launch-1");
+  expect(calls[0].env[RUNTIME_SESSION_TITLE_ENV]).toBe(metadata.title);
+  expect(calls[0].env[HANDOFF_AFTER_TAB_ENV]).toBeUndefined();
   expect(calls[1].env.OMP_RUNTIME_LAUNCH_ID).toBeUndefined();
   expect(calls[1].env.OMP_RUNTIME_PROMPT_URL).toBeUndefined();
   expect(calls[1].env.AGENT).toBeUndefined();
   expect(calls[1].env.KEEP).toBe("yes");
-  expect(titles).toEqual([paneTitleSequence(metadata.title)]);
+  expect(titles).toEqual([paneTitleSequence(metadata.title)+handoffTabPlacementSequence("8")]);
 });
 
 test("provides platform shells and strips runtime state from interactive environments", () => {
@@ -102,6 +107,7 @@ test("provides platform shells and strips runtime state from interactive environ
   expect(interactiveShellCommand("linux", { SHELL: "/bin/zsh" })).toEqual({ program: "/bin/zsh", args: ["-l"] });
   expect(buildInteractiveEnvironment({ OMP_RUNTIME_NONCE: "x", CI: "1", KEEP: "yes" })).toEqual({ KEEP: "yes" });
   expect(() => paneTitleSequence("bad\u0007title")).toThrow();
+  expect(() => handoffTabPlacementSequence("bad")).toThrow();
 });
 
 test("rejects malformed metadata and missing host identity", () => {
