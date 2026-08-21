@@ -337,3 +337,66 @@ Los perfiles y overlays permanecen porque representan configuración completa de
 sesión (`Task`, `prewalk`, proveedor y concurrencia), no un segundo selector
 rápido de modelo. El editor Windows opcional sigue disponible, pero ya no
 intercepta teclas de selección ni registra un ciclo paralelo.
+
+## 2026-08-20 — WinInput directo; wrapper global no operativo
+
+El editor vigente no reproduce el conflicto histórico con autocomplete: cargado
+directamente mediante `extensions/windows-input.ts` sobre OMP 17.3.8, activa
+`/windows-input`, conserva el menú `/` y convive con `/profiles`.
+
+El wrapper global `~/.omp/agent/extensions/windows-input.ts` no es equivalente.
+Su reexportación cruza la frontera del loader de extensiones y los imports
+internos terminan resolviendo `@oh-my-pi/pi-natives` 17.4.0 desde el cache de
+Bun; ese paquete no contiene el addon Win32 requerido. El wrapper captura el
+error y deja únicamente el comando diagnóstico, por lo que parece que WinInput
+estuviera cargado aunque el `CustomEditor` no se instaló.
+
+Hasta corregir esa resolución, la ruta verificable es cargar la fuente directa.
+El 2026-08-21 la configuración global reemplazó el wrapper por
+`C:/dev/omp/extensions/windows-input.ts`; el smoke RPC desde Constelaciones
+expuso `Toggle Windows-like input editor`, prueba de que el módulo nativo cargó.
+El backup byte-exacto previo quedó en
+`C:/Users/jpsal/.omp/agent/config.yml.windows-input-backup-2026-08-21T11-02-26.280Z`
+con SHA-256
+`5bbcf775d22fa1aba352a8420beaac1c194f27dc90e494f09f22f0ccb54a1c75`.
+
+## 2026-08-21 — Mouse del prompt como contrato TUI opt-in
+
+Click-to-caret y selección por drag no se implementan reconstruyendo geometría
+desde la extensión. `pi-tui` expone hit-testing del `Editor` sobre el frame
+renderizado y enruta SGR mouse sólo al componente normal enfocado que declara
+`wantsMouseTracking`. Usa button-motion `1002` más coordenadas extendidas
+`1006`; los overlays fullscreen conservan su tracking separado `1003`.
+
+`WindowsInputEditor` consume ese contrato: click cancela autocomplete y mueve el
+caret; press/motion/release izquierdos crean la misma selección que ya usan
+copy, cut, delete, paste y reemplazo por escritura. El mapeo conserva wrapping,
+scroll, padding y límites de grafemas anchos.
+
+`Ctrl+Z` se reserva como undo de texto en WinInput, no como suspend POSIX.
+Las ediciones de rango guardan snapshots atómicos compatibles con el TUI 17.4
+ya instalado; el TUI custom agrega además `replaceTextUndoable()` y `undo()`.
+`Ctrl+C` copia cuando hay selección, limpia un draft no vacío de forma
+reversible y es inerte sobre un draft vacío. Así conserva el clear útil sin
+mantener el doble Ctrl+C accidental como salida destructiva; `Ctrl+D` sigue
+siendo la salida explícita.
+
+La rueda no se entrega a WinInput en la pantalla principal. WezTerm intercepta
+`WheelUp`/`WheelDown` con `mouse_reporting = true` y `alt_screen = false` para
+recorrer el scrollback; el drag normal sigue llegando al editor y
+`Shift + drag` conserva la selección del terminal. Las TUIs fullscreen quedan
+fuera de esos bindings y mantienen su rueda propia.
+
+El paquete oficial OMP 17.4.0 aporta el addon Win32 correcto. El override
+actual de mouse tiene SHA-256
+`96da502deb46cda9f014c795d4e3174b5ba36d1804879e49cfb7784e265843f4`,
+pero la extensión viva ya aporta el undo compatible y el smoke lo verificó. El
+build TUI completo pendiente tiene SHA-256
+`90a83ae249bd82f428875150cba265e495ed1357ab6bcc6001e76ea63f289fd4`;
+`omp-undo-activate` reemplaza `omp.com` cuando su sesión bloqueante termine y
+`omp-mouse-finalize-v2` hace luego el cutover limpio de `omp.exe`.
+
+Rollback al launcher oficial 17.4:
+`C:/Users/jpsal/.bun/bin/omp.exe.official-17.4-backup-2026-08-21T11-41-10.889Z`,
+SHA-256
+`942767491537d14a8d2334a77cb3b4508479eef77323c4bcfe6387f2450d2e24`.
