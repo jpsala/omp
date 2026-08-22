@@ -14,18 +14,28 @@
 
 import { spawnSync } from "node:child_process";
 import { platform } from "node:os";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+} from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { CustomEditor } from "@oh-my-pi/pi-coding-agent/modes/components/custom-editor";
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import {
 	decodePrintableKey,
+	matchesKey,
 	type EditorTheme,
 	type KeybindingsManager,
-	matchesKey,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
 
+const MAX_WINDOWS_UNDO_STACK = 100;
+
 type Pos = { line: number; col: number };
 type Range = { start: Pos; end: Pos };
+type WindowsUndoSnapshot = {
+	beforeText: string;
+	beforeCursor: Pos;
+	afterText: string;
+};
 
 function comparePos(a: Pos, b: Pos): number {
 	if (a.line !== b.line) return a.line - b.line;
@@ -153,8 +163,9 @@ function readClipboardTextSync(): string | null {
 	return null;
 }
 
-class WindowsInputEditor extends CustomEditor {
+export class WindowsInputEditor extends CustomEditor {
 	private selectionAnchor: Pos | null = null;
+	private windowsUndoStack: WindowsUndoSnapshot[] = [];
 
 	private get lines(): string[] {
 		return this.getLines();
@@ -221,6 +232,7 @@ class WindowsInputEditor extends CustomEditor {
 		// Use raw editor text because range offsets are computed from state.lines.
 		// getExpandedText() expands paste markers and can desynchronize offsets.
 		const currentText = this.getText();
+		const currentCursor = this.cursor;
 		const startOffset = this.posToOffset(range.start);
 		const endOffset = this.posToOffset(range.end);
 		const normalized = normalizeText(replacement);
@@ -232,12 +244,30 @@ class WindowsInputEditor extends CustomEditor {
 			nextText,
 			startOffset + normalized.length,
 		);
+		if (nextText === currentText) return;
 
+		this.windowsUndoStack.push({
+			beforeText: currentText,
+			beforeCursor: currentCursor,
+			afterText: nextText,
+		});
+		if (this.windowsUndoStack.length > MAX_WINDOWS_UNDO_STACK) {
+			this.windowsUndoStack.shift();
+		}
 		this.onAutocompleteCancel?.();
-		this.setText(nextText);
-		this.moveCursorTo(cursor);
+		const editor = this as WindowsInputEditor & {
+			replaceTextUndoable?: (text: string, position: Pos) => void;
+		};
+		if (typeof editor.replaceTextUndoable === "function") {
+			editor.replaceTextUndoable(nextText, cursor);
+		} else {
+			// Compatibility with the installed 17.4.0 TUI while the custom
+			// binary waits for its Windows file lock to clear.
+			this.setText(nextText);
+			this.moveCursorTo(cursor);
+		}
 		this.clearSelection();
-		this.notifyChanged();
+		this.tui?.requestRender();
 	}
 
 	private offsetToPosInText(text: string, offset: number): Pos {
@@ -261,11 +291,6 @@ class WindowsInputEditor extends CustomEditor {
 		if (!range) return false;
 		this.replaceRange(range, text);
 		return true;
-	}
-
-	private notifyChanged(): void {
-		this.onChange?.(this.getText());
-		this.tui?.requestRender();
 	}
 
 	private collapseSelection(to: "start" | "end"): boolean {
@@ -307,7 +332,17 @@ class WindowsInputEditor extends CustomEditor {
 
 		if (matchesKey(data, "ctrl+z")) {
 			this.clearSelection();
-			super.handleInput(data);
+			const snapshot = this.windowsUndoStack.at(-1);
+			if (snapshot?.afterText === this.getText()) {
+				this.windowsUndoStack.pop();
+				this.onAutocompleteCancel?.();
+				this.setText(snapshot.beforeText);
+				this.moveCursorTo(snapshot.beforeCursor);
+			} else {
+				// Public on every supported Editor version; unlike CustomEditor's
+				// Ctrl+Z route, this invokes text undo instead of POSIX suspend.
+				this.undoPastTransientText("");
+			}
 			this.tui?.requestRender();
 			return;
 		}
@@ -317,15 +352,21 @@ class WindowsInputEditor extends CustomEditor {
 			return;
 		}
 
-
 		if (matchesKey(data, "ctrl+c")) {
 			const selected = this.selectedText();
 			if (selected) {
 				copyText(selected);
 				return;
 			}
-			// Preserve Pi's app.clear action when there is no selection.
-			super.handleInput(data);
+			// Windows-style safety: clear a non-empty draft as one undoable edit.
+			// Ctrl+C on an empty draft is inert, so an accidental double press
+			// cannot trigger OMP's global shutdown gesture.
+			if (this.getText().length > 0) {
+				this.replaceRange(
+					{ start: { line: 0, col: 0 }, end: this.docEnd() },
+					"",
+				);
+			}
 			return;
 		}
 
