@@ -1,7 +1,8 @@
+import type { SpawnAgentSessionRequestV1 } from "./agent-runtime-context.ts";
 import { promptSha256, randomLaunchId, type AckStage, type HandshakeAck, type MarkerStore } from "./runtime-handshake.ts";
 import type { WezTermPaneHandle, WezTermHostAdapter } from "./runtime-host-wezterm.ts";
 import { openPromptChannel, type PromptChannelHandle } from "./runtime-prompt-channel.ts";
-export interface LaunchRequest { cwd:string; placement:{kind:"split";direction:"left"|"right"|"top"|"bottom";percent:number}|{kind:"tab"}; pane:{title:string;onExit:"close"|"keep-open"}; fresh:boolean; persistence:"saved"|"ephemeral"; model:{mode:"inherit"}|{mode:"explicit";spec:string}; prompt:string; focus:boolean }
+export type LaunchRequest = SpawnAgentSessionRequestV1;
 export interface LaunchEnvironment { launchId:string; nonce:string; promptHash:string; sourcePaneId:string; instanceRef:string; parentSessionId:string }
 export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
 export interface LaunchResult { ok:true; launchId:string; paneId:string; sessionId:string; model:string }

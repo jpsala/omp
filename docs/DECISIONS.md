@@ -77,19 +77,25 @@ Los pull requests son excepcionales y requieren un motivo concreto. Collab,
 browser y computer sólo se activan cuando su necesidad y las políticas locales
 lo permiten.
 
-## 2026-08-14 — Handoff corto como comando del Runtime Habitat
+## 2026-08-14 — Implementación corta usa workflow nativo de OMP 18
 
 `/plan-implement-short [objetivo]` vive en la extensión global
-`agent-runtime-habitat`, junto a la tool que lanza la sesión. El slash command
-inyecta una instrucción compacta al parent en vez de copiar un prompt manual:
-el parent resuelve alcance y contratos, arma el plan completo con la menor
-cantidad de pasos y entrega un único handoff autocontenido.
+`agent-runtime-habitat`, junto a la tool que lanza la sesión. El parent ya no
+duplica planificación: empaqueta objetivo, límites, evidencia y verificación en
+un prompt autocontenido y abre una única hija.
 
-El implementador arranca inmediatamente en un split derecho al 50%, fresh
-saved, mismo cwd y modelo heredado; el foco queda en el parent. El paralelismo
-es interno al implementador y sólo para slices independientes con contrato
-cerrado. El parent no duplica implementación ni monitorea el pane después del
-handshake.
+La hija arranca en Sol heredado dentro de un split derecho al 50%, fresh saved,
+mismo cwd y foco conservado en el parent. El request cerrado declara
+`workflow: { mode: "plan-yolo", target: "@smol", advisor: true }`: OMP 18
+planifica en el modelo fuerte, autoaprueba el plan y entrega la implementación
+al rol económico; Advisor revisa el corte de forma opt-in. El parent no
+implementa ni monitorea el pane después del handshake.
+
+`agent_runtime_session` también admite workflow `prewalk`, pero nunca argv
+libre. El target es un selector de rol nativo OMP, no un `model.spec`; ausencia
+de workflow conserva exactamente el lanzamiento anterior. Esta integración es
+workstation-specific mientras plan-yolo permanezca en el build granular y debe
+revalidarse al rebasar OMP.
 
 ## 2026-08-14 — Nombre y cierre del pane son contrato explícito
 

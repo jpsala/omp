@@ -9,7 +9,12 @@ export interface AgentRuntimeContextV1 {
  location?: { instanceRef: string; windowId?: string; tabId?: string; paneId?: string; workspace?: string; cwd: string };
  capabilities: Readonly<Record<string, boolean | readonly string[]>>;
 }
-export interface SpawnAgentSessionRequestV1 { version: 1; cwd: string; placement: { kind: "split"; direction: "left"|"right"|"top"|"bottom"; percent: number } | { kind: "tab" }; pane: { title: string; onExit: "close"|"keep-open" }; fresh: boolean; persistence: "saved"|"ephemeral"; model: {mode:"inherit"}|{mode:"explicit";spec:string}; prompt: string; focus: boolean }
+export type AgentSessionWorkflow = {
+ mode: "prewalk" | "plan-yolo";
+ target?: string;
+ advisor?: boolean;
+};
+export interface SpawnAgentSessionRequestV1 { version: 1; cwd: string; placement: { kind: "split"; direction: "left"|"right"|"top"|"bottom"; percent: number } | { kind: "tab" }; pane: { title: string; onExit: "close"|"keep-open" }; fresh: boolean; persistence: "saved"|"ephemeral"; model: {mode:"inherit"}|{mode:"explicit";spec:string}; prompt: string; focus: boolean; workflow?: AgentSessionWorkflow }
 
 const keys=(v: unknown, allowed: readonly string[], at: string): Record<string,unknown> => { if (!v || typeof v!=="object" || Array.isArray(v)) throw new Error(`${at} must be an object`); const o=v as Record<string,unknown>; for(const k of Object.keys(o)) if(!allowed.includes(k)) throw new Error(`${at} contains unknown field ${JSON.stringify(k)}`); return o; };
 const str=(v: unknown, at: string): string => { if(typeof v!=="string" || !v.trim()) throw new Error(`${at} must be a non-empty string`); return v; };

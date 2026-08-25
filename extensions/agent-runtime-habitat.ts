@@ -5,7 +5,7 @@ import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
 import { createMarkerStore, markerRoot, promptSha256, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
-import { launchAgent, RuntimeLaunchError, type LaunchRequest } from "../src/runtime-launcher.ts";
+import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { translateOmpRequest } from "../src/runtime-harness-omp.ts";
 import { RUNTIME_SESSION_TITLE_ENV } from "../src/runtime-tab-placement.ts";
@@ -20,17 +20,17 @@ export const PLAN_IMPLEMENT_SHORT_COMMAND = "plan-implement-short";
 export function buildPlanImplementShortPrompt(objective: string): string {
  const explicitObjective=objective.trim();
  const target=explicitObjective
-   ? `Usá este objetivo explícito (JSON string): ${JSON.stringify(explicitObjective)}`
-   : "Derivá el objetivo de la solicitud de usuario accionable inmediatamente anterior a este comando. Si no existe una, pedí sólo el objetivo y no lances otra sesión.";
- return `Actuá como coordinador de implementación, no como implementador de esta sesión.
+   ? `Objetivo explícito para la hija (JSON string): ${JSON.stringify(explicitObjective)}`
+   : "Derivá el objetivo de la solicitud de usuario accionable inmediatamente anterior a este comando. Si no existe una, pedí sólo el objetivo y no invoques agent_runtime_session.";
+ return `Empaquetá un único objetivo y lanzá exactamente una sesión hija; no produzcas el plan ni implementes en esta sesión.
 
 ${target}
 
-Investigá sólo lo necesario para cerrar alcance y dependencias. Diseñá el plan completo con la menor cantidad posible de pasos. Agrupá cambios que deban coordinarse y marcá como paralelos únicamente pasos realmente independientes. Antes del handoff resolvé contratos compartidos, invariantes y criterios de aceptación; no delegues planificación abierta.
+Construí un prompt autocontenido y compacto para una hija sin acceso a esta conversación. Incluí el objetivo, el cwd actual, el contexto ya comprobado que sea indispensable, límites aplicables y verificación esperada. No cierres un plan de implementación: la hija es dueña de planning e implementación, y el workflow nativo plan-yolo debe planificar y aplicar el cambio patch-specific.
 
-Construí un único prompt autocontenido para un agente sin acceso a esta conversación. Debe incluir objetivo, cwd, contexto comprobado, archivos o superficies afectadas cuando se conozcan, plan mínimo, límites y verificación esperada. Indicá al implementador que empiece inmediatamente y que puede usar subagentes en paralelo sólo para slices independientes con contratos ya cerrados.
+Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese paquete como prompt, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false y workflow:{mode:"plan-yolo",target:"@smol",advisor:true}. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras otras sesiones, no uses argv libre y no monitorees el pane.
 
-No implementes aquí. Invocá agent_runtime_session exactamente una vez con el cwd actual, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:false. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Pasá el handoff como prompt. No abras otras sesiones ni monitorees el pane. Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
+Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
 export const HANDOFF_COMMAND = "handoff";
 export function parseAtomicHandoffInput(text: string): string | undefined {
@@ -95,7 +95,7 @@ export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:5
 function isRequestInput(value: unknown): value is SessionToolInput {
  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
  const r=value as Record<string, unknown>;
- const allowed=["cwd","prompt","placement","pane","fresh","persistence","model","focus"];
+ const allowed=["cwd","prompt","placement","pane","fresh","persistence","model","focus","workflow"];
  if (Object.keys(r).some(k=>!allowed.includes(k))) return false;
  if (typeof r.cwd!=="string" || !r.cwd.trim() || typeof r.prompt!=="string" || !r.prompt.trim()) return false;
  if (typeof r.fresh!=="boolean" || typeof r.focus!=="boolean" || (r.persistence!=="saved"&&r.persistence!=="ephemeral")) return false;
@@ -116,9 +116,17 @@ function isRequestInput(value: unknown): value is SessionToolInput {
  ));
  if (!validPlacement || !r.model || typeof r.model!=="object" || Array.isArray(r.model)) return false;
  const model=r.model as Record<string, unknown>;
- return model.mode==="inherit"
+ const validModel=model.mode==="inherit"
    ? Object.keys(model).length===1
    : model.mode==="explicit" && Object.keys(model).length===2 && typeof model.spec==="string" && !!model.spec.trim();
+ if (!validModel) return false;
+ if (r.workflow===undefined) return true;
+ if (!r.workflow || typeof r.workflow!=="object" || Array.isArray(r.workflow)) return false;
+ const workflow=r.workflow as Record<string,unknown>;
+ if (Object.keys(workflow).some(key=>!["mode","target","advisor"].includes(key))) return false;
+ if (workflow.mode!=="prewalk"&&workflow.mode!=="plan-yolo") return false;
+ if (workflow.target!==undefined&&(typeof workflow.target!=="string"||!workflow.target.trim())) return false;
+ return workflow.advisor===undefined||typeof workflow.advisor==="boolean";
 }
 export function normalizeSessionToolInput(input: SessionToolInput): SpawnAgentSessionRequestV1 {
  return {version:1,...input,placement:input.placement??DEFAULT_SESSION_PLACEMENT};
@@ -169,7 +177,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
  pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
-   description:"Plan the active objective and start one implementer in a right split",
+   description:"Start one planning-and-implementation owner with native plan-yolo in a right split",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
  });
  pi.on("input",(event)=>{
@@ -188,7 +196,8 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}.",approval:"write",
+    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
       prompt:{type:"string",minLength:1},
@@ -203,11 +212,16 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         {type:"object",properties:{mode:{const:"inherit"}},required:["mode"],additionalProperties:false},
         {type:"object",properties:{mode:{const:"explicit"},spec:{type:"string",minLength:1}},required:["mode","spec"],additionalProperties:false}
       ]},
+      workflow:{type:"object",properties:{
+        mode:{type:"string",enum:["prewalk","plan-yolo"]},
+        target:{type:"string",minLength:1},
+        advisor:{type:"boolean"}
+      },required:["mode"],additionalProperties:false},
       focus:{type:"boolean"}
     },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split; {kind:'tab'} means adjacent named tab) or explicit {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, and focus"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split; {kind:'tab'} means adjacent named tab) or explicit {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       const request=normalizeSessionToolInput(raw);
@@ -225,7 +239,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
       if("kind" in translated) return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:translated.message})}],details:{status:"unsupported",reason:translated.message}};
       if(runtime.host.provider!=="WezTerm"||runtime.host.kind!=="terminal"||!runtime.location?.paneId||!runtime.location.instanceRef)
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"unsupported runtime host"})}],details:{status:"unsupported",reason:"unsupported runtime host"}};
-      const value=request as LaunchRequest;
+      const value=request;
       const adapter=createWezTermAdapter();
       try{
         const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",

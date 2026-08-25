@@ -66,17 +66,19 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   wrapper global permite usarlo desde cualquier repo.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
   lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]`,
-  `/handoff [foco]` y promoción durable. Como el TUI despacha el builtin
-  homónimo antes que los comandos de extensión, la extensión intercepta el input
-  interactivo exacto antes del despacho nativo y no registra una colisión inerte.
-  Handoff persiste primero el cierre semántico y abre una hija fresh saved en
-  un tab adyacente enfocado, usa el mismo nombre
-  generacional para sesión y tab, inyecta el kickoff y conserva el origen como
-  rollback. Si se omite placement en la tool, abre un split derecho
-  al 50%; cada launch declara nombre y conducta al salir. El handshake usa
-  `scripts/runtime-child-bootstrap.ts` y `src/runtime-prompt-channel.ts`; una
-  falla del canal, naming o posición se reporta inmediatamente y nunca persiste
-  prompt, URL o nonce.
+  `/handoff [foco]` y promoción durable. La tool acepta un workflow cerrado
+  `prewalk|plan-yolo`, target de rol nativo y Advisor opt-in; nunca argv libre.
+  `/plan-implement-short` abre una hija Sol en split derecho, plan-yolo entrega
+  la implementación a `@smol` y Advisor revisa el corte, sin duplicar plan en
+  el parent. El benchmark nativo corto pasó 8/8 turnos con Sol medium y Luna
+  medium falló en el turno 5, por lo que esta degradación queda limitada al
+  flow corto y `task.prewalk` global permanece apagado.
+  Como el TUI despacha el builtin `/handoff` antes que extensiones, Habitat
+  intercepta sólo el input exacto. Handoff persiste el cierre y abre una hija
+  fresh saved en tab adyacente enfocado, con nombre generacional compartido por
+  sesión y tab y origen intacto como rollback. El handshake conserva canal
+  efímero, dos acks, hash, ownership del pane y fast fail sin persistir prompt,
+  URL ni nonce.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.

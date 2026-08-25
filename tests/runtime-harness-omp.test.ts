@@ -43,6 +43,22 @@ describe("OMP Phase 3 translation", () => {
     const result = await translateOmpRequest(request(), { ...context(), effectiveProfile: "team-profile" });
     expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH, "--profile", "team-profile"] });
   });
+  test("appends exact closed workflow flags without changing legacy argv order", async () => {
+    const legacy = await translateOmpRequest(request(), context());
+    expect(legacy).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH] });
+
+    const prewalk = await translateOmpRequest({ ...request(), workflow: { mode: "prewalk" as const, target: "@smol" } }, context());
+    expect(prewalk).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH, "--prewalk", "--prewalk-into", "@smol"] });
+
+    const planYolo = await translateOmpRequest({ ...request(), workflow: { mode: "plan-yolo" as const, target: "@smol", advisor: true } }, context());
+    expect(planYolo).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH, "--plan-yolo", "--plan-yolo-into", "@smol", "--advisor"] });
+  });
+
+  test("supports workflow mode alone and emits advisor only when opted in", async () => {
+    const result = await translateOmpRequest({ ...request("ephemeral"), workflow: { mode: "prewalk" as const, advisor: false } }, context());
+    expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--no-session", "--prewalk"] });
+  });
+
   test("scrubs exact recursion and inherited session markers while preserving unrelated env", async () => {
     const result = await translateOmpRequest(request(), context(), {
       AGENT: "x", OMPCODE: "x", CLAUDECODE: "x", CI: "1", PI_CODING_AGENT_SESSION_DIR: "inherited",
@@ -67,6 +83,18 @@ describe("OMP Phase 3 translation", () => {
     ];
     for (const [badRequest, badContext] of cases) {
       await expect(translateOmpRequest(badRequest as never, badContext as never)).resolves.toMatchObject({ kind: "unsupported", code: "incompatible-request" });
+    }
+  });
+  test("rejects non-closed or malformed workflows before translation", async () => {
+    for (const workflow of [
+      { mode: "prewalk", extra: true },
+      { mode: "plan-yolo", target: "   " },
+      { mode: "plan-yolo", advisor: "yes" },
+      { mode: "other" },
+    ]) {
+      const result = await translateOmpRequest({ ...request(), workflow } as never, context());
+      expect(result).toMatchObject({ kind: "unsupported", code: "incompatible-request" });
+      expect(result).not.toHaveProperty("argv");
     }
   });
   test("omits agent-dir override when no effective agentDir exists", async () => {

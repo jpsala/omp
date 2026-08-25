@@ -14,19 +14,23 @@ La extensión no autoriza lanzamientos por estar disponible. La tool mutante con
 
 ### Handoff corto de implementación
 
-`/plan-implement-short [objetivo]` dispara un turno compacto en la sesión actual:
-el parent cierra alcance, contratos e invariantes, produce el plan completo con
-la menor cantidad de pasos y entrega un único prompt autocontenido a un
-implementador. Sin argumento usa la solicitud accionable inmediatamente
-anterior; sin objetivo recuperable pide sólo ese dato y no abre una sesión.
+`/plan-implement-short [objetivo]` empaqueta el objetivo en la sesión actual y
+lanza exactamente una hija como dueña conjunta de planning e implementación. El
+parent no investiga para cerrar un plan completo ni implementa. Sin argumento
+deriva la solicitud accionable inmediatamente anterior; si no existe un objetivo
+recuperable, pide sólo ese dato y no abre una sesión.
 
-El comando lanza exactamente una sesión fresh saved, hereda modelo y cwd, abre
-un split derecho al 50% y conserva el foco en el parent. El pane recibe un
-título corto `Implementador · <objetivo>` y `onExit: "keep-open"`: salir de OMP
-devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo. Los
-pasos sólo se marcan paralelos cuando son independientes; el implementador puede
-delegarlos con contratos ya cerrados. El parent no implementa, no abre panes
-adicionales ni monitorea al child después del handshake.
+La hija es fresh saved, hereda modelo y cwd, abre un split derecho al 50%,
+conserva el foco en el parent y usa `onExit: "keep-open"`. El request declara
+exactamente `workflow: { mode: "plan-yolo", target: "@smol", advisor: true }`.
+OMP recibe el workflow nativo plan-yolo: la hija produce el plan y aplica el
+cambio patch-specific, en vez de recibir un plan completo preparado por el
+parent. Este comando opta explícitamente por advisor; no convierte advisor en
+default para otros lanzamientos.
+
+El pane recibe un título corto `Implementador · <objetivo>`. El parent no abre
+panes adicionales ni monitorea al child después del handshake. Salir de OMP
+devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo.
 
 ### Promoción de contexto durable
 
@@ -82,6 +86,29 @@ pane owned.
 - Fresh ephemeral: `--no-session`.
 - Selección de modelo: el request siempre declara `explicit` o `inherit`;
   `inherit` resuelve el modelo actual.
+
+### Workflows nativos cerrados
+
+`agent_runtime_session.workflow` es opcional. Su ausencia conserva exactamente
+el argv histórico. Cuando está presente sólo acepta:
+
+```text
+{ mode: "prewalk" | "plan-yolo", target?: string, advisor?: boolean }
+```
+
+La traducción es directa y sin argv libre: `prewalk` agrega `--prewalk` y un
+target agrega `--prewalk-into <target>`; `plan-yolo` agrega `--plan-yolo` y un
+target agrega `--plan-yolo-into <target>`. Sólo `advisor: true` agrega
+`--advisor`. Campos extra, tipos incorrectos y targets vacíos devuelven
+`unsupported` antes de crear un pane.
+
+`target` es un selector de rol nativo OMP, por ejemplo `@smol`; no es
+`model.spec`, no cambia el modelo efectivo declarado por `model` y no debe
+sintetizarse como `provider/model`. Activar un workflow puede sumar turns,
+latencia y costo frente al lanzamiento legacy. El caller opta por ese costo en
+cada request; el rollback sigue limitado al pane owned y conserva intacto el
+origen.
+
 
 ### Ciclo de vida y nombre de panes
 
@@ -177,9 +204,11 @@ después de una única lectura válida o durante rollback; el prompt no aparece 
 argv, env, terminal, logs, artifacts ni markers.
 
 El schema mantiene `cwd`, `prompt`, `pane`, freshness, persistencia, modelo y
-focus obligatorios. `placement` es el único campo opcional y su ausencia se
-normaliza a `{ kind: "split", direction: "right", percent: 50 }`. Un objeto
-explícito inválido sigue fallando cerrado y devuelve la forma esperada.
+focus obligatorios. `placement` y `workflow` son opcionales; omitir `workflow`
+conserva el lanzamiento legacy y omitir `placement` normaliza a
+`{ kind: "split", direction: "right", percent: 50 }`. Ambos objetos son
+closed-world: una forma explícita inválida falla como `unsupported` antes del
+launch.
 
 ## Ownership y rollback
 

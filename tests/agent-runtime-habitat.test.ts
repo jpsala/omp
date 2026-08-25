@@ -58,7 +58,7 @@ test("extension registers context and an explicit nested launch contract", async
     const sessionTool = tools.get("agent_runtime_session");
     expect(contextTool?.approval).toBe("read");
     expect(sessionTool?.approval).toBe("write");
-    const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[] }> };
+    const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[]; additionalProperties?: boolean; properties?: Record<string, unknown> }> };
     expect(schema.required).toEqual(["cwd", "prompt", "pane", "fresh", "persistence", "model", "focus"]);
     expect(schema.properties?.placement.anyOf).toHaveLength(2);
     expect(DEFAULT_SESSION_PLACEMENT).toEqual({ kind: "split", direction: "right", percent: 50 });
@@ -73,18 +73,26 @@ test("extension registers context and an explicit nested launch contract", async
     }).placement).toEqual(DEFAULT_SESSION_PLACEMENT);
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
+    expect(schema.properties?.workflow.required).toEqual(["mode"]);
+    expect(schema.properties?.workflow.additionalProperties).toBeFalse();
+    expect(schema.properties?.workflow.properties).toHaveProperty("target");
+    expect(sessionTool?.description).toContain("never model.spec");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
-    expect(planCommand?.description).toContain("right split");
+    expect(planCommand?.description).toContain("planning-and-implementation owner");
     await planCommand!.handler('corregir "framing"', {});
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]).toContain(JSON.stringify('corregir "framing"'));
     expect(sentMessages[0]).toContain('placement {kind:"split",direction:"right",percent:50}');
     expect(sentMessages[0]).toContain('pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}');
-    expect(sentMessages[0]).toContain('model:{mode:"inherit"}');
-    expect(sentMessages[0]).toContain("No implementes aquí");
+    expect(sentMessages[0]).toContain('fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false');
+    expect(sentMessages[0]).toContain('workflow:{mode:"plan-yolo",target:"@smol",advisor:true}');
+    expect(sentMessages[0]).toContain("la hija es dueña de planning e implementación");
+    expect(sentMessages[0]).toContain("no produzcas el plan ni implementes en esta sesión");
+    expect(sentMessages[0].match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
     await planCommand!.handler("   ", {});
     expect(sentMessages).toHaveLength(2);
     expect(sentMessages[1]).toContain("solicitud de usuario accionable inmediatamente anterior");
+    expect(sentMessages[1]).toContain("pedí sólo el objetivo y no invoques agent_runtime_session");
     const promoteCommand = commands.get(PROMOTE_CONTEXT_COMMAND);
     expect(promoteCommand?.description).toContain("durable session context");
     await promoteCommand!.handler('decisión de "framing"', {});
@@ -124,6 +132,17 @@ test("extension registers context and an explicit nested launch contract", async
 
     const invalid = await sessionTool!.execute("id", { cwd: "C:\\tmp", prompt: "x", placement: { type: "split", direction: "right", size: 50 }, fresh: true, persistence: "saved", model: { type: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(invalid.content[0].text).reason).toContain("{kind:'tab'} means adjacent named tab");
+    const invalidWorkflow = await sessionTool!.execute("id", {
+      cwd: `${agentDir}/missing`,
+      prompt: "x",
+      pane: { title: "Implementador", onExit: "keep-open" },
+      fresh: true,
+      persistence: "saved",
+      model: { mode: "inherit" },
+      focus: false,
+      workflow: { mode: "plan-yolo", target: "", argv: ["--anything"] },
+    }, new AbortController().signal, () => {}, {});
+    expect(JSON.parse(invalidWorkflow.content[0].text)).toMatchObject({ status: "unsupported", reason: expect.stringContaining("invalid launch request") });
 
     const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");

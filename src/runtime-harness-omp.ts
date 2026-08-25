@@ -38,6 +38,15 @@ function validModel(value: unknown): value is { mode: "inherit" } | { mode: "exp
   if (model.mode === "inherit") return Object.keys(model).length === 1;
   return model.mode === "explicit" && typeof model.spec === "string" && !!model.spec.trim() && Object.keys(model).length === 2;
 }
+function validWorkflow(value: unknown): value is NonNullable<SpawnAgentSessionRequestV1["workflow"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const workflow = value as Record<string, unknown>;
+  if (Object.keys(workflow).some(key => !["mode", "target", "advisor"].includes(key))) return false;
+  if (workflow.mode !== "prewalk" && workflow.mode !== "plan-yolo") return false;
+  if (workflow.target !== undefined && (typeof workflow.target !== "string" || !workflow.target.trim())) return false;
+  return workflow.advisor === undefined || typeof workflow.advisor === "boolean";
+}
+
 
 function validResolvedModel(value: unknown): value is OmpModel {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -49,12 +58,13 @@ function validResolvedModel(value: unknown): value is OmpModel {
 function validRequest(value: unknown): value is SpawnAgentSessionRequestV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
-  const allowed = ["version", "cwd", "placement", "pane", "fresh", "persistence", "model", "prompt", "focus"];
+  const allowed = ["version", "cwd", "placement", "pane", "fresh", "persistence", "model", "prompt", "focus", "workflow"];
   if (Object.keys(request).some(key => !allowed.includes(key))) return false;
   if (request.version !== 1 || typeof request.cwd !== "string" || !request.cwd.trim()) return false;
   if (request.fresh !== true && request.fresh !== false) return false;
   if (request.persistence !== "saved" && request.persistence !== "ephemeral") return false;
-  if (typeof request.prompt !== "string" || !request.prompt.trim() || typeof request.focus !== "boolean" || !validModel(request.model)) return false;
+  if (typeof request.prompt !== "string" || !request.prompt.trim() || typeof request.focus !== "boolean" || !validModel(request.model)
+    || (request.workflow !== undefined && !validWorkflow(request.workflow))) return false;
   const pane = request.pane;
   if (!pane || typeof pane !== "object" || Array.isArray(pane)) return false;
   const paneOptions = pane as Record<string, unknown>;
@@ -123,6 +133,11 @@ export async function translateOmpRequest(request: SpawnAgentSessionRequestV1, c
   if (request.persistence === "saved") argv.push("--config", overlay);
   else argv.push("--no-session");
   if (context.effectiveProfile) argv.push("--profile", context.effectiveProfile);
+  if (request.workflow) {
+    argv.push(request.workflow.mode === "prewalk" ? "--prewalk" : "--plan-yolo");
+    if (request.workflow.target) argv.push(request.workflow.mode === "prewalk" ? "--prewalk-into" : "--plan-yolo-into", request.workflow.target);
+    if (request.workflow.advisor === true) argv.push("--advisor");
+  }
   const env = scrubOmpEnvironment(environment);
   if (context.harness.agentDir) env.PI_CODING_AGENT_DIR = context.harness.agentDir;
   return { executable: "omp", argv, env, cwd: request.cwd };
