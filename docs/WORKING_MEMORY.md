@@ -7,11 +7,11 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 ## Estado actual
 
 - Config local: `.omp/config.yml` enlaza `wezterm-attention`,
-  `agent-runtime-habitat`, `omp-profiles`, `windows-input` y las tres
-  extensiones globales de browser/atención porque las listas project-local
-  reemplazan, no fusionan, `extensions` del perfil. `windows-input` conserva
-  sólo el editor Windows opcional y `/windows-input`; no registra hotkeys de
-  perfiles ni intercepta la selección de modelos.
+  `agent-runtime-habitat`, `omp-profiles`, `windows-input`, las tres extensiones
+  globales de browser/atención y `context-budget` porque las listas
+  project-local reemplazan, no fusionan, `extensions` del perfil.
+  `windows-input` conserva sólo el editor Windows opcional y `/windows-input`;
+  no registra hotkeys de perfiles ni intercepta la selección de modelos.
 - La configuración global carga `C:/dev/omp/extensions/windows-input.ts`
   directamente. Sobre OMP 17.3.8 activa el editor y `/windows-input`; evita el
   wrapper `~/.omp/agent/extensions/windows-input.ts`, cuya reexportación resuelve

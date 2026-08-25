@@ -358,6 +358,7 @@ const expectedConfig = [
 	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-notification.ts",
+	"  - C:/dev/os/runtime/omp-extensions/context-budget.ts",
 ].join("\n");
 if (normalizedConfig !== expectedConfig) {
 	issues.push(".omp/config.yml must preserve project-local and global workstation extensions");
