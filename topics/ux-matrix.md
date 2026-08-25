@@ -42,12 +42,12 @@ rueda.
 
 ## Filtros nativos del transcript
 
-OMP 18.0.4 puede retirar snapshots comprometidos y reconstruir el transcript
+OMP 18.0.5 puede retirar snapshots comprometidos y reconstruir el transcript
 principal con `resetDisplay()`. Eso permite seguir trabajando con Markdown,
 renderers, streaming y editor normales; el costo es reemplazar la representación
 terminal anterior, no conservarla byte por byte en el scrollback.
 
-El patch downstream durable `patches/omp-18.0.4-workstation.patch` agrega
+El patch downstream durable `patches/omp-18.0.5-workstation.patch` agrega
 `display.hiddenTools`, `display.hideAssistantToolPreambles`,
 `display.transcriptVisibilityProfiles` y la API opcional de visibilidad para
 extensiones. La política cubre thinking, preámbulos, métricas por turno, toggle
@@ -56,13 +56,14 @@ global y tools individuales. El filtro por nombre compone con
 Tres presets atómicos y perfiles nombrados globales permiten cambiar de contexto
 sin repetir toggles.
 
-Revisión contra el tag oficial `v18.0.4`: upstream conserva los toggles globales
+Revisión contra el tag oficial `v18.0.5`: upstream conserva los toggles globales
 de thinking, actividad de tools y métricas, pero no expone filtros por nombre,
-ocultamiento de preámbulos ni perfiles atómicos. Sus mejoras de streaming,
-layout, scrollback y paneles son complementarias: el selector basado en
-`ctx.ui.select` hereda el panel nuevo y el patch se rebasó después de esos fixes.
-Por eso el delta sigue siendo necesario. Está fijado a `v18.0.4`; cada update
-posterior exige rebase y tests focales, nunca aplicación ciega.
+ocultamiento de preámbulos ni perfiles atómicos. Sus nuevas declaraciones
+append-only, APIs de filas estables y fixes de transcript son complementarios:
+el selector basado en `ctx.ui.select` hereda el panel nativo y el rebase conserva
+la semántica nueva de silent abort en `EventController`. Por eso el delta sigue
+siendo necesario. Está fijado a `v18.0.5`; cada update posterior exige rebase y
+tests focales, nunca aplicación ciega.
 
 El build se publica exclusivamente con `bun run deploy:omp`: instala
 `~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core

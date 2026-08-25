@@ -436,8 +436,8 @@ una API pública opcional. Registra `Ctrl+Alt+O`; WezTerm convierte el chord
 físico `Ctrl+Shift+M` en esa secuencia y abre un selector modal, no otro
 transcript.
 
-`patches/omp-18.0.4-workstation.patch` es el delta reproducible contra
-`v18.0.4`. El `omp update` oficial reemplazó el binario 17.4 y confirmó que los
+El entonces patch 18.0.4 fue el delta reproducible contra `v18.0.4`. El
+`omp update` oficial reemplazó el binario 17.4 y confirmó que los
 filtros no existen upstream; se rebasaron sobre 18 sólo los filtros granulares.
 El delta anterior de status/cuota no se arrastró a ciegas frente al core nuevo.
 El despliegue publica el addon Win32 de la misma versión como sidecar y rota
@@ -491,3 +491,17 @@ El usuario también puede guardar el estado actual con un nombre, aplicarlo
 atómicamente o eliminarlo. Los perfiles viven en el setting global
 `display.transcriptVisibilityProfiles`; no crean otro archivo de preferencias ni
 se mezclan con perfiles de modelos.
+
+## 2026-08-25 — Rebase granular sobre OMP 18.0.5
+
+El tag estable `v18.0.5` sigue sin ofrecer filtros por tool, preámbulos o
+perfiles de visibilidad. Se reemplaza el patch 18.0.4 por
+`patches/omp-18.0.5-workstation.patch`; no se conservan dos bases activas.
+
+El único conflicto del rebase estaba en el render final de
+`EventController`: se preservó la semántica 18.0.5 de `SilentAbort` estructural
+y se agregó únicamente el filtro de preámbulos al timeline visible. El delta
+pasó 23 tests focales, 94 assertions y el check completo de
+`packages/coding-agent`. El build Windows embebe el addon nativo 18.0.5 y se
+publica sólo mediante `bun run deploy:omp`; el smoke real confirmó
+`omp/18.0.5` y el selector granular con presets, perfil `zen` y 39 opciones.

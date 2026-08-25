@@ -1,5 +1,5 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index 00c9116..15cadf0 100644
+index 5bbe36a..57f8e61 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
 @@ -1286,6 +1286,33 @@ export const SETTINGS_SCHEMA = {
@@ -149,12 +149,12 @@ index 485ae94..5d5d989 100644
  		this.#showImages = show;
  		this.#updateDisplay();
 diff --git a/packages/coding-agent/src/modes/components/transcript-container.ts b/packages/coding-agent/src/modes/components/transcript-container.ts
-index 5d0a576..ce63079 100644
+index 2960905..140b0dc 100644
 --- a/packages/coding-agent/src/modes/components/transcript-container.ts
 +++ b/packages/coding-agent/src/modes/components/transcript-container.ts
-@@ -60,10 +60,19 @@ export class TranscriptContainer extends Container {
- 	#nextBatchId = 1;
- 	#offered: { batch: HistoryBatch; end: number } | undefined;
+@@ -119,10 +119,19 @@ export class TranscriptContainer extends Container {
+ 	#replayPending = false;
+ 	#replayRequested = false;
  	#toolActivityVisible = true;
 +	#hiddenToolActivityNames = new Set<string>();
  	#lastFrame: AnimationFrame = { tick: 0, now: 0 };
@@ -171,9 +171,9 @@ index 5d0a576..ce63079 100644
 -		if (isToolActivityComponent(component)) component.setToolActivityVisible(this.#toolActivityVisible);
 +		this.#applyToolActivityVisibility(component);
  		super.addChild(component);
- 		this.#entries.push({ component, state: "active" });
- 	}
-@@ -86,9 +95,20 @@ export class TranscriptContainer extends Container {
+ 		this.#entries.push({
+ 			component,
+@@ -153,9 +162,20 @@ export class TranscriptContainer extends Container {
  	setToolActivityVisible(visible: boolean): void {
  		if (this.#toolActivityVisible === visible) return;
  		this.#toolActivityVisible = visible;
@@ -197,10 +197,10 @@ index 5d0a576..ce63079 100644
  	}
  
 diff --git a/packages/coding-agent/src/modes/controllers/event-controller.ts b/packages/coding-agent/src/modes/controllers/event-controller.ts
-index 6960dc8..3d0da65 100644
+index d40b017..40fefef 100644
 --- a/packages/coding-agent/src/modes/controllers/event-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/event-controller.ts
-@@ -881,7 +881,9 @@ export class EventController {
+@@ -903,7 +903,9 @@ export class EventController {
  			this.ctx.chatContainer.addChild(this.ctx.streamingComponent);
  			this.#streamingReveal.begin(
  				this.ctx.streamingComponent,
@@ -211,7 +211,7 @@ index 6960dc8..3d0da65 100644
  			);
  			this.ctx.ui.requestRender();
  		}
-@@ -1056,7 +1058,9 @@ export class EventController {
+@@ -1078,7 +1080,9 @@ export class EventController {
  				this.#streamingReveal.resyncVisibility();
  			}
  			this.ctx.streamingMessage = event.message;
@@ -222,10 +222,10 @@ index 6960dc8..3d0da65 100644
  			this.#streamingReveal.setTarget(timeline.beforeTools);
  
  			const visibleBlockCount = this.ctx.streamingMessage.content.filter(
-@@ -1262,7 +1266,9 @@ export class EventController {
- 							stopReason: "stop",
- 						}
- 					: this.ctx.streamingMessage;
+@@ -1276,7 +1280,9 @@ export class EventController {
+ 						stopReason: "stop",
+ 					}
+ 				: this.ctx.streamingMessage;
 -			const displayTimeline = splitAssistantMessageToolTimeline(displayMessage);
 +			const displayTimeline = splitAssistantMessageToolTimeline(displayMessage, {
 +				hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
@@ -326,10 +326,10 @@ index fa23f22..b601a96 100644
  		this.ctx.setToolUIContext(uiContext, true);
  		this.#toolUIContext = uiContext;
 diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
-index 78c168e..de86444 100644
+index 9c2ee7f..53aa3a9 100644
 --- a/packages/coding-agent/src/modes/interactive-mode.ts
 +++ b/packages/coding-agent/src/modes/interactive-mode.ts
-@@ -978,6 +978,7 @@ export class InteractiveMode implements InteractiveModeContext {
+@@ -988,6 +988,7 @@ export class InteractiveMode implements InteractiveModeContext {
  
  		this.hideToolActivity = settings.get("display.hideToolActivity");
  		this.chatContainer.setToolActivityVisible(!this.hideToolActivity);
@@ -379,7 +379,7 @@ index e1ac002..5bc6f6c 100644
  		const previousPendingTools = this.ctx.pendingTools;
 diff --git a/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
 new file mode 100644
-index 0000000..caf77b0
+index 0000000..53f745a
 --- /dev/null
 +++ b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
 @@ -0,0 +1,74 @@
@@ -393,8 +393,8 @@ index 0000000..caf77b0
 +import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 +import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 +import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-+import { TempDir } from "@oh-my-pi/pi-utils";
 +import { Text } from "@oh-my-pi/pi-tui";
++import { TempDir } from "@oh-my-pi/pi-utils";
 +
 +class NamedToolActivity extends Text {
 +	#visible = true;
