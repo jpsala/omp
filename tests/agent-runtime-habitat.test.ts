@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
@@ -71,6 +71,16 @@ test("extension registers context and an explicit nested launch contract", async
       model: { mode: "inherit" },
       focus: false,
     }).placement).toEqual(DEFAULT_SESSION_PLACEMENT);
+    expect(normalizeSessionToolInput({
+      cwd: "C:\\dev\\omp",
+      prompt: "implement",
+      placement: { kind: "tab" },
+      pane: { title: "ESV2", onExit: "keep-open" },
+      fresh: true,
+      persistence: "saved",
+      model: { mode: "inherit" },
+      focus: false,
+    }, "OMP Habitat").pane.title).toBe("OMP Habitat: ESV2");
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
     expect(schema.properties?.workflow.required).toEqual(["mode"]);
@@ -157,4 +167,12 @@ test("increments bounded handoff session generations", () => {
   expect(nextHandoffTitle("os · Handoff · 2", "")).toBe("os · Handoff · 3");
   expect(nextHandoffTitle(undefined, "  Contexto\nnuevo  ")).toBe("Contexto nuevo · 2");
   expect(nextHandoffTitle("x".repeat(600), "").length).toBeLessThanOrEqual(500);
+});
+test("prefixes tab titles with the source session without duplicating inherited names", () => {
+  expect(childSessionTitle("os", "ESV2")).toBe("os: ESV2");
+  expect(childSessionTitle("os", "os: Batch")).toBe("os: Batch");
+  expect(childSessionTitle("os", "os · 2")).toBe("os · 2");
+  expect(childSessionTitle("  os\norquestador  ", "Implementador")).toBe("os orquestador: Implementador");
+  expect(childSessionTitle(undefined, "Implementador")).toBe("Implementador");
+  expect(childSessionTitle("x".repeat(600), "child").length).toBeLessThanOrEqual(500);
 });

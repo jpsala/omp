@@ -119,6 +119,13 @@ split explícita conserva soporte para otra dirección. `title` se persiste como
 nombre de sesión OMP; para tab placement también se aplica mediante
 `wezterm cli set-tab-title`.
 
+Los tabs nuevos conservan genealogía visual automáticamente. El runtime antepone
+el nombre de la sesión creadora como `<origen>: <title>`; no lo duplica cuando el
+título solicitado ya empieza con ese nombre seguido por `:` o ` · `. Esto
+preserva los handoffs generacionales (`os · 2`) y permite jerarquía anidada
+(`os: Orquestador: Implementador`). Los splits no cambian su título porque no
+crean otro tab.
+
 `onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
 termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
 inicia un shell interactivo después de OMP, en el mismo `cwd`; Windows usa

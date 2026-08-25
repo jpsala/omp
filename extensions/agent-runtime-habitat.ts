@@ -92,6 +92,7 @@ type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};
 type Event={systemPrompt?:readonly string[];prompt?:string};
 export type SessionToolInput=Omit<SpawnAgentSessionRequestV1,"version"|"placement">&{placement?:SpawnAgentSessionRequestV1["placement"]};
 export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:50} as const;
+const MAX_SESSION_TITLE_LENGTH=500;
 function isRequestInput(value: unknown): value is SessionToolInput {
  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
  const r=value as Record<string, unknown>;
@@ -101,7 +102,7 @@ function isRequestInput(value: unknown): value is SessionToolInput {
  if (typeof r.fresh!=="boolean" || typeof r.focus!=="boolean" || (r.persistence!=="saved"&&r.persistence!=="ephemeral")) return false;
  if (!r.pane || typeof r.pane!=="object" || Array.isArray(r.pane)) return false;
  const pane=r.pane as Record<string, unknown>;
- if (Object.keys(pane).length!==2 || typeof pane.title!=="string" || !pane.title.trim() || pane.title.length>500
+ if (Object.keys(pane).length!==2 || typeof pane.title!=="string" || !pane.title.trim() || pane.title.length>MAX_SESSION_TITLE_LENGTH
    || /[\u0000-\u001f\u007f]/.test(pane.title) || (pane.onExit!=="close"&&pane.onExit!=="keep-open")) return false;
  const placement=r.placement;
  const validPlacement=placement===undefined || (!!placement && typeof placement==="object" && !Array.isArray(placement) && (
@@ -128,8 +129,22 @@ function isRequestInput(value: unknown): value is SessionToolInput {
  if (workflow.target!==undefined&&(typeof workflow.target!=="string"||!workflow.target.trim())) return false;
  return workflow.advisor===undefined||typeof workflow.advisor==="boolean";
 }
-export function normalizeSessionToolInput(input: SessionToolInput): SpawnAgentSessionRequestV1 {
- return {version:1,...input,placement:input.placement??DEFAULT_SESSION_PLACEMENT};
+export function childSessionTitle(sourceName: string | undefined, requestedTitle: string): string {
+ const requested=requestedTitle.trim();
+ const source=(sourceName??"").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim();
+ if (!source) return requested.slice(0,MAX_SESSION_TITLE_LENGTH);
+ const requestedKey=requested.toLowerCase(), sourceKey=source.toLowerCase();
+ if (requestedKey===sourceKey || requestedKey.startsWith(`${sourceKey}:`) || requestedKey.startsWith(`${sourceKey} · `))
+   return requested.slice(0,MAX_SESSION_TITLE_LENGTH);
+ const separator=": ";
+ const prefix=source.slice(0,MAX_SESSION_TITLE_LENGTH-separator.length-1).trimEnd();
+ const suffix=requested.slice(0,MAX_SESSION_TITLE_LENGTH-prefix.length-separator.length).trimEnd();
+ return `${prefix}${separator}${suffix}`;
+}
+export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: string): SpawnAgentSessionRequestV1 {
+ const placement=input.placement??DEFAULT_SESSION_PLACEMENT;
+ const title=placement.kind==="tab" ? childSessionTitle(sourceName,input.pane.title) : input.pane.title;
+ return {version:1,...input,placement,pane:{...input.pane,title}};
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
@@ -196,7 +211,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source and automatically prefixes pane.title with the source session name (`<source>: <title>`) unless already inherited. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
@@ -224,7 +239,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split; {kind:'tab'} means adjacent named tab) or explicit {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
-      const request=normalizeSessionToolInput(raw);
+      const request=normalizeSessionToolInput(raw,pi.getSessionName());
       let cwdPath=request.cwd;
       try {
         if (cwdPath.startsWith("file:")) cwdPath=fileURLToPath(cwdPath);
