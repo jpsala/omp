@@ -49,12 +49,12 @@ historial comprometido.
 
 `extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
 mediante el wrapper global `extensions/windows-input.ts`, independientemente de
-que el editor WinInput opcional pueda cargar. En esta workstation, Main consume
-el `Ctrl+Shift+M` físico dentro de WezTerm y lo rerutea a ese chord para evitar
-la acción de minimizar. La extensión abre un overlay fullscreen sobre el
-alternate screen y reconstruye la rama activa con mensajes de usuario,
-assistant y thinking, omitiendo tool calls y tool results. `Esc`, `q` o el mismo
-hotkey físico vuelven al transcript original. La vista no modifica la sesión,
+que el editor WinInput opcional pueda cargar. WezTerm reemplaza su binding
+default `Hide` de `Ctrl+Shift+M` y emite directamente `CSI 111;7u` al PTY; Main
+no registra ni rerutea el chord. La extensión abre un overlay fullscreen sobre
+el alternate screen y reconstruye la rama activa con mensajes de usuario,
+assistant y thinking, omitiendo tool calls y tool results. `Esc`, `q` o
+`Ctrl+Shift+M` vuelven al transcript original. La vista no modifica la sesión,
 no limpia scrollback y desactiva mouse reporting para conservar la selección
 nativa del terminal.
 
