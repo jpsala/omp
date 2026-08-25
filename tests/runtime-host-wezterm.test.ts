@@ -32,19 +32,24 @@ function expectSocket(call: Call, instanceRef: string) {
   expect(call.options?.env?.WEZTERM_UNIX_SOCKET).toBe(instanceRef);
 }
 
-test("split and tab use distinct commands and executable argv", async () => {
+test("split, tab, and dedicated window use distinct executable argv", async () => {
   const calls: Call[] = [];
   const adapter = new WezTermHostAdapter({ executable: "wezterm.exe", runner: fakeRunner(calls) });
   expect(calls).toHaveLength(0);
   await adapter.split({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:\\dev\\omp", direction: "right", percent: 40, program: "omp", args: ["--flag"] });
   await adapter.tab({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:\\dev\\omp", program: "omp", args: ["--flag"] });
-  const split = calls.find(call => call.argv.includes("split-pane")!);
-  const tab = calls.find(call => call.argv.includes("spawn")!);
-  expect(split?.argv.slice(-3)).toEqual(["--", "omp", "--flag"]);
-  expect(split?.argv).not.toContain("--socket-name");
-  expect(tab?.argv).toContain("spawn");
+  const windowHandle = await adapter.window({ source: { instanceRef: "inst", paneId: "7" }, cwd: "C:\\dev\\omp", program: "omp", args: ["--flag"] });
+  await adapter.finalizeTab(windowHandle, "os: Orquestador", false);
+  const split = calls.find(call => call.argv.includes("split-pane"))!;
+  const tab = calls.find(call => call.argv.includes("spawn") && !call.argv.includes("--new-window"))!;
+  const window = calls.find(call => call.argv.includes("--new-window"))!;
+  expect(split.argv.slice(-3)).toEqual(["--", "omp", "--flag"]);
+  expect(tab.argv).toContain("spawn");
+  expect(window.argv).toEqual(["cli", "spawn", "--pane-id", "7", "--new-window", "--cwd", "C:\\dev\\omp", "--", "omp", "--flag"]);
+  expect(window.options?.env?.[HANDOFF_AFTER_TAB_ENV]).toBeUndefined();
+  expect(calls.find(call => call.argv.includes("set-tab-title"))?.argv).toEqual(["cli", "set-tab-title", "--tab-id", "3", "os: Orquestador"]);
   for (const call of calls) expectSocket(call, "inst");
-  expect(tab?.options?.env?.[HANDOFF_AFTER_TAB_ENV]).toBe("2");
+  expect(tab.options?.env?.[HANDOFF_AFTER_TAB_ENV]).toBe("2");
   expect(calls[0].argv).toContain("split-pane");
 });
 

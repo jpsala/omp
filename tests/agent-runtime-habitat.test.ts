@@ -8,7 +8,7 @@ import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGME
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
-interface PluginApi { on: (event: string, handler: Function) => void; registerTool: (definition: ToolSpec) => void; registerCommand: (name: string, definition: CommandSpec) => void; sendUserMessage: (content: string) => void; getThinkingLevel: () => string; getSessionName: () => string | undefined; setSessionName: (name: string) => Promise<void>; pi: { getAgentDir: () => string } }
+interface PluginApi { on: (event: string, handler: Function) => void; registerTool: (definition: ToolSpec) => void; registerCommand: (name: string, definition: CommandSpec) => void; sendUserMessage: (content: string, options?: { deliverAs?: "steer" | "followUp" }) => void; getThinkingLevel: () => string; getSessionName: () => string | undefined; setSessionName: (name: string) => Promise<void>; setInterval: (callback: (...args: unknown[]) => void, ms?: number) => unknown; pi: { getAgentDir: () => string } }
 const env = { TERM_PROGRAM: "WezTerm", WEZTERM_PANE: "42", WEZTERM_UNIX_SOCKET: "\\\\?\\pipe\\wez" };
 const listed = JSON.stringify([{ pane_id: 42, window_id: 7, tab_id: 8, workspace: "ws", cwd: "C:\\dev\\omp" }]);
 
@@ -52,7 +52,7 @@ test("extension registers context and an explicit nested launch contract", async
     const commands = new Map<string, CommandSpec>();
     const sentMessages: string[] = [];
     let sessionName: string | undefined = "OMP Habitat";
-    const pi: PluginApi = { on(event, handler) { handlers[event] = handler; }, registerTool(definition) { tools.set(definition.name, definition); }, registerCommand(name, definition) { commands.set(name, definition); }, sendUserMessage(content) { sentMessages.push(content); }, getThinkingLevel: () => "medium", getSessionName: () => sessionName, setSessionName: async name => { sessionName = name; }, pi: { getAgentDir: () => agentDir } };
+    const pi: PluginApi = { on(event, handler) { handlers[event] = handler; }, registerTool(definition) { tools.set(definition.name, definition); }, registerCommand(name, definition) { commands.set(name, definition); }, sendUserMessage(content) { sentMessages.push(content as string); }, getThinkingLevel: () => "medium", getSessionName: () => sessionName, setSessionName: async name => { sessionName = name; }, setInterval: () => 0, pi: { getAgentDir: () => agentDir } };
     habitat(pi as unknown as Parameters<typeof habitat>[0]);
     const contextTool = tools.get("agent_runtime_context");
     const sessionTool = tools.get("agent_runtime_session");
@@ -60,7 +60,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(sessionTool?.approval).toBe("write");
     const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[]; additionalProperties?: boolean; properties?: Record<string, unknown> }> };
     expect(schema.required).toEqual(["cwd", "prompt", "pane", "fresh", "persistence", "model", "focus"]);
-    expect(schema.properties?.placement.anyOf).toHaveLength(2);
+    expect(schema.properties?.placement.anyOf).toHaveLength(3);
     expect(DEFAULT_SESSION_PLACEMENT).toEqual({ kind: "split", direction: "right", percent: 50 });
     expect(normalizeSessionToolInput({
       cwd: "C:\\dev\\omp",
@@ -81,6 +81,16 @@ test("extension registers context and an explicit nested launch contract", async
       model: { mode: "inherit" },
       focus: false,
     }, "OMP Habitat").pane.title).toBe("OMP Habitat: ESV2");
+    expect(normalizeSessionToolInput({
+      cwd: "C:\\dev\\omp",
+      prompt: "orchestrate",
+      placement: { kind: "window" },
+      pane: { title: "Orquestador", onExit: "keep-open" },
+      fresh: true,
+      persistence: "saved",
+      model: { mode: "inherit" },
+      focus: true,
+    }, "OMP Habitat").pane.title).toBe("OMP Habitat: Orquestador");
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
     expect(schema.properties?.workflow.required).toEqual(["mode"]);
@@ -141,7 +151,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(details.harness.model).toEqual({ provider: "openai-codex", id: "gpt-5.6-sol", thinking: "medium" });
 
     const invalid = await sessionTool!.execute("id", { cwd: "C:\\tmp", prompt: "x", placement: { type: "split", direction: "right", size: 50 }, fresh: true, persistence: "saved", model: { type: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
-    expect(JSON.parse(invalid.content[0].text).reason).toContain("{kind:'tab'} means adjacent named tab");
+    expect(JSON.parse(invalid.content[0].text).reason).toContain("{kind:'window'} for a dedicated window");
     const invalidWorkflow = await sessionTool!.execute("id", {
       cwd: `${agentDir}/missing`,
       prompt: "x",

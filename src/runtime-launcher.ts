@@ -4,9 +4,9 @@ import type { WezTermPaneHandle, WezTermHostAdapter } from "./runtime-host-wezte
 import { openPromptChannel, type PromptChannelHandle } from "./runtime-prompt-channel.ts";
 export type LaunchRequest = SpawnAgentSessionRequestV1;
 export interface LaunchEnvironment { launchId:string; nonce:string; promptHash:string; sourcePaneId:string; instanceRef:string; parentSessionId:string }
-export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
+export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"window"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; onReady?:(result:LaunchResult)=>Promise<void>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
 export interface LaunchResult { ok:true; launchId:string; paneId:string; sessionId:string; model:string }
-export type LaunchFailureStage = "prompt_channel" | "build_child" | "create_pane" | "finalize_tab" | AckStage | "focus";
+export type LaunchFailureStage = "prompt_channel" | "build_child" | "create_pane" | "finalize_tab" | AckStage | "focus" | "register_completion";
 export type RollbackStatus = "not-needed" | "completed" | "failed";
 export interface LaunchFailureDetails {
   status: "failed";
@@ -88,10 +88,12 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
     stage="create_pane";
     h=request.placement.kind==="split"
       ?await deps.adapter.split({...req,direction:request.placement.direction,percent:request.placement.percent})
-      :await deps.adapter.tab(req);
-    if(request.placement.kind==="tab"){
+      :request.placement.kind==="window"
+        ?await deps.adapter.window(req)
+        :await deps.adapter.tab(req);
+    if(request.placement.kind!=="split"){
       stage="finalize_tab";
-      await deps.adapter.finalizeTab(h,request.pane.title);
+      await deps.adapter.finalizeTab(h,request.pane.title,request.placement.kind==="tab");
     }
     const get=async(expectedStage:AckStage,window:number):Promise<HandshakeAck>=>{
       stage=expectedStage;
@@ -121,7 +123,10 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
     stage="focus";
     if(request.focus)await deps.adapter.focus(h);
     await deps.markers.cleanup(id);
-    return {ok:true,launchId:id,paneId:h.ownedPaneId,sessionId:first.sessionId,model:first.model};
+    const result:LaunchResult={ok:true,launchId:id,paneId:h.ownedPaneId,sessionId:first.sessionId,model:first.model};
+    stage="register_completion";
+    await deps.onReady?.(result);
+    return result;
   }catch(e){
     return fail(e);
   }

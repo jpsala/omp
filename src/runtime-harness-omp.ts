@@ -73,7 +73,7 @@ function validRequest(value: unknown): value is SpawnAgentSessionRequestV1 {
   const placement = request.placement;
   if (!placement || typeof placement !== "object" || Array.isArray(placement)) return false;
   const p = placement as Record<string, unknown>;
-  if (p.kind === "tab") return Object.keys(p).length === 1;
+  if (p.kind === "tab" || p.kind === "window") return Object.keys(p).length === 1;
   return p.kind === "split" && Object.keys(p).length === 3
     && (p.direction === "left" || p.direction === "right" || p.direction === "top" || p.direction === "bottom")
     && typeof p.percent === "number" && Number.isFinite(p.percent) && p.percent > 0 && p.percent < 100;

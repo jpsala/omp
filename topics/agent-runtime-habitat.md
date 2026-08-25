@@ -114,17 +114,18 @@ origen.
 
 Todo request de `agent_runtime_session` declara `pane: { title, onExit }`.
 `placement` es opcional: si se omite, el runtime abre un split derecho al 50%;
-`{ kind: "tab" }` crea un tab inmediatamente después del origen. Una ubicación
+`{ kind: "tab" }` crea un tab inmediatamente después del origen y
+`{ kind: "window" }` crea el primer tab de una ventana dedicada. Una ubicación
 split explícita conserva soporte para otra dirección. `title` se persiste como
-nombre de sesión OMP; para tab placement también se aplica mediante
+nombre de sesión OMP; para tab y window placement también se aplica mediante
 `wezterm cli set-tab-title`.
 
-Los tabs nuevos conservan genealogía visual automáticamente. El runtime antepone
-el nombre de la sesión creadora como `<origen>: <title>`; no lo duplica cuando el
-título solicitado ya empieza con ese nombre seguido por `:` o ` · `. Esto
-preserva los handoffs generacionales (`os · 2`) y permite jerarquía anidada
-(`os: Orquestador: Implementador`). Los splits no cambian su título porque no
-crean otro tab.
+Los tabs y ventanas nuevos conservan genealogía visual automáticamente. El
+runtime antepone el nombre de la sesión creadora como `<origen>: <title>`; no lo
+duplica cuando el título solicitado ya empieza con ese nombre seguido por `:` o
+` · `. Esto preserva los handoffs generacionales (`os · 2`) y permite jerarquía
+anidada (`os: Orquestador: Implementador`). Los splits no cambian su título
+porque no crean otro tab.
 
 `onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
 termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
@@ -136,6 +137,23 @@ elimina.
 
 `persistence: "saved"|"ephemeral"` gobierna el almacenamiento de la sesión OMP;
 no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
+
+### Retorno automático de hijas
+
+Cada launch exitoso registra transitoriamente la identidad de la hija bajo el
+directorio runtime privado del usuario. En el primer `agent_end` terminal, la
+hija publica estado y texto final acotado; no persiste prompts ni transcripts.
+El parent consume y elimina el resultado, retira el pending correspondiente e
+inyecta un `followUp` que reanuda automáticamente su orquestación. Los reportes
+se escapan antes de entrar al prompt y el parent debe verificar cambios y
+afirmaciones contra las fuentes reales.
+
+Si una hija actúa como orquestador y todavía conserva pending propios, no
+reporta upstream al cerrar su primer turno. Integra los retornos que recibe y
+sólo publica su resultado cuando ya no quedan hijas pendientes. El registro es
+atómico y forma parte del launch: si falla, el pane recién creado se revierte.
+El mailbox permite recuperar completions pendientes cuando una sesión guardada
+se reabre; los archivos consumidos se eliminan.
 
 
 ### Modelo: rol de agente vs spec real
@@ -153,9 +171,10 @@ en un model spec por convención.
 ### Después del lanzamiento
 
 Un resultado `ok` con `paneId`, `sessionId` y `model` confirma que la sesión hija
-recibió el prompt y empezó. El parent debe volver a su trabajo o esperar el
-handoff del usuario; no debe monitorear el pane con Computer Use, screenshots,
-lectura de scrollback ni polling visual salvo que JP lo pida explícitamente.
+recibió el prompt, empezó y quedó registrada para retorno. El parent vuelve a
+su trabajo; cuando la hija finaliza, el runtime lo reanuda con su resultado. No
+debe pedir al usuario que vigile tabs ni monitorear panes con Computer Use,
+screenshots, scrollback o polling visual.
 
 Un host, placement o request no soportado devuelve `unsupported`. No debe activar investigación de source, procesos, sesiones o fallbacks ad hoc.
 
@@ -213,17 +232,19 @@ argv, env, terminal, logs, artifacts ni markers.
 El schema mantiene `cwd`, `prompt`, `pane`, freshness, persistencia, modelo y
 focus obligatorios. `placement` y `workflow` son opcionales; omitir `workflow`
 conserva el lanzamiento legacy y omitir `placement` normaliza a
-`{ kind: "split", direction: "right", percent: 50 }`. Ambos objetos son
-closed-world: una forma explícita inválida falla como `unsupported` antes del
-launch.
+`{ kind: "split", direction: "right", percent: 50 }`. `placement` acepta además
+`{ kind: "tab" }` y `{ kind: "window" }`. Ambos objetos son closed-world: una
+forma explícita inválida falla como `unsupported` antes del launch.
 
 ## Ownership y rollback
 
 El adapter sólo puede enfocar o cerrar un pane creado por esa instancia de la
-operación. Si la creación funciona pero la validación posterior falla, intenta
-cerrar exactamente ese pane y devuelve `rollback: completed|failed` junto con el
-error primario. Nunca crea otro pane como retry.
-Nunca debe cerrar el pane origen ni usar el último pane enfocado como fallback.
+operación. Un window placement crea una ventana nueva cuyo primer pane queda
+bajo el mismo ownership; nunca mueve el pane origen. Si creación, título,
+handshake o registro de completion fallan, intenta cerrar exactamente el pane
+owned —y con él la ventana vacía— y devuelve `rollback: completed|failed`.
+Nunca crea otro pane como retry, cierra el origen ni usa el último pane enfocado
+como fallback.
 
 Cerrar un pane owned que ya terminó se considera rollback satisfecho. WezTerm
 puede devolver `no such pane` cuando el programa child falla y el pane desaparece
@@ -261,4 +282,16 @@ Smoke vivo del 2026-08-11: pane `76` abrió pane `118` dentro de window `0`, tab
 prompt Unicode de 9165 caracteres. La sesión respondió exactamente
 `IPC_LONG_OK`.
 
-El smoke vivo requiere pedido explícito: debe demostrar mismo tab, nuevo pane, session id distinta, modelo esperado y acknowledgment exacto del prompt.
+Smoke vivo del 2026-08-25: dispatcher pane `90` quedó en window `0`; un window
+placement creó el orquestador pane `91` y su worker tab pane `92` juntos en la
+window dedicada `3`. Los títulos quedaron
+`os: Smoke dispatcher 4: Orquestador smoke` y
+`os: Smoke dispatcher 4: Orquestador smoke: Worker smoke`. La worker respondió
+`WORKER_WINDOW_OK`; el mailbox reanudó al orquestador, que respondió
+`ORCHESTRATOR_RETURN_OK`; ese retorno reanudó al dispatcher y llegó al parent
+original como `DISPATCHER_RETURN_OK`, sin aviso manual.
+
+El smoke vivo requiere pedido explícito. Para splits debe demostrar mismo tab,
+nuevo pane, session id distinta, modelo esperado y acknowledgment exacto. Para
+orquestación visible debe demostrar ventana dedicada, tabs agrupados, títulos
+genealógicos y retorno automático transitivo hasta el parent.

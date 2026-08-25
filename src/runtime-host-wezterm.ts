@@ -10,6 +10,7 @@ export interface WezTermSource { instanceRef: string; paneId: string }
 export interface WezTermPaneHandle { instanceRef: string; sourcePaneId: string; ownedPaneId: string; location: WezTermLocation }
 export interface SplitRequest { source: WezTermSource; cwd: string; direction: "left" | "right" | "top" | "bottom"; percent: number; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
 export interface TabRequest { source: WezTermSource; cwd: string; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
+export interface WindowRequest { source: WezTermSource; cwd: string; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
 export interface WezTermAdapterOptions { runner?: ProcessRunner; executable?: string; timeoutMs?: number }
 
 const defaultRunner: ProcessRunner = (executable, argv, options = {}) => new Promise((resolve, reject) => {
@@ -102,12 +103,14 @@ export class WezTermHostAdapter {
   }
 
 
-  private async open(input: { kind: "split"; request: SplitRequest } | { kind: "tab"; request: TabRequest }) {
+  private async open(input: { kind: "split"; request: SplitRequest } | { kind: "tab"; request: TabRequest } | { kind: "window"; request: WindowRequest }) {
     const { kind, request } = input;
     const cwd = normalizedCwd(request.cwd);
     const argv = kind === "split"
       ? ["cli", "split-pane", "--pane-id", request.source.paneId, `--${request.direction}`, "--percent", String(request.percent), "--cwd", cwd, "--", request.program, ...(request.args ?? [])]
-      : ["cli", "spawn", "--pane-id", request.source.paneId, "--cwd", cwd, "--", request.program, ...(request.args ?? [])];
+      : kind === "window"
+        ? ["cli", "spawn", "--pane-id", request.source.paneId, "--new-window", "--cwd", cwd, "--", request.program, ...(request.args ?? [])]
+        : ["cli", "spawn", "--pane-id", request.source.paneId, "--cwd", cwd, "--", request.program, ...(request.args ?? [])];
     const result = await this.run(
       this.executable,
       argv,
@@ -151,7 +154,8 @@ export class WezTermHostAdapter {
       },
     });
   }
-  async finalizeTab(h: WezTermPaneHandle, title: string): Promise<void> {
+  window(request: WindowRequest) { return this.open({ kind: "window", request }); }
+  async finalizeTab(h: WezTermPaneHandle, title: string, requireAdjacentToSource = true): Promise<void> {
     this.assertOwned(h);
     if (!title.trim() || title.length > 500 || /[\u0000-\u001f\u007f]/.test(title)) throw new Error("invalid tab title");
     const renamed = await this.run(
@@ -160,6 +164,7 @@ export class WezTermHostAdapter {
       this.opts(h.instanceRef),
     );
     if (renamed.exitCode !== 0) fail("wezterm set-tab-title", renamed);
+    if (!requireAdjacentToSource) return;
     for (let attempt = 0; attempt < 40; attempt++) {
       const rows = await this.listRows(h.instanceRef);
       const source = rows.find(row => row !== null && typeof row === "object" && !Array.isArray(row) && "pane_id" in row && String(row.pane_id) === h.sourcePaneId);

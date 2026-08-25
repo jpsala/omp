@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
+import { completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
@@ -88,7 +89,7 @@ Actualizá fuentes existentes antes de crear otras. Preservá grado de certeza, 
 
 Después regenerá los índices y ejecutá el audit documental que el repo defina. Si no hay delta durable, no edites archivos. Respondé con qué promoviste y dónde, qué omitiste deliberadamente por temporal o derivable, y los checks ejecutados.`;
 }
-type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string}};
+type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string};setInterval?:(callback:(...args:unknown[])=>void,ms?:number,...args:unknown[])=>unknown};
 type Event={systemPrompt?:readonly string[];prompt?:string};
 export type SessionToolInput=Omit<SpawnAgentSessionRequestV1,"version"|"placement">&{placement?:SpawnAgentSessionRequestV1["placement"]};
 export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:50} as const;
@@ -106,7 +107,7 @@ function isRequestInput(value: unknown): value is SessionToolInput {
    || /[\u0000-\u001f\u007f]/.test(pane.title) || (pane.onExit!=="close"&&pane.onExit!=="keep-open")) return false;
  const placement=r.placement;
  const validPlacement=placement===undefined || (!!placement && typeof placement==="object" && !Array.isArray(placement) && (
-   (placement as Record<string,unknown>).kind==="tab"
+   ((placement as Record<string,unknown>).kind==="tab" || (placement as Record<string,unknown>).kind==="window")
      ? Object.keys(placement).length===1
      : (placement as Record<string,unknown>).kind==="split" && Object.keys(placement).length===3
        && ["left","right","top","bottom"].includes(String((placement as Record<string,unknown>).direction))
@@ -143,7 +144,7 @@ export function childSessionTitle(sourceName: string | undefined, requestedTitle
 }
 export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: string): SpawnAgentSessionRequestV1 {
  const placement=input.placement??DEFAULT_SESSION_PLACEMENT;
- const title=placement.kind==="tab" ? childSessionTitle(sourceName,input.pane.title) : input.pane.title;
+ const title=placement.kind!=="split" ? childSessionTitle(sourceName,input.pane.title) : input.pane.title;
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
@@ -158,6 +159,25 @@ export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ct
  return createMarkerStore(markerRoot()).publish(ack);
 }
 export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
+ const completionStore=createCompletionStore(completionRoot());
+ const monitoredParents=new Set<string>(), drainingParents=new Set<string>();
+ const drainCompletions=async(parentSessionId:string)=>{
+   if(drainingParents.has(parentSessionId)) return;
+   drainingParents.add(parentSessionId);
+   try{
+     const batch=await completionStore.consume(parentSessionId);
+     if(batch.completions.length>0) pi.sendUserMessage(renderCompletionFollowUp(batch),{deliverAs:"followUp"});
+   }finally{drainingParents.delete(parentSessionId);}
+ };
+ const ensureCompletionMonitor=async(parentSessionId:string,ctx:Ctx)=>{
+   if(!monitoredParents.has(parentSessionId)){
+     if(!ctx.setInterval) throw new Error("completion monitor requires ExtensionContext.setInterval");
+     monitoredParents.add(parentSessionId);
+     ctx.setInterval(()=>{void drainCompletions(parentSessionId);},750);
+   }
+   await drainCompletions(parentSessionId);
+ };
+ let launchedChildren=false, upstreamCompletionReported=false;
  const context=(ctx:Ctx)=>{
    const model=ctx.model?.provider&&ctx.model.id
      ? {provider:ctx.model.provider,id:ctx.model.id,thinking:pi.getThinkingLevel()}
@@ -188,9 +208,25 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
      delete process.env[PROMPT_CHANNEL_URL_ENV];
      delete process.env[PROMPT_CHANNEL_HASH_ENV];
    }
+   const ownSessionId=ctx.sessionManager?.getSessionId?.();
+   if(ownSessionId && await completionStore.hasActivity(ownSessionId)){
+     launchedChildren=true;
+     await ensureCompletionMonitor(ownSessionId,ctx);
+   }
    if(prompt!==undefined) pi.sendUserMessage(prompt);
  });
  pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
+ pi.on("agent_end",async(event,ctx)=>{
+   if(upstreamCompletionReported) return;
+   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
+   const childSessionId=ctx.sessionManager?.getSessionId?.(), childName=pi.getSessionName();
+   if(!launchId||!parentSessionId||!paneId||!childSessionId||!childName||childSessionId===parentSessionId) return;
+   const hasPendingChildren=await completionStore.hasPending(childSessionId);
+   if(!shouldReportCompletionUpstream({launchedChildren,hasPendingChildren,willContinue:event.willContinue===true,messages:event.messages})) return;
+   const completion=summarizeAgentCompletion(event.messages);
+   await completionStore.publish({version:1,launchId,parentSessionId,childSessionId,childName,paneId,...completion,completedAt:Date.now()});
+   upstreamCompletionReported=true;
+ });
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
    description:"Start one planning-and-implementation owner with native plan-yolo in a right split",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
@@ -211,13 +247,14 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates a named tab immediately after the source and automatically prefixes pane.title with the source session name (`<source>: <title>`) unless already inherited. pane.title is persisted as the OMP session name and, for tab placement, as the explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source session name (`<source>: <title>`) unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
       prompt:{type:"string",minLength:1},
       placement:{anyOf:[
         {type:"object",properties:{kind:{const:"tab"}},required:["kind"],additionalProperties:false},
+        {type:"object",properties:{kind:{const:"window"}},required:["kind"],additionalProperties:false},
         {type:"object",properties:{kind:{const:"split"},direction:{enum:["left","right","top","bottom"]},percent:{type:"number",exclusiveMinimum:0,exclusiveMaximum:100}},required:["kind","direction","percent"],additionalProperties:false}
       ]},
       pane:{type:"object",properties:{title:{type:"string",minLength:1,maxLength:500},onExit:{type:"string",enum:["close","keep-open"]}},required:["title","onExit"],additionalProperties:false},
@@ -236,7 +273,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
     },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split; {kind:'tab'} means adjacent named tab) or explicit {kind:'split',direction,percent}, pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for an adjacent named tab, {kind:'window'} for a dedicated window, or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       const request=normalizeSessionToolInput(raw,pi.getSessionName());
@@ -254,10 +291,12 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
       if("kind" in translated) return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:translated.message})}],details:{status:"unsupported",reason:translated.message}};
       if(runtime.host.provider!=="WezTerm"||runtime.host.kind!=="terminal"||!runtime.location?.paneId||!runtime.location.instanceRef)
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"unsupported runtime host"})}],details:{status:"unsupported",reason:"unsupported runtime host"}};
+      if(!runtime.harness.sessionId)
+        return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"launching a child session requires a persisted parent session id for completion routing"})}],details:{status:"unsupported",reason:"launching a child session requires a persisted parent session id for completion routing"}};
       const value=request;
       const adapter=createWezTermAdapter();
       try{
-        const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId??"unknown",
+        const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId,
           buildChild:async(_request,env)=>({
             program:"bun",
             args:[CHILD_BOOTSTRAP,...createBootstrapArgv({
@@ -268,7 +307,13 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
               onExit:_request.pane.onExit,
               ...(runtime.harness.agentDir?{agentDir:runtime.harness.agentDir}:{})
             },translated.executable,translated.argv)]
-          })});
+          }),
+          onReady:async ready=>{
+            await completionStore.register({version:1,launchId:ready.launchId,parentSessionId:runtime.harness.sessionId!,childSessionId:ready.sessionId,childName:value.pane.title,paneId:ready.paneId,startedAt:Date.now()});
+            launchedChildren=true;
+          }
+        });
+        await ensureCompletionMonitor(runtime.harness.sessionId,ctx);
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }catch(error){
         if(!(error instanceof RuntimeLaunchError))throw error;

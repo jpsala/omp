@@ -83,6 +83,11 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   sesión y tab y origen intacto como rollback. El handshake conserva canal
   efímero, dos acks, hash, ownership del pane y fast fail sin persistir prompt,
   URL ni nonce.
+  Para orquestaciones visibles, `placement:{kind:"window"}` crea un owner en
+  ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos.
+  Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
+  por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
+  hijas. El smoke transitivo window → tab → parent pasó el 2026-08-25.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.

@@ -35,6 +35,10 @@ describe("OMP Phase 3 translation", () => {
     const result = await translateOmpRequest(request("ephemeral", { mode: "explicit", spec: "anthropic/sonnet" }), context(), {});
     expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "anthropic/sonnet", "--no-session"] });
   });
+  test("accepts dedicated window placement without changing child argv", async () => {
+    const result = await translateOmpRequest({ ...request(), placement: { kind: "window" as const } }, context());
+    expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH] });
+  });
   test("incompatible non-fresh request is structured", async () => {
     const result = await translateOmpRequest({ ...request(), fresh: false }, context());
     expect(result).toEqual({ kind: "unsupported", code: "incompatible-request", message: "Only fresh sessions are supported" });

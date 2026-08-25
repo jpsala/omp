@@ -21,7 +21,8 @@ function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: numb
   const adapter = {
     split: async (value: { env?: Record<string, string | undefined> }) => { events.push("split"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
     tab: async (value: { env?: Record<string, string | undefined> }) => { events.push("tab"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
-    finalizeTab: async (_handle: unknown, title: string) => { events.push(`finalize:${title}`); },
+    window: async (value: { env?: Record<string, string | undefined> }) => { events.push("window"); childEnvironments.push(value.env); return { ownedPaneId: "child-pane" }; },
+    finalizeTab: async (_handle: unknown, title: string, adjacent = true) => { events.push(`finalize:${title}:${adjacent}`); },
     focus: async () => { events.push("focus"); },
     killOwnedPane: async () => { killed = true; events.push("kill"); },
   };
@@ -136,7 +137,23 @@ test("reconciles an acknowledgement that arrives on the timeout boundary without
 });
 
 test("uses adjacent named tab placement and does not replay consumed acknowledgements", async () => {
-  const r = { ...request, placement: { kind: "tab" as const } }; const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]); const result = await launchAgent(r, h.deps); expect(result.paneId).toBe("child-pane"); expect(h.events).toContain("tab"); expect(h.events).toContain(`finalize:${request.pane.title}`);
+  const r = { ...request, placement: { kind: "tab" as const } }; const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]); const result = await launchAgent(r, h.deps); expect(result.paneId).toBe("child-pane"); expect(h.events).toContain("tab"); expect(h.events).toContain(`finalize:${request.pane.title}:true`);
+});
+test("creates and names a dedicated window without enforcing source adjacency", async () => {
+  const r = { ...request, placement: { kind: "window" as const } };
+  const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]);
+  const result = await launchAgent(r, h.deps);
+  expect(result.paneId).toBe("child-pane");
+  expect(h.events).toContain("window");
+  expect(h.events).toContain(`finalize:${request.pane.title}:false`);
+});
+test("rolls back a ready child when completion registration fails", async () => {
+  const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]);
+  h.deps.onReady = async () => { throw new Error("completion registration failed"); };
+  const error = await launchAgent(request, h.deps).catch(value => value);
+  expect(error).toBeInstanceOf(RuntimeLaunchError);
+  expect(error.details.stage).toBe("register_completion");
+  expect(h.killed).toBe(true);
 });
 
 test("rolls back the owned pane when adjacent tab finalization fails", async () => {
