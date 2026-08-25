@@ -1,8 +1,8 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index 00c9116..a6d7272 100644
+index 00c9116..15cadf0 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
-@@ -1286,6 +1286,28 @@ export const SETTINGS_SCHEMA = {
+@@ -1286,6 +1286,33 @@ export const SETTINGS_SCHEMA = {
  		},
  	},
  
@@ -28,14 +28,19 @@ index 00c9116..a6d7272 100644
 +		},
 +	},
 +
++	"display.transcriptVisibilityProfiles": {
++		type: "record",
++		default: {} as Record<string, unknown>,
++	},
++
  	"display.showTokenUsage": {
  		type: "boolean",
  		default: false,
 diff --git a/packages/coding-agent/src/extensibility/extensions/types.ts b/packages/coding-agent/src/extensibility/extensions/types.ts
-index a476f25..6022320 100644
+index a476f25..ee63781 100644
 --- a/packages/coding-agent/src/extensibility/extensions/types.ts
 +++ b/packages/coding-agent/src/extensibility/extensions/types.ts
-@@ -253,6 +253,13 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
+@@ -253,6 +253,14 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
  // (custom editor component, header/footer, widgets, theming, terminal input)
  // and may be invoked from event handlers that have already taken the agent
  // loop's lock — hooks intentionally cannot.
@@ -43,13 +48,14 @@ index a476f25..6022320 100644
 +	hideThinking: boolean;
 +	hideToolActivity: boolean;
 +	hideAssistantToolPreambles: boolean;
++	hideTokenUsage: boolean;
 +	hiddenTools: string[];
 +}
 +
  export interface ExtensionUIContext {
  	/** True when selector timeouts start only after the dialog is presented. */
  	timeoutStartsOnPresentation?: boolean;
-@@ -368,6 +375,12 @@ export interface ExtensionUIContext {
+@@ -368,6 +376,18 @@ export interface ExtensionUIContext {
  
  	/** Set tool output expansion state. */
  	setToolsExpanded(expanded: boolean): void;
@@ -59,6 +65,12 @@ index a476f25..6022320 100644
 +
 +	/** Persist transcript visibility preferences and rebuild the native transcript in place. */
 +	setTranscriptVisibility?(visibility: TranscriptVisibility): void;
++
++	/** Read globally persisted named transcript-visibility profiles. */
++	getTranscriptVisibilityProfiles?(): Record<string, TranscriptVisibility>;
++
++	/** Replace the globally persisted named transcript-visibility profiles. */
++	setTranscriptVisibilityProfiles?(profiles: Record<string, TranscriptVisibility>): void;
  }
  
  /** Visual composer style and selector copy registered by an extension. */
@@ -222,7 +234,7 @@ index 6960dc8..3d0da65 100644
  
  			if (this.ctx.streamingMessage.stopReason !== "aborted" && this.ctx.streamingMessage.stopReason !== "error") {
 diff --git a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
-index fa23f22..b62a58d 100644
+index fa23f22..b601a96 100644
 --- a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 @@ -20,6 +20,7 @@ import type {
@@ -233,7 +245,48 @@ index fa23f22..b62a58d 100644
  } from "../../extensibility/extensions";
  import { getSessionSlashCommands } from "../../extensibility/extensions/get-commands-handler";
  import { AskDialogComponent, boundPromptTitle } from "../../modes/components/ask-dialog";
-@@ -141,6 +142,28 @@ export class ExtensionUiController {
+@@ -63,6 +64,40 @@ function toWireSelectOptions(options: ExtensionUISelectItem[]): CollabUiSelectIt
+ 	);
+ }
+ 
++function normalizeTranscriptVisibility(value: unknown): TranscriptVisibility | undefined {
++	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
++	const candidate = value as Partial<TranscriptVisibility>;
++	if (
++		typeof candidate.hideThinking !== "boolean" ||
++		typeof candidate.hideToolActivity !== "boolean" ||
++		typeof candidate.hideAssistantToolPreambles !== "boolean" ||
++		typeof candidate.hideTokenUsage !== "boolean" ||
++		!Array.isArray(candidate.hiddenTools) ||
++		!candidate.hiddenTools.every(name => typeof name === "string")
++	) {
++		return undefined;
++	}
++	return {
++		hideThinking: candidate.hideThinking,
++		hideToolActivity: candidate.hideToolActivity,
++		hideAssistantToolPreambles: candidate.hideAssistantToolPreambles,
++		hideTokenUsage: candidate.hideTokenUsage,
++		hiddenTools: [...new Set(candidate.hiddenTools.map(name => name.trim().toLowerCase()).filter(Boolean))].sort(),
++	};
++}
++
++function normalizeTranscriptVisibilityProfiles(value: unknown): Record<string, TranscriptVisibility> {
++	if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
++	const profiles: Record<string, TranscriptVisibility> = {};
++	for (const [rawName, rawProfile] of Object.entries(value)) {
++		const name = rawName.trim().replace(/\s+/g, " ");
++		const profile = normalizeTranscriptVisibility(rawProfile);
++		if (!name || name.length > 64 || /[\x00-\x1f\x7f]/.test(name) || !profile) continue;
++		profiles[name] = profile;
++	}
++	return profiles;
++}
++
+ export class ExtensionUiController {
+ 	#extensionTerminalInputUnsubscribers = new Set<() => void>();
+ 	#composerShapeDisposers: Array<() => void> = [];
+@@ -141,6 +176,38 @@ export class ExtensionUiController {
  			setEditorComponent: factory => this.ctx.setEditorComponent(factory),
  			getToolsExpanded: () => this.ctx.toolOutputExpanded,
  			setToolsExpanded: expanded => this.ctx.setToolsExpanded(expanded),
@@ -241,6 +294,7 @@ index fa23f22..b62a58d 100644
 +				hideThinking: this.ctx.hideThinkingBlock,
 +				hideToolActivity: this.ctx.hideToolActivity,
 +				hideAssistantToolPreambles: this.ctx.settings.get("display.hideAssistantToolPreambles"),
++				hideTokenUsage: !this.ctx.settings.get("display.showTokenUsage"),
 +				hiddenTools: [...this.ctx.settings.get("display.hiddenTools")],
 +			}),
 +			setTranscriptVisibility: (visibility: TranscriptVisibility) => {
@@ -252,12 +306,21 @@ index fa23f22..b62a58d 100644
 +				this.ctx.settings.set("hideThinkingBlock", visibility.hideThinking);
 +				this.ctx.settings.set("display.hideToolActivity", visibility.hideToolActivity);
 +				this.ctx.settings.set("display.hideAssistantToolPreambles", visibility.hideAssistantToolPreambles);
++				this.ctx.settings.set("display.showTokenUsage", !visibility.hideTokenUsage);
 +				this.ctx.settings.set("display.hiddenTools", hiddenTools);
 +				this.ctx.chatContainer.setToolActivityVisible(!visibility.hideToolActivity);
 +				this.ctx.chatContainer.setHiddenToolActivityNames(hiddenTools);
 +				this.ctx.rebuildChatFromMessages();
 +				if (visibility.hideToolActivity || hiddenTools.length > 0) this.ctx.ui.clearInlineImages();
 +				this.ctx.ui.resetDisplay();
++			},
++			getTranscriptVisibilityProfiles: () =>
++				normalizeTranscriptVisibilityProfiles(this.ctx.settings.get("display.transcriptVisibilityProfiles")),
++			setTranscriptVisibilityProfiles: profiles => {
++				this.ctx.settings.set(
++					"display.transcriptVisibilityProfiles",
++					normalizeTranscriptVisibilityProfiles(profiles),
++				);
 +			},
  		};
  		this.ctx.setToolUIContext(uiContext, true);
@@ -314,6 +377,86 @@ index e1ac002..5bc6f6c 100644
  		const preservedChatChildren = options.preserveExistingChat ? [...visibleChatContainer.children] : undefined;
  		const previousTranscriptMessageComponents = this.ctx.transcriptMessageComponents;
  		const previousPendingTools = this.ctx.pendingTools;
+diff --git a/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
+new file mode 100644
+index 0000000..caf77b0
+--- /dev/null
++++ b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
+@@ -0,0 +1,74 @@
++import { afterAll, beforeAll, describe, expect, it } from "bun:test";
++import * as path from "node:path";
++import { Agent } from "@oh-my-pi/pi-agent-core";
++import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
++import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
++import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { TempDir } from "@oh-my-pi/pi-utils";
++import { Text } from "@oh-my-pi/pi-tui";
++
++class NamedToolActivity extends Text {
++	#visible = true;
++	constructor(
++		text: string,
++		private readonly toolName: string,
++	) {
++		super(text, 0, 0);
++	}
++	getToolActivityName(): string {
++		return this.toolName;
++	}
++	setToolActivityVisible(visible: boolean): void {
++		this.#visible = visible;
++	}
++	override render(width: number): readonly string[] {
++		return this.#visible ? super.render(width) : [];
++	}
++}
++
++describe("InteractiveMode startup tool visibility", () => {
++	let authStorage: AuthStorage;
++	let mode: InteractiveMode;
++	let session: AgentSession;
++	let tempDir: TempDir;
++
++	beforeAll(async () => {
++		initTheme();
++		resetSettingsForTest();
++		tempDir = TempDir.createSync("@pi-tool-visibility-");
++		await Settings.init({ inMemory: true, cwd: tempDir.path() });
++		settings.set("display.hiddenTools", ["bash"]);
++		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
++		const modelRegistry = new ModelRegistry(authStorage);
++		const model = modelRegistry.find("anthropic", "claude-sonnet-4-5");
++		if (!model) throw new Error("Expected claude-sonnet-4-5 test model");
++		session = new AgentSession({
++			agent: new Agent({ initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] } }),
++			sessionManager: SessionManager.create(tempDir.path(), tempDir.path()),
++			settings: Settings.isolated(),
++			modelRegistry,
++		});
++		mode = new InteractiveMode(session, "test");
++	});
++
++	afterAll(async () => {
++		mode.stop();
++		await session.dispose();
++		authStorage.close();
++		tempDir.removeSync();
++		resetSettingsForTest();
++	});
++
++	it("keeps persisted per-tool filters across the staged startup transcript swap", async () => {
++		await mode.renderInitialMessages();
++		mode.chatContainer.addChild(new NamedToolActivity("bash output", "bash"));
++		mode.chatContainer.addChild(new NamedToolActivity("read output", "read"));
++		const rendered = mode.chatContainer.renderViewport(120, 20, { tick: 0, now: Date.now() }).join("\n");
++		expect(rendered).not.toContain("bash output");
++		expect(rendered).toContain("read output");
++	});
++});
 diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 index f041efa..502acbc 100644
 --- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
@@ -360,6 +503,88 @@ index f041efa..502acbc 100644
 +		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).toContain("bash output");
 +	});
  });
+diff --git a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
+index 70e8512..02f7b42 100644
+--- a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
++++ b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
+@@ -25,6 +25,14 @@ function makeHarness() {
+ 	const requestRender = vi.fn();
+ 	const setFocus = vi.fn();
+ 	const addAutocompleteProvider = vi.fn();
++	const settingsValues = new Map<string, unknown>([
++		["display.showTokenUsage", true],
++		["display.hideAssistantToolPreambles", false],
++		["display.hiddenTools", []],
++		["display.transcriptVisibilityProfiles", {}],
++	]);
++	const settingsSet = vi.fn((key: string, value: unknown) => settingsValues.set(key, value));
++	const rebuildChatFromMessages = vi.fn();
+ 	const fakeHandle = {
+ 		hide: vi.fn(),
+ 		setHidden: vi.fn(),
+@@ -39,12 +47,25 @@ function makeHarness() {
+ 			setFocus,
+ 			showOverlay,
+ 			terminal: { rows: 40 },
++			clearInlineImages: vi.fn(),
++			resetDisplay: vi.fn(),
+ 		},
+ 		editorContainer,
+ 		session: {
+ 			extensionRunner: undefined,
+ 			setUsageFallbackConfirmer: vi.fn(),
+ 		},
++		settings: {
++			get: (key: string) => settingsValues.get(key),
++			set: settingsSet,
++		},
++		hideThinkingBlock: false,
++		hideToolActivity: false,
++		chatContainer: {
++			setToolActivityVisible: vi.fn(),
++			setHiddenToolActivityNames: vi.fn(),
++		},
++		rebuildChatFromMessages,
+ 		setToolUIContext(context: ExtensionUIContext, hasUI: boolean): void {
+ 			expect(hasUI).toBe(true);
+ 			uiContext = context;
+@@ -64,6 +85,9 @@ function makeHarness() {
+ 		showOverlay,
+ 		fakeHandle,
+ 		controller,
++		settingsValues,
++		settingsSet,
++		rebuildChatFromMessages,
+ 		async init(): Promise<ExtensionUIContext> {
+ 			await controller.initHooksAndCustomTools();
+ 			expect(uiContext).toBeDefined();
+@@ -94,6 +118,26 @@ describe("ExtensionUiController editor UI", () => {
+ 		expect(harness.requestRender).toHaveBeenCalledTimes(1);
+ 	});
+ 
++	it("persists usage visibility and named profiles through the extension UI", async () => {
++		const harness = makeHarness();
++		const ui = await harness.init();
++		const hidden = {
++			hideThinking: true,
++			hideToolActivity: false,
++			hideAssistantToolPreambles: true,
++			hideTokenUsage: true,
++			hiddenTools: ["bash"],
++		};
++
++		expect(ui.getTranscriptVisibility?.().hideTokenUsage).toBe(false);
++		ui.setTranscriptVisibility?.(hidden);
++		expect(harness.settingsValues.get("display.showTokenUsage")).toBe(false);
++		expect(harness.rebuildChatFromMessages).toHaveBeenCalledTimes(1);
++
++		ui.setTranscriptVisibilityProfiles?.({ Quiet: hidden });
++		expect(ui.getTranscriptVisibilityProfiles?.()).toEqual({ Quiet: hidden });
++	});
++
+ 	it("keeps a populated prompt visible and routes input to it until the draft is cleared", async () => {
+ 		const harness = makeHarness();
+ 		harness.editor.setText("finish this wor");
 diff --git a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
 index 1833799..92af5cf 100644
 --- a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts

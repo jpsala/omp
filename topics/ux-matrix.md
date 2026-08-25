@@ -48,12 +48,13 @@ renderers, streaming y editor normales; el costo es reemplazar la representació
 terminal anterior, no conservarla byte por byte en el scrollback.
 
 El patch downstream durable `patches/omp-18.0.4-workstation.patch` agrega
-`display.hiddenTools`, `display.hideAssistantToolPreambles` y la API opcional
-`getTranscriptVisibility`/`setTranscriptVisibility` para extensiones. El filtro
-por nombre compone con `display.hideToolActivity`: el global prevalece y cada
-tool individual oculta su llamada y resultado. Los preámbulos sólo se eliminan
-cuando el mismo mensaje contiene una tool call; las respuestas finales sin tools
-siempre permanecen.
+`display.hiddenTools`, `display.hideAssistantToolPreambles`,
+`display.transcriptVisibilityProfiles` y la API opcional de visibilidad para
+extensiones. La política cubre thinking, preámbulos, métricas por turno, toggle
+global y tools individuales. El filtro por nombre compone con
+`display.hideToolActivity`; las respuestas finales sin tools siempre permanecen.
+Tres presets atómicos y perfiles nombrados globales permiten cambiar de contexto
+sin repetir toggles.
 El build se publica exclusivamente con `bun run deploy:omp`: instala
 `~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core
 anterior.
@@ -65,8 +66,8 @@ pero no filtra la superficie efectiva.
 `extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
 mediante `extensions/windows-input.ts`. WezTerm reemplaza su `Hide` default de
 `Ctrl+Shift+M` y emite `CSI 111;7u` directamente al PTY. El chord abre un
-selector modal pequeño con thinking, preámbulos, toggle global y todas las tools
-registradas; al cerrar se continúa en el transcript principal. Main no participa.
+selector modal pequeño con presets, perfiles guardados y filtros individuales;
+al cerrar se continúa en el transcript principal. Main no participa.
 
 
 ## Mercado de renderers y clientes (2026-08-15)

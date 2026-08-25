@@ -476,3 +476,17 @@ renderizando Bash. La política granular ahora se aplica en cada creación y
 rebuild del transcript. Un test de integración construye `InteractiveMode`,
 ejecuta el swap inicial y exige que `bash` quede oculto mientras `read` sigue
 visible.
+
+## 2026-08-25 — Presets y perfiles atómicos de visibilidad
+
+Las métricas por turno son componentes separados de las tools; ocultar Bash no
+las elimina. `TranscriptVisibility` incorpora `hideTokenUsage`, que invierte
+`display.showTokenUsage` y fuerza el mismo rebuild del transcript.
+
+Para evitar micromanejo, el selector ofrece tres presets completos:
+`Conversación limpia` oculta toda la actividad interna; `Trabajo enfocado`
+oculta thinking, preámbulos, métricas, Bash y Hub; `Diagnóstico` muestra todo.
+El usuario también puede guardar el estado actual con un nombre, aplicarlo
+atómicamente o eliminarlo. Los perfiles viven en el setting global
+`display.transcriptVisibilityProfiles`; no crean otro archivo de preferencias ni
+se mezclan con perfiles de modelos.
