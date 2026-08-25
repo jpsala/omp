@@ -7,13 +7,17 @@ import {
 	toggleTranscriptVisibilityChoice,
 } from "./tool-activity-view-core.ts";
 
+let unsupportedNotified = false;
 export const TOOL_ACTIVITY_VIEW_SHORTCUT = "ctrl+alt+o" as const;
 
 async function openTranscriptVisibilitySelector(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
 	const readVisibility = ctx.ui.getTranscriptVisibility;
 	const writeVisibility = ctx.ui.setTranscriptVisibility;
 	if (!readVisibility || !writeVisibility) {
-		ctx.ui.notify("Esta versión de OMP no expone filtros granulares del transcript.", "error");
+		if (!unsupportedNotified) {
+			unsupportedNotified = true;
+			ctx.ui.notify("Esta sesión usa un binario OMP anterior. Abrí un nuevo tab OMP para usar los filtros.", "warning");
+		}
 		return;
 	}
 

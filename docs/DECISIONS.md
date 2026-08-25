@@ -441,3 +441,9 @@ binario ya servía. El despliegue conserva un artifact staged separado, publica
 el addon Win32 existente como sidecar junto al launcher y sólo reemplaza
 ejecutables con copia atómica cuando Windows libera sus locks; nunca trunca ni
 sobrescribe el binario de una sesión activa.
+
+Los tabs OMP de WezTerm ejecutan `wezterm.home_dir .. '/.bun/bin/omp.exe'`.
+Nombrar sólo `omp.exe` todavía dejaba resolución indirecta y permitió abrir una
+sesión con el core anterior aunque la extensión nueva ya estuviera en disco.
+Una sesión viva no puede incorporar APIs agregadas al binario; el fallback de
+la extensión avisa una sola vez y exige un tab nuevo, sin repetir errores.
