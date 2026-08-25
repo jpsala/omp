@@ -9,6 +9,7 @@ import {
 } from "../src/profile-catalog.ts";
 import ompProfiles from "../extensions/omp-profiles.ts";
 import { parseProfileCommand, profileArgumentCompletions } from "../extensions/omp-profiles.ts";
+import { TOOL_ACTIVITY_VIEW_SHORTCUT } from "../extensions/tool-activity-view.ts";
 import windowsInput from "../extensions/windows-input.ts";
 
 test("catalogs every maintained overlay without secrets", () => {
@@ -137,7 +138,7 @@ test("activation resolves only the catalog overlay and does not claim live mutat
 });
 
 
-test("keeps the Windows editor wrapper native without a model shortcut", async () => {
+test("keeps model selection native while registering the global filtered view", async () => {
 	const shortcuts: string[] = [];
 	await expect(
 		windowsInput({
@@ -147,5 +148,5 @@ test("keeps the Windows editor wrapper native without a model shortcut", async (
 			logger: { warn() {} },
 		} as never),
 	).resolves.toBeUndefined();
-	expect(shortcuts).toEqual([]);
+	expect(shortcuts).toEqual([TOOL_ACTIVITY_VIEW_SHORTCUT]);
 });

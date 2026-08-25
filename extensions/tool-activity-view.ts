@@ -2,11 +2,13 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { matchesKey, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
-import { buildFilteredTranscript } from "./tool-activity-view-core.ts";
+import {
+	buildFilteredTranscript,
+	matchesFilteredViewKey,
+	wrapFilteredViewText,
+} from "./tool-activity-view-core.ts";
 
 export const TOOL_ACTIVITY_VIEW_SHORTCUT = "ctrl+shift+m" as const;
-
 
 function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 	const entries = ctx.sessionManager.getBranch();
@@ -26,7 +28,7 @@ function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 					const label = block.role === "user" ? "You" : "Assistant";
 					next.push(theme.fg("accent", theme.bold(label)));
 					for (const paragraph of block.text.split("\n")) {
-						next.push(...wrapTextWithAnsi(paragraph || " ", Math.max(1, width)));
+						next.push(...wrapFilteredViewText(paragraph || " ", Math.max(1, width)));
 					}
 					next.push("");
 				}
@@ -56,20 +58,20 @@ function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 				},
 				handleInput(data: string) {
 					if (
-						matchesKey(data, "escape") ||
-						matchesKey(data, "q") ||
-						matchesKey(data, TOOL_ACTIVITY_VIEW_SHORTCUT)
+						matchesFilteredViewKey(data, "escape") ||
+						matchesFilteredViewKey(data, "q") ||
+						matchesFilteredViewKey(data, "toggle")
 					) {
 						done();
 						return;
 					}
 					const page = Math.max(1, (process.stdout.rows ?? 24) - 4);
-					if (matchesKey(data, "up")) scrollOffset = (scrollOffset ?? 0) - 1;
-					else if (matchesKey(data, "down")) scrollOffset = (scrollOffset ?? 0) + 1;
-					else if (matchesKey(data, "pageUp")) scrollOffset = (scrollOffset ?? 0) - page;
-					else if (matchesKey(data, "pageDown")) scrollOffset = (scrollOffset ?? 0) + page;
-					else if (matchesKey(data, "home")) scrollOffset = 0;
-					else if (matchesKey(data, "end")) scrollOffset = Number.MAX_SAFE_INTEGER;
+					if (matchesFilteredViewKey(data, "up")) scrollOffset = (scrollOffset ?? 0) - 1;
+					else if (matchesFilteredViewKey(data, "down")) scrollOffset = (scrollOffset ?? 0) + 1;
+					else if (matchesFilteredViewKey(data, "pageUp")) scrollOffset = (scrollOffset ?? 0) - page;
+					else if (matchesFilteredViewKey(data, "pageDown")) scrollOffset = (scrollOffset ?? 0) + page;
+					else if (matchesFilteredViewKey(data, "home")) scrollOffset = 0;
+					else if (matchesFilteredViewKey(data, "end")) scrollOffset = Number.MAX_SAFE_INTEGER;
 					else return;
 					tui.requestRender();
 				},

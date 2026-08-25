@@ -4,6 +4,52 @@ export interface FilteredTranscriptBlock {
 	role: FilteredTranscriptRole;
 	text: string;
 }
+export type FilteredViewKey =
+	| "escape"
+	| "q"
+	| "toggle"
+	| "up"
+	| "down"
+	| "pageUp"
+	| "pageDown"
+	| "home"
+	| "end";
+
+const VIEW_KEY_SEQUENCES: Record<Exclude<FilteredViewKey, "q" | "toggle">, readonly string[]> = {
+	escape: ["\x1b", "\x1b[27u", "\x1b[27;1u"],
+	up: ["\x1b[A", "\x1b[1;1A"],
+	down: ["\x1b[B", "\x1b[1;1B"],
+	pageUp: ["\x1b[5~", "\x1b[5;1~"],
+	pageDown: ["\x1b[6~", "\x1b[6;1~"],
+	home: ["\x1b[H", "\x1b[1~", "\x1b[1;1H"],
+	end: ["\x1b[F", "\x1b[4~", "\x1b[1;1F"],
+};
+
+export function matchesFilteredViewKey(data: string, key: FilteredViewKey): boolean {
+	if (key === "q") return data === "q" || data === "\x1b[113u" || data === "\x1b[113;1u";
+	if (key === "toggle") return /^\x1b\[109;6(?::[123])?u$/.test(data);
+	return VIEW_KEY_SEQUENCES[key].includes(data);
+}
+
+export function wrapFilteredViewText(text: string, width: number): string[] {
+	const safeWidth = Math.max(1, Math.trunc(width));
+	if (!text) return [""];
+	const lines: string[] = [];
+	let line = "";
+	let lineWidth = 0;
+	for (const character of text) {
+		const characterWidth = Bun.stringWidth(character);
+		if (line && lineWidth + characterWidth > safeWidth) {
+			lines.push(line);
+			line = "";
+			lineWidth = 0;
+		}
+		line += character;
+		lineWidth += characterWidth;
+	}
+	if (line || lines.length === 0) lines.push(line);
+	return lines;
+}
 
 function safeTranscriptText(value: string): string {
 	return value

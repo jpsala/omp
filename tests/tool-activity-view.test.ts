@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { buildFilteredTranscript } from "../extensions/tool-activity-view-core.ts";
+import {
+	buildFilteredTranscript,
+	matchesFilteredViewKey,
+	wrapFilteredViewText,
+} from "../extensions/tool-activity-view-core.ts";
 
 test("keeps conversation text and removes tool activity", () => {
 	const transcript = buildFilteredTranscript([
@@ -35,5 +39,16 @@ test("strips terminal control bytes from transcript text", () => {
 	]);
 
 	expect(transcript).toEqual([{ role: "assistant", text: "safe[2Jtext" }]);
+});
+
+test("recognizes the reversible view keys without conflating Enter", () => {
+	expect(matchesFilteredViewKey("\u001b[109;6u", "toggle")).toBe(true);
+	expect(matchesFilteredViewKey("\r", "toggle")).toBe(false);
+	expect(matchesFilteredViewKey("\u001b", "escape")).toBe(true);
+});
+
+test("wraps filtered prose to terminal cell width", () => {
+	expect(wrapFilteredViewText("abcd", 3)).toEqual(["abc", "d"]);
+	expect(wrapFilteredViewText("界a", 2)).toEqual(["界", "a"]);
 });
 
