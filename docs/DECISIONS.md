@@ -435,12 +435,13 @@ call; una respuesta final sin tools nunca desaparece. La extensión accede por
 una API pública opcional y `Ctrl+Shift+M` abre un selector modal, no otro
 transcript.
 
-`patches/omp-17.4.0-workstation.patch` es el delta reproducible contra
-`v17.4.0`; incluye además los cambios downstream activos de cuota/status que el
-binario ya servía. El despliegue conserva un artifact staged separado, publica
-el addon Win32 existente como sidecar junto al launcher y sólo reemplaza
-ejecutables con copia atómica cuando Windows libera sus locks; nunca trunca ni
-sobrescribe el binario de una sesión activa.
+`patches/omp-18.0.4-workstation.patch` es el delta reproducible contra
+`v18.0.4`. El `omp update` oficial reemplazó el binario 17.4 y confirmó que los
+filtros no existen upstream; se rebasaron sobre 18 sólo los filtros granulares.
+El delta anterior de status/cuota no se arrastró a ciegas frente al core nuevo.
+El despliegue publica el addon Win32 de la misma versión como sidecar y rota
+launchers mediante artifacts únicos fuera de `PATHEXT`, incluso cuando una
+sesión anterior mantiene el backup previo bloqueado.
 
 Los tabs OMP de WezTerm ejecutan `wezterm.home_dir .. '/.bun/bin/omp.exe'`.
 Nombrar sólo `omp.exe` todavía dejaba resolución indirecta y permitió abrir una
@@ -454,3 +455,15 @@ valida PE/tamaño, staging y rotación con rollback, retira `omp.com` antes del
 cutover y deja backups bloqueados con sufijos fuera de `PATHEXT`. El audit falla
 si `omp.com` reaparece. No se corrige modificando `PATHEXT`, aliases ni perfiles
 de shell.
+
+## 2026-08-25 — `omp update` exige rebase explícito del delta downstream
+
+`omp update` preservó la resolución única a `omp.exe`, pero reemplazó el core y
+retiró la API granular. Esto es el comportamiento esperado de un updater de
+binario completo, no una nueva colisión de launchers. El flujo validado es:
+actualizar, clonar el tag exacto, rebasar y probar el patch focal, construir con
+el addon nativo de la misma versión y desplegar mediante `bun run deploy:omp`.
+
+El deploy usa nombres de backup únicos; un `omp.exe.previous` bloqueado ya no
+impide publicar la versión siguiente. Las preferencias de thinking, preámbulos
+y tools se restauran después del update si el schema oficial las descarta.

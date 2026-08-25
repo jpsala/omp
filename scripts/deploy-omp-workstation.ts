@@ -1,4 +1,4 @@
-import { copyFile, lstat, open, rename, rm } from "node:fs/promises";
+import { copyFile, lstat, open, readdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -38,22 +38,34 @@ async function removeWhenUnlocked(path: string, pendingCleanup: string[]): Promi
 	}
 }
 
+async function cleanupRotatedArtifacts(binDir: string, pendingCleanup: string[]): Promise<void> {
+	const names = await readdir(binDir);
+	for (const name of names) {
+		if (
+			!name.startsWith("omp.exe.previous") &&
+			!name.startsWith("omp.com.retired") &&
+			!name.startsWith("pi_natives.win32-x64-baseline.node.")
+		) {
+			continue;
+		}
+		await removeWhenUnlocked(join(binDir, name), pendingCleanup);
+	}
+}
+
 export async function deployOmpWorkstation(source: string, binDir = join(homedir(), ".bun", "bin")): Promise<OmpDeploymentResult> {
 	if (process.platform !== "win32") throw new Error("OMP workstation deployment is Windows-only");
 	const sourcePath = resolve(source);
 	const target = join(binDir, "omp.exe");
 	const collision = join(binDir, "omp.com");
-	const retiredCollision = join(binDir, "omp.com.retired");
-	const previous = join(binDir, "omp.exe.previous");
+	const rotationId = `${Date.now()}-${process.pid}`;
+	const retiredCollision = join(binDir, `omp.com.retired-${rotationId}`);
+	const previous = join(binDir, `omp.exe.previous-${rotationId}`);
 	const next = join(binDir, "omp.exe.next");
 	const expectedSize = await validateCompiledExecutable(sourcePath);
 	const pendingCleanup: string[] = [];
-	await removeWhenUnlocked(retiredCollision, pendingCleanup);
+	await cleanupRotatedArtifacts(binDir, pendingCleanup);
 	let collisionRetired = false;
 	if ((await lstat(collision).catch(() => undefined))?.isFile()) {
-		if (pendingCleanup.includes(retiredCollision)) {
-			throw new Error(`Cannot retire omp.com while the prior retired artifact is locked: ${retiredCollision}`);
-		}
 		await rename(collision, retiredCollision);
 		collisionRetired = true;
 	}
@@ -64,14 +76,8 @@ export async function deployOmpWorkstation(source: string, binDir = join(homedir
 		const copiedSize = await validateCompiledExecutable(next);
 		if (copiedSize !== expectedSize) throw new Error(`Staged OMP artifact size mismatch: ${copiedSize} != ${expectedSize}`);
 
-		await removeWhenUnlocked(previous, pendingCleanup);
 		const targetExists = (await lstat(target).catch(() => undefined))?.isFile() ?? false;
-		if (targetExists) {
-			if (pendingCleanup.includes(previous)) {
-				throw new Error(`Cannot rotate omp.exe while the prior backup is locked: ${previous}`);
-			}
-			await rename(target, previous);
-		}
+		if (targetExists) await rename(target, previous);
 		try {
 			await rename(next, target);
 		} catch (error) {

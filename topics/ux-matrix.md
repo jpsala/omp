@@ -42,12 +42,12 @@ rueda.
 
 ## Filtros nativos del transcript
 
-OMP 17.4 puede retirar snapshots comprometidos y reconstruir el transcript
+OMP 18.0.4 puede retirar snapshots comprometidos y reconstruir el transcript
 principal con `resetDisplay()`. Eso permite seguir trabajando con Markdown,
 renderers, streaming y editor normales; el costo es reemplazar la representación
 terminal anterior, no conservarla byte por byte en el scrollback.
 
-El patch downstream durable `patches/omp-17.4.0-workstation.patch` agrega
+El patch downstream durable `patches/omp-18.0.4-workstation.patch` agrega
 `display.hiddenTools`, `display.hideAssistantToolPreambles` y la API opcional
 `getTranscriptVisibility`/`setTranscriptVisibility` para extensiones. El filtro
 por nombre compone con `display.hideToolActivity`: el global prevalece y cada

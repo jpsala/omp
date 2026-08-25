@@ -25,6 +25,7 @@ test("deploys only omp.exe and retires a conflicting omp.com", async () => {
 	await fakeExecutable(source, 0x31);
 	await fakeExecutable(join(binDir, "omp.exe"), 0x32);
 	await fakeExecutable(join(binDir, "omp.com"), 0x33);
+	await fakeExecutable(join(binDir, "omp.exe.previous-old"), 0x34);
 
 	const result = await deployOmpWorkstation(source, binDir);
 	expect(result.retiredCollision).toBe(true);
@@ -32,6 +33,7 @@ test("deploys only omp.exe and retires a conflicting omp.com", async () => {
 	expect((await readFile(join(binDir, "omp.exe"))).equals(await readFile(source))).toBe(true);
 	expect(await lstat(join(binDir, "omp.com")).catch(() => undefined)).toBeUndefined();
 	expect(await lstat(join(binDir, "omp.com.retired")).catch(() => undefined)).toBeUndefined();
+	expect(await lstat(join(binDir, "omp.exe.previous-old")).catch(() => undefined)).toBeUndefined();
 });
 
 test("rejects a non-PE artifact without disturbing the active launcher", async () => {
