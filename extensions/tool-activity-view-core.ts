@@ -1,108 +1,67 @@
-export type FilteredTranscriptRole = "user" | "assistant";
-
-export interface FilteredTranscriptBlock {
-	role: FilteredTranscriptRole;
-	text: string;
-}
-export type FilteredViewKey =
-	| "escape"
-	| "q"
-	| "toggle"
-	| "up"
-	| "down"
-	| "pageUp"
-	| "pageDown"
-	| "home"
-	| "end";
-
-const VIEW_KEY_SEQUENCES: Record<Exclude<FilteredViewKey, "q" | "toggle">, readonly string[]> = {
-	escape: ["\x1b", "\x1b[27u", "\x1b[27;1u"],
-	up: ["\x1b[A", "\x1b[1;1A"],
-	down: ["\x1b[B", "\x1b[1;1B"],
-	pageUp: ["\x1b[5~", "\x1b[5;1~"],
-	pageDown: ["\x1b[6~", "\x1b[6;1~"],
-	home: ["\x1b[H", "\x1b[1~", "\x1b[1;1H"],
-	end: ["\x1b[F", "\x1b[4~", "\x1b[1;1F"],
-};
-
-export function matchesFilteredViewKey(data: string, key: FilteredViewKey): boolean {
-	if (key === "q") return data === "q" || data === "\x1b[113u" || data === "\x1b[113;1u";
-	if (key === "toggle") return /^\x1b\[111;7(?::[123])?u$/.test(data);
-	return VIEW_KEY_SEQUENCES[key].includes(data);
+export interface TranscriptVisibilityState {
+	hideThinking: boolean;
+	hideToolActivity: boolean;
+	hideAssistantToolPreambles: boolean;
+	hiddenTools: string[];
 }
 
-export function wrapFilteredViewText(text: string, width: number): string[] {
-	const safeWidth = Math.max(1, Math.trunc(width));
-	if (!text) return [""];
-	const lines: string[] = [];
-	let line = "";
-	let lineWidth = 0;
-	for (const character of text) {
-		const characterWidth = Bun.stringWidth(character);
-		if (line && lineWidth + characterWidth > safeWidth) {
-			lines.push(line);
-			line = "";
-			lineWidth = 0;
-		}
-		line += character;
-		lineWidth += characterWidth;
+export interface TranscriptVisibilityChoice {
+	id: "done" | "thinking" | "preambles" | "all-tools" | `tool:${string}`;
+	label: string;
+	description: string;
+}
+
+function mark(hidden: boolean): string {
+	return hidden ? "[x]" : "[ ]";
+}
+
+export function buildTranscriptVisibilityChoices(
+	state: TranscriptVisibilityState,
+	toolNames: readonly string[],
+): TranscriptVisibilityChoice[] {
+	const normalizedTools = [...new Set(toolNames.map(name => name.trim().toLowerCase()).filter(Boolean))].sort();
+	const hiddenTools = new Set(state.hiddenTools.map(name => name.trim().toLowerCase()).filter(Boolean));
+	return [
+		{ id: "done", label: "Listo", description: "Cerrar y seguir trabajando en el transcript normal" },
+		{
+			id: "thinking",
+			label: `${mark(state.hideThinking)} Thinking blocks`,
+			description: "Razonamiento visible del assistant",
+		},
+		{
+			id: "preambles",
+			label: `${mark(state.hideAssistantToolPreambles)} Preámbulos internos`,
+			description: "Texto del assistant inmediatamente anterior a una tool call",
+		},
+		{
+			id: "all-tools",
+			label: `${mark(state.hideToolActivity)} Toda la actividad de tools`,
+			description: "Toggle global nativo; prevalece sobre los filtros individuales",
+		},
+		...normalizedTools.map(
+			(name): TranscriptVisibilityChoice => ({
+				id: `tool:${name}`,
+				label: `${mark(hiddenTools.has(name))} Tool · ${name}`,
+				description: `Llamadas y resultados de ${name}`,
+			}),
+		),
+	];
+}
+
+export function toggleTranscriptVisibilityChoice(
+	state: TranscriptVisibilityState,
+	choice: TranscriptVisibilityChoice["id"],
+): TranscriptVisibilityState {
+	if (choice === "done") return state;
+	if (choice === "thinking") return { ...state, hideThinking: !state.hideThinking };
+	if (choice === "preambles") {
+		return { ...state, hideAssistantToolPreambles: !state.hideAssistantToolPreambles };
 	}
-	if (line || lines.length === 0) lines.push(line);
-	return lines;
-}
+	if (choice === "all-tools") return { ...state, hideToolActivity: !state.hideToolActivity };
 
-function safeTranscriptText(value: string): string {
-	return value
-		.replace(/\r\n?/g, "\n")
-		.replace(/\t/g, "    ")
-		.replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "");
-}
-
-function userContentText(content: unknown): string {
-	if (typeof content === "string") return safeTranscriptText(content);
-	if (!Array.isArray(content)) return "";
-
-	const parts: string[] = [];
-	for (const part of content) {
-		if (typeof part !== "object" || part === null) continue;
-		const item = part as { type?: unknown; text?: unknown };
-		if (item.type === "text" && typeof item.text === "string") parts.push(item.text);
-	}
-	return safeTranscriptText(parts.join("\n\n"));
-}
-
-function assistantConversationText(content: unknown, stopReason: unknown): string {
-	if (stopReason === "toolUse") return "";
-	if (typeof content === "string") return safeTranscriptText(content);
-	if (!Array.isArray(content)) return "";
-
-	const parts: string[] = [];
-	for (const part of content) {
-		if (typeof part !== "object" || part === null) continue;
-		const item = part as { type?: unknown; text?: unknown };
-		if (item.type === "toolCall") return "";
-		if (item.type === "text" && typeof item.text === "string") parts.push(item.text);
-	}
-	return safeTranscriptText(parts.join("\n\n"));
-}
-
-export function buildFilteredTranscript(entries: readonly unknown[]): FilteredTranscriptBlock[] {
-	const blocks: FilteredTranscriptBlock[] = [];
-	for (const entry of entries) {
-		if (typeof entry !== "object" || entry === null) continue;
-		const candidate = entry as { type?: unknown; message?: unknown };
-		if (candidate.type !== "message" || typeof candidate.message !== "object" || candidate.message === null) {
-			continue;
-		}
-		const message = candidate.message as { role?: unknown; content?: unknown; stopReason?: unknown };
-		if (message.role !== "user" && message.role !== "assistant") continue;
-		const text = (
-			message.role === "user"
-				? userContentText(message.content)
-				: assistantConversationText(message.content, message.stopReason)
-		).trim();
-		if (!text) continue;
-		blocks.push({ role: message.role, text });
-	}
-	return blocks;
+	const toolName = choice.slice("tool:".length).trim().toLowerCase();
+	const hiddenTools = new Set(state.hiddenTools.map(name => name.trim().toLowerCase()).filter(Boolean));
+	if (hiddenTools.has(toolName)) hiddenTools.delete(toolName);
+	else hiddenTools.add(toolName);
+	return { ...state, hiddenTools: [...hiddenTools].sort() };
 }

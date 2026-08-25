@@ -1,69 +1,50 @@
 import { expect, test } from "bun:test";
 import {
-	buildFilteredTranscript,
-	matchesFilteredViewKey,
-	wrapFilteredViewText,
+	buildTranscriptVisibilityChoices,
+	toggleTranscriptVisibilityChoice,
+	type TranscriptVisibilityState,
 } from "../extensions/tool-activity-view-core.ts";
 
-test("keeps conversation turns and removes internal assistant activity", () => {
-	const transcript = buildFilteredTranscript([
-		{ type: "message", message: { role: "user", content: "revisá el repo" } },
-		{
-			type: "message",
-			message: {
-				role: "assistant",
-				content: [
-					{ type: "thinking", thinking: "Voy a inspeccionarlo." },
-					{ type: "text", text: "**Revisando el estado**" },
-					{ type: "toolCall", name: "bash", arguments: { command: "git status" } },
-				],
-				stopReason: "toolUse",
-			},
-		},
-		{
-			type: "message",
-			message: { role: "toolResult", toolName: "bash", content: [{ type: "text", text: "secret output" }] },
-		},
-		{
-			type: "message",
-			message: {
-				role: "assistant",
-				content: [
-					{ type: "thinking", thinking: "Ya tengo la respuesta." },
-					{ type: "text", text: "El árbol está limpio." },
-				],
-				stopReason: "stop",
-			},
-		},
+const visible: TranscriptVisibilityState = {
+	hideThinking: false,
+	hideToolActivity: false,
+	hideAssistantToolPreambles: false,
+	hiddenTools: [],
+};
+
+test("builds stable granular choices from configured tools", () => {
+	const choices = buildTranscriptVisibilityChoices(visible, ["read", "bash", "read", " Bash "]);
+	expect(choices.map(choice => choice.id)).toEqual([
+		"done",
+		"thinking",
+		"preambles",
+		"all-tools",
+		"tool:bash",
+		"tool:read",
 	]);
-
-	expect(transcript).toEqual([
-		{ role: "user", text: "revisá el repo" },
-		{ role: "assistant", text: "El árbol está limpio." },
-	]);
-	expect(JSON.stringify(transcript)).not.toContain("Revisando el estado");
-	expect(JSON.stringify(transcript)).not.toContain("Voy a inspeccionarlo");
-	expect(JSON.stringify(transcript)).not.toContain("git status");
-	expect(JSON.stringify(transcript)).not.toContain("secret output");
+	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[ ] Tool · bash");
 });
 
-test("strips terminal control bytes from transcript text", () => {
-	const transcript = buildFilteredTranscript([
-		{ type: "message", message: { role: "assistant", content: "safe\u001b[2Jtext\u0007" } },
-	]);
+test("toggles independent transcript categories without changing the others", () => {
+	const thinkingHidden = toggleTranscriptVisibilityChoice(visible, "thinking");
+	const preamblesHidden = toggleTranscriptVisibilityChoice(thinkingHidden, "preambles");
+	const bashHidden = toggleTranscriptVisibilityChoice(preamblesHidden, "tool:bash");
 
-	expect(transcript).toEqual([{ role: "assistant", text: "safe[2Jtext" }]);
+	expect(bashHidden).toEqual({
+		hideThinking: true,
+		hideToolActivity: false,
+		hideAssistantToolPreambles: true,
+		hiddenTools: ["bash"],
+	});
+	expect(toggleTranscriptVisibilityChoice(bashHidden, "tool:bash").hiddenTools).toEqual([]);
+	expect(toggleTranscriptVisibilityChoice(bashHidden, "all-tools").hideToolActivity).toBe(true);
 });
 
-test("recognizes the reversible view keys without conflating Enter", () => {
-	expect(matchesFilteredViewKey("\u001b[111;7u", "toggle")).toBe(true);
-	expect(matchesFilteredViewKey("\u001b[109;6u", "toggle")).toBe(false);
-	expect(matchesFilteredViewKey("\u001b", "escape")).toBe(true);
-	expect(matchesFilteredViewKey("\r", "toggle")).toBe(false);
+test("normalizes persisted hidden tool names", () => {
+	const choices = buildTranscriptVisibilityChoices(
+		{ ...visible, hiddenTools: [" Bash ", "READ"] },
+		["bash", "read"],
+	);
+	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[x] Tool · bash");
+	expect(choices.find(choice => choice.id === "tool:read")?.label).toBe("[x] Tool · read");
 });
-
-test("wraps filtered prose to terminal cell width", () => {
-	expect(wrapFilteredViewText("abcd", 3)).toEqual(["abc", "d"]);
-	expect(wrapFilteredViewText("界a", 2)).toEqual(["界", "a"]);
-});
-

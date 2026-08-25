@@ -40,24 +40,26 @@ delete, paste y reemplazo siguen operando sobre esa selección. Las TUIs
 fullscreen activan su tracking separado y conservan sus propios eventos de
 rueda.
 
-## Visibilidad reversible de tools
+## Filtros nativos del transcript
 
-El toggle nativo `Ctrl+Shift+O` cambia el render de los componentes que OMP aún
-puede repintar. No puede borrar tool blocks que ya entraron al scrollback nativo
-de WezTerm; esto se vuelve visible al reanudar sesiones largas o desplazarse por
-historial comprometido.
+OMP 17.4 puede retirar snapshots comprometidos y reconstruir el transcript
+principal con `resetDisplay()`. Eso permite seguir trabajando con Markdown,
+renderers, streaming y editor normales; el costo es reemplazar la representación
+terminal anterior, no conservarla byte por byte en el scrollback.
+
+El patch downstream durable `patches/omp-17.4.0-workstation.patch` agrega
+`display.hiddenTools`, `display.hideAssistantToolPreambles` y la API opcional
+`getTranscriptVisibility`/`setTranscriptVisibility` para extensiones. El filtro
+por nombre compone con `display.hideToolActivity`: el global prevalece y cada
+tool individual oculta su llamada y resultado. Los preámbulos sólo se eliminan
+cuando el mismo mensaje contiene una tool call; las respuestas finales sin tools
+siempre permanecen.
 
 `extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
-mediante el wrapper global `extensions/windows-input.ts`, independientemente de
-que el editor WinInput opcional pueda cargar. WezTerm reemplaza su binding
-default `Hide` de `Ctrl+Shift+M` y emite directamente `CSI 111;7u` al PTY; Main
-no registra ni rerutea el chord. La extensión abre un overlay fullscreen sobre
-el alternate screen y reconstruye la conversación de la rama activa: conserva
-mensajes de usuario y respuestas finales del assistant, omitiendo thinking,
-preámbulos de turnos que invocan tools, tool calls y tool results. `Esc`, `q` o
-`Ctrl+Shift+M` vuelven al transcript original. La vista no modifica la sesión,
-no limpia scrollback y desactiva mouse reporting para conservar la selección
-nativa del terminal.
+mediante `extensions/windows-input.ts`. WezTerm reemplaza su `Hide` default de
+`Ctrl+Shift+M` y emite `CSI 111;7u` directamente al PTY. El chord abre un
+selector modal pequeño con thinking, preámbulos, toggle global y todas las tools
+registradas; al cerrar se continúa en el transcript principal. Main no participa.
 
 
 ## Mercado de renderers y clientes (2026-08-15)
@@ -66,7 +68,7 @@ Revalidado con `omp/17.3.0` local y las fuentes primarias enlazadas.
 
 | Opción | Aporte | Compatibilidad con OMP | Decisión |
 | --- | --- | --- | --- |
-| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` cambia la visibilidad de actividad aún repintable y `Ctrl+T` muestra/oculta thinking; themes, límites de output y status line son configurables. | **Nativa con límite de scrollback**. Las filas ya comprometidas al scrollback de WezTerm no pueden borrarse. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Usar `Ctrl+Shift+M` cuando se necesite una vista reversible de toda la rama sin tools; no limpiar scrollback ni parchear renderers internos. |
+| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` cambia toda la actividad y `Ctrl+T` muestra/oculta thinking. El patch downstream suma filtros por tool y preámbulos mediante `Ctrl+Shift+M`. | **Nativa con replay explícito**. `resetDisplay()` reconstruye la sesión con componentes ricos; reemplaza el scrollback visual previo en vez de preservar sus bytes. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Trabajar en el transcript principal. Usar el selector granular; no mantener una segunda vista fullscreen. |
 | Export/share/collab | `/export --themes` genera HTML con renderers web por tool; `/share` publica un snapshot cifrado; `/collab` ofrece transcript web vivo con thinking, tool cards y subagentes. | **Nativa**. [Session operations](https://github.com/can1357/oh-my-pi/blob/main/docs/session-operations-export-share-fork-resume.md), [Collab](https://github.com/can1357/oh-my-pi/blob/main/docs/collab.md). | Usar para lectura rica fuera del TUI antes de adoptar un cliente alternativo. |
 | Paseo | Cliente desktop/web/mobile multiagente; OMP es provider directo mediante `omp --mode rpc-ui`, con approvals y tools host. | **Explícita**, aunque el provider OMP viene deshabilitado por defecto. [Repositorio](https://github.com/getpaseo/paseo), [provider contract](https://github.com/getpaseo/paseo/blob/main/docs/providers.md). | Mejor opción externa para evaluar una UI completa y mantenida. |
 | `omp-desktop` | Tauri/React enfocado en OMP: Bash/eval streaming, código resaltado, diff unificado scrubbable, tool cards y minimapa. | **Explícita** sobre `omp --mode rpc`; proyecto pequeño y contrato RPC sujeto a drift. [Repositorio](https://github.com/apoc/omp-desktop). | Prototipo Windows prometedor; probar aislado, no volverlo interfaz principal todavía. |

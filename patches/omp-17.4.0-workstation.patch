@@ -1,0 +1,535 @@
+diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
+index 262c7db..8f749f8 100644
+--- a/packages/coding-agent/src/config/settings-schema.ts
++++ b/packages/coding-agent/src/config/settings-schema.ts
+@@ -1122,6 +1122,28 @@ export const SETTINGS_SCHEMA = {
+ 		},
+ 	},
+ 
++	"display.hiddenTools": {
++		type: "array",
++		default: [] as string[],
++		ui: {
++			tab: "appearance",
++			group: "Display",
++			label: "Hidden Tools",
++			description: "Tool names whose calls and results are hidden from the transcript",
++		},
++	},
++
++	"display.hideAssistantToolPreambles": {
++		type: "boolean",
++		default: false,
++		ui: {
++			tab: "appearance",
++			group: "Display",
++			label: "Hide Assistant Tool Preambles",
++			description: "Hide assistant text emitted immediately before a tool call",
++		},
++	},
++
+ 	"display.showTokenUsage": {
+ 		type: "boolean",
+ 		default: false,
+diff --git a/packages/coding-agent/src/extensibility/extensions/types.ts b/packages/coding-agent/src/extensibility/extensions/types.ts
+index 4e0f1b1..3f3c90c 100644
+--- a/packages/coding-agent/src/extensibility/extensions/types.ts
++++ b/packages/coding-agent/src/extensibility/extensions/types.ts
+@@ -252,6 +252,13 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
+ // (custom editor component, header/footer, widgets, theming, terminal input)
+ // and may be invoked from event handlers that have already taken the agent
+ // loop's lock — hooks intentionally cannot.
++export interface TranscriptVisibility {
++	hideThinking: boolean;
++	hideToolActivity: boolean;
++	hideAssistantToolPreambles: boolean;
++	hiddenTools: string[];
++}
++
+ export interface ExtensionUIContext {
+ 	/** True when selector timeouts start only after the dialog is presented. */
+ 	timeoutStartsOnPresentation?: boolean;
+@@ -367,6 +374,12 @@ export interface ExtensionUIContext {
+ 
+ 	/** Set tool output expansion state. */
+ 	setToolsExpanded(expanded: boolean): void;
++
++	/** Read transcript visibility preferences when the interactive TUI exposes them. */
++	getTranscriptVisibility?(): TranscriptVisibility;
++
++	/** Persist transcript visibility preferences and rebuild the native transcript in place. */
++	setTranscriptVisibility?(visibility: TranscriptVisibility): void;
+ }
+ 
+ /** Visual composer style and selector copy registered by an extension. */
+diff --git a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
+index 21d9e14..f5ae894 100644
+--- a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
++++ b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
+@@ -99,6 +99,7 @@ export class ChatTranscriptBuilder {
+ 
+ 	constructor(private readonly deps: ChatTranscriptBuilderDeps) {
+ 		this.container.setToolActivityVisible(!settings.get("display.hideToolActivity"));
++		this.container.setHiddenToolActivityNames(settings.get("display.hiddenTools"));
+ 	}
+ 
+ 	/** Whether the transcript currently holds any rendered rows. */
+@@ -109,6 +110,7 @@ export class ChatTranscriptBuilder {
+ 	/** Discard all components and rebuild the whole transcript from `entries`. */
+ 	rebuild(entries: SessionMessageEntry[]): void {
+ 		this.reset();
++		this.container.setHiddenToolActivityNames(settings.get("display.hiddenTools"));
+ 		for (const entry of entries) this.#appendChatMessage(entry.message);
+ 		// Flush the trailing turn's usage row only once its tools are materialized
+ 		// (a read whose result has not arrived stays pending); otherwise the row
+@@ -317,7 +319,9 @@ export class ChatTranscriptBuilder {
+ 	#appendAssistantMessage(message: Extract<AgentMessage, { role: "assistant" }>): void {
+ 		const hideThinkingBlock = this.deps.hideThinkingBlock?.() ?? false;
+ 		const proseOnlyThinking = this.deps.proseOnlyThinking ? this.deps.proseOnlyThinking() : true;
+-		const timeline = splitAssistantMessageToolTimeline(message);
++		const timeline = splitAssistantMessageToolTimeline(message, {
++			hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
++		});
+ 		const assistantComponent = new AssistantMessageComponent(
+ 			timeline.beforeTools,
+ 			hideThinkingBlock,
+diff --git a/packages/coding-agent/src/modes/components/read-tool-group.ts b/packages/coding-agent/src/modes/components/read-tool-group.ts
+index eeb1ced..8734150 100644
+--- a/packages/coding-agent/src/modes/components/read-tool-group.ts
++++ b/packages/coding-agent/src/modes/components/read-tool-group.ts
+@@ -506,6 +506,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
+ 		super.invalidate();
+ 	}
+ 
++	getToolActivityName(): string {
++		return "read";
++	}
++
+ 	getComponent(): Component {
+ 		return this;
+ 	}
+diff --git a/packages/coding-agent/src/modes/components/status-line/component.ts b/packages/coding-agent/src/modes/components/status-line/component.ts
+index c77e0c9..879ec3f 100644
+--- a/packages/coding-agent/src/modes/components/status-line/component.ts
++++ b/packages/coding-agent/src/modes/components/status-line/component.ts
+@@ -275,6 +275,7 @@ interface ActiveMeter {
+ const EMPTY_MESSAGES: readonly AgentMessage[] = [];
+ const STATUS_USAGE_START_DELAY_MS = 0;
+ const STATUS_USAGE_REFRESH_TIMEOUT_MS = 2_000;
++const STATUS_USAGE_VIEW_TTL_MS = 60_000;
+ 
+ function isContextSegment(segment: StatusLineSegmentId): boolean {
+ 	return segment === "context_pct" || segment === "context_total";
+@@ -433,7 +434,7 @@ export class StatusLineComponent implements Component {
+ 	#lastTokensPerSecond: number | null = null;
+ 	#lastTokensPerSecondTimestamp: number | null = null;
+ 
+-	// Provider usage caching (5-min TTL, OAuth/sub only)
++	// Rendered usage snapshot caching; provider fetches keep their own longer TTL.
+ 	#cachedUsage: {
+ 		tier?: string;
+ 		fiveHour?: { percent: number; resetMinutes?: number };
+@@ -442,6 +443,7 @@ export class StatusLineComponent implements Component {
+ 	} | null = null;
+ 	#cachedUsageContextKey: string | null = null;
+ 	#usageFetchedAt = 0;
++	#usageActivityRefreshedAt = Number.NEGATIVE_INFINITY;
+ 	#usageInFlight = false;
+ 	#usageStartTimer: Timer | null = null;
+ 	// A timed-out request may still resolve. Its result remains eligible only
+@@ -793,6 +795,7 @@ export class StatusLineComponent implements Component {
+ 		this.#clearUsageStartTimer();
+ 		this.#cachedUsage = null;
+ 		this.#usageFetchedAt = 0;
++		this.#usageActivityRefreshedAt = Number.NEGATIVE_INFINITY;
+ 		this.#usageInFlight = false;
+ 		this.#contextUsageCache = undefined;
+ 		this.#lastTokensPerSecond = null;
+@@ -1247,29 +1250,50 @@ export class StatusLineComponent implements Component {
+ 	}
+ 
+ 	#getUsageContextKey(session: AgentSession): string {
+-		const activeProvider = session.state.model?.provider ?? session.model?.provider;
++		const activeModel = session.state.model ?? session.model;
++		const activeProvider = activeModel?.provider;
+ 		const identity = activeProvider
+ 			? session.modelRegistry?.authStorage?.getOAuthAccountIdentity(activeProvider, session.sessionId)
+ 			: undefined;
+-		return this.#formatUsageContextKey(activeProvider, identity);
++		return `${this.#formatUsageContextKey(activeProvider, identity)}\0${activeModel?.id ?? ""}`;
++	}
++
++	#syncUsageContext(session: AgentSession): void {
++		const usageContextKey = this.#getUsageContextKey(session);
++		if (this.#cachedUsageContextKey === usageContextKey) return;
++		this.#cachedUsage = null;
++		this.#usageFetchedAt = 0;
++		this.#usageActivityRefreshedAt = Number.NEGATIVE_INFINITY;
++		this.#cachedUsageContextKey = usageContextKey;
+ 	}
+ 
+ 	/**
+-	 * Startup redraws only arm a short-delayed task; timeout releases the render
+-	 * cadence while a late successful fetch can still refresh the cached segment.
++	 * Startup and ordinary redraws use the short view cache; the provider layer
++	 * independently keeps full usage fetches on its longer cache.
+ 	 */
+ 	refreshUsageInBackground(): void {
++		const session = this.session;
++		this.#syncUsageContext(session);
++		this.#scheduleUsageRefresh(session, Date.now(), false);
++	}
++
++	/**
++	 * A completed assistant response may have refreshed Codex usage from response
++	 * headers without a network request. Re-read that cache at most once a minute.
++	 */
++	refreshUsageAfterActivity(): void {
+ 		const now = Date.now();
+ 		const session = this.session;
+-		const usageContextKey = this.#getUsageContextKey(session);
+-		if (this.#cachedUsageContextKey !== usageContextKey) {
+-			this.#cachedUsage = null;
+-			this.#usageFetchedAt = 0;
+-			this.#cachedUsageContextKey = usageContextKey;
+-		}
++		this.#syncUsageContext(session);
++		if (now - this.#usageActivityRefreshedAt < STATUS_USAGE_VIEW_TTL_MS) return;
++		this.#usageActivityRefreshedAt = now;
++		this.#scheduleUsageRefresh(session, now, true);
++	}
++
++	#scheduleUsageRefresh(session: AgentSession, now: number, ignoreViewCache: boolean): void {
+ 		if (this.#usageInFlight || this.#usageStartTimer) return;
+-		if (this.#usageFetchedAt > 0 && now - this.#usageFetchedAt < 5 * 60_000) return;
+-		const fetcher = (session as { fetchUsageReports?: (signal?: AbortSignal) => Promise<unknown> }).fetchUsageReports;
++		if (!ignoreViewCache && this.#usageFetchedAt > 0 && now - this.#usageFetchedAt < STATUS_USAGE_VIEW_TTL_MS) return;
++		const fetcher = session.fetchUsageReports;
+ 		if (typeof fetcher !== "function") return;
+ 		this.#usageInFlight = true;
+ 		this.#usageStartTimer = setTimeout(() => {
+@@ -1309,12 +1333,13 @@ export class StatusLineComponent implements Component {
+ 			return;
+ 		}
+ 		this.#latestAppliedUsageRefreshSequence = sequence;
+-		const activeProvider = session.state.model?.provider ?? session.model?.provider;
++		const activeModel = session.state.model ?? session.model;
++		const activeProvider = activeModel?.provider;
+ 		const activeIdentity =
+ 			activeProvider && session.modelRegistry?.authStorage
+ 				? session.modelRegistry.authStorage.getOAuthAccountIdentity(activeProvider, session.sessionId)
+ 				: undefined;
+-		const normalized = this.#normalizeUsageReports(reports, activeProvider, activeIdentity);
++		const normalized = this.#normalizeUsageReports(reports, activeProvider, activeIdentity, activeModel?.id);
+ 		const resetSnapshot =
+ 			activeProvider === "openai-codex" ? this.#normalizeCodexResetSnapshot(reports, activeIdentity) : null;
+ 		const usageChanged = this.#cachedUsage !== normalized;
+@@ -1427,6 +1452,7 @@ export class StatusLineComponent implements Component {
+ 		reports: unknown,
+ 		activeProvider?: string,
+ 		activeIdentity?: OAuthAccountIdentity,
++		activeModelId?: string,
+ 	): {
+ 		tier?: string;
+ 		fiveHour?: { percent: number; resetMinutes?: number };
+@@ -1473,6 +1499,10 @@ export class StatusLineComponent implements Component {
+ 				const windowId = l.scope?.windowId;
+ 				const tier = l.scope?.tier;
+ 				const resetsAt = l.window?.resetsAt;
++				if (activeProvider === "openai-codex" && activeModelId) {
++					const isSparkModel = activeModelId.toLowerCase().includes("-spark");
++					if (isSparkModel ? tier !== "spark" : tier !== undefined) continue;
++				}
+ 				// Canonical window ids win. Fall back to the reported span (same
+ 				// tolerance as the 5h priority-boost check) so providers that emit
+ 				// non-canonical ids, and cache rows written before a provider was
+diff --git a/packages/coding-agent/src/modes/components/tool-activity.ts b/packages/coding-agent/src/modes/components/tool-activity.ts
+index 5772a9b..646661f 100644
+--- a/packages/coding-agent/src/modes/components/tool-activity.ts
++++ b/packages/coding-agent/src/modes/components/tool-activity.ts
+@@ -2,6 +2,8 @@ import { type Component, Container } from "@oh-my-pi/pi-tui";
+ 
+ export interface ToolActivityComponent {
+ 	setToolActivityVisible(visible: boolean): void;
++	/** Built-in or extension tool name for per-tool transcript filtering. */
++	getToolActivityName?(): string;
+ }
+ 
+ export function isToolActivityComponent(component: Component): component is Component & ToolActivityComponent {
+diff --git a/packages/coding-agent/src/modes/components/tool-execution.ts b/packages/coding-agent/src/modes/components/tool-execution.ts
+index fddc637..b314ec5 100644
+--- a/packages/coding-agent/src/modes/components/tool-execution.ts
++++ b/packages/coding-agent/src/modes/components/tool-execution.ts
+@@ -978,6 +978,10 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
+ 		super.invalidate();
+ 	}
+ 
++	getToolActivityName(): string {
++		return this.#toolName;
++	}
++
+ 	setShowImages(show: boolean): void {
+ 		this.#showImages = show;
+ 		this.#updateDisplay();
+diff --git a/packages/coding-agent/src/modes/components/transcript-container.ts b/packages/coding-agent/src/modes/components/transcript-container.ts
+index 32738ef..2bf7b33 100644
+--- a/packages/coding-agent/src/modes/components/transcript-container.ts
++++ b/packages/coding-agent/src/modes/components/transcript-container.ts
+@@ -168,6 +168,7 @@ export class TranscriptContainer
+ 		ViewportTailProvider
+ {
+ 	#toolActivityVisible = true;
++	#hiddenToolActivityNames = new Set<string>();
+ 	// Bumped to retire every block segment at once (theme change / clear); a
+ 	// segment is only reused when its stored generation matches.
+ 	#generation = 0;
+@@ -201,17 +202,36 @@ export class TranscriptContainer
+ 	// consumes the report and re-bases the baseline). Out-of-band renders
+ 	// between engine frames lower it; they can never inflate it.
+ 	#stableRowsFloor = 0;
++	#applyToolActivityVisibility(component: Component): void {
++		if (!isToolActivityComponent(component)) return;
++		const toolName = component.getToolActivityName?.().trim().toLowerCase();
++		component.setToolActivityVisible(
++			this.#toolActivityVisible && (!toolName || !this.#hiddenToolActivityNames.has(toolName)),
++		);
++	}
++
+ 	override addChild(component: Component): void {
+-		if (isToolActivityComponent(component)) component.setToolActivityVisible(this.#toolActivityVisible);
++		this.#applyToolActivityVisibility(component);
+ 		super.addChild(component);
+ 	}
+ 
+ 	setToolActivityVisible(visible: boolean): void {
+ 		if (this.#toolActivityVisible === visible) return;
+ 		this.#toolActivityVisible = visible;
+-		for (const child of this.children) {
+-			if (isToolActivityComponent(child)) child.setToolActivityVisible(visible);
++		for (const child of this.children) this.#applyToolActivityVisibility(child);
++		this.invalidate();
++	}
++
++	setHiddenToolActivityNames(names: readonly string[]): void {
++		const normalized = new Set(names.map(name => name.trim().toLowerCase()).filter(Boolean));
++		if (
++			normalized.size === this.#hiddenToolActivityNames.size &&
++			[...normalized].every(name => this.#hiddenToolActivityNames.has(name))
++		) {
++			return;
+ 		}
++		this.#hiddenToolActivityNames = normalized;
++		for (const child of this.children) this.#applyToolActivityVisibility(child);
+ 		this.invalidate();
+ 	}
+ 
+diff --git a/packages/coding-agent/src/modes/controllers/event-controller.ts b/packages/coding-agent/src/modes/controllers/event-controller.ts
+index b3cecc9..d9ed718 100644
+--- a/packages/coding-agent/src/modes/controllers/event-controller.ts
++++ b/packages/coding-agent/src/modes/controllers/event-controller.ts
+@@ -857,7 +857,9 @@ export class EventController {
+ 			this.ctx.chatContainer.addChild(this.ctx.streamingComponent);
+ 			this.#streamingReveal.begin(
+ 				this.ctx.streamingComponent,
+-				splitAssistantMessageToolTimeline(this.ctx.streamingMessage).beforeTools,
++				splitAssistantMessageToolTimeline(this.ctx.streamingMessage, {
++					hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
++				}).beforeTools,
+ 			);
+ 			this.ctx.ui.requestRender();
+ 		}
+@@ -1040,7 +1042,9 @@ export class EventController {
+ 				this.#streamingReveal.resyncVisibility();
+ 			}
+ 			this.ctx.streamingMessage = event.message;
+-			const timeline = splitAssistantMessageToolTimeline(this.ctx.streamingMessage);
++			const timeline = splitAssistantMessageToolTimeline(this.ctx.streamingMessage, {
++				hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
++			});
+ 			this.#streamingReveal.setTarget(timeline.beforeTools);
+ 
+ 			const visibleBlockCount = this.ctx.streamingMessage.content.filter(
+@@ -1199,6 +1203,7 @@ export class EventController {
+ 	}
+ 
+ 	async #handleMessageEnd(event: Extract<AgentSessionEvent, { type: "message_end" }>): Promise<void> {
++		if (event.message.role === "assistant") this.ctx.statusLine.refreshUsageAfterActivity();
+ 		if (event.message.role === "user") return;
+ 		const unlockedThinkingVisibility =
+ 			event.message.role === "assistant" && this.ctx.noteDisplayableThinkingContent(event.message);
+@@ -1246,7 +1251,9 @@ export class EventController {
+ 							stopReason: "stop",
+ 						}
+ 					: this.ctx.streamingMessage;
+-			const displayTimeline = splitAssistantMessageToolTimeline(displayMessage);
++			const displayTimeline = splitAssistantMessageToolTimeline(displayMessage, {
++				hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
++			});
+ 			this.ctx.streamingComponent.updateContent(displayTimeline.beforeTools);
+ 
+ 			if (this.ctx.streamingMessage.stopReason !== "aborted" && this.ctx.streamingMessage.stopReason !== "error") {
+diff --git a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
+index fa23f22..b62a58d 100644
+--- a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
++++ b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
+@@ -20,6 +20,7 @@ import type {
+ 	ExtensionWidgetOptions,
+ 	SendUserMessageHandler,
+ 	TerminalInputHandler,
++	TranscriptVisibility,
+ } from "../../extensibility/extensions";
+ import { getSessionSlashCommands } from "../../extensibility/extensions/get-commands-handler";
+ import { AskDialogComponent, boundPromptTitle } from "../../modes/components/ask-dialog";
+@@ -141,6 +142,28 @@ export class ExtensionUiController {
+ 			setEditorComponent: factory => this.ctx.setEditorComponent(factory),
+ 			getToolsExpanded: () => this.ctx.toolOutputExpanded,
+ 			setToolsExpanded: expanded => this.ctx.setToolsExpanded(expanded),
++			getTranscriptVisibility: () => ({
++				hideThinking: this.ctx.hideThinkingBlock,
++				hideToolActivity: this.ctx.hideToolActivity,
++				hideAssistantToolPreambles: this.ctx.settings.get("display.hideAssistantToolPreambles"),
++				hiddenTools: [...this.ctx.settings.get("display.hiddenTools")],
++			}),
++			setTranscriptVisibility: (visibility: TranscriptVisibility) => {
++				const hiddenTools = [
++					...new Set(visibility.hiddenTools.map(name => name.trim().toLowerCase()).filter(Boolean)),
++				].sort();
++				this.ctx.hideThinkingBlock = visibility.hideThinking;
++				this.ctx.hideToolActivity = visibility.hideToolActivity;
++				this.ctx.settings.set("hideThinkingBlock", visibility.hideThinking);
++				this.ctx.settings.set("display.hideToolActivity", visibility.hideToolActivity);
++				this.ctx.settings.set("display.hideAssistantToolPreambles", visibility.hideAssistantToolPreambles);
++				this.ctx.settings.set("display.hiddenTools", hiddenTools);
++				this.ctx.chatContainer.setToolActivityVisible(!visibility.hideToolActivity);
++				this.ctx.chatContainer.setHiddenToolActivityNames(hiddenTools);
++				this.ctx.rebuildChatFromMessages();
++				if (visibility.hideToolActivity || hiddenTools.length > 0) this.ctx.ui.clearInlineImages();
++				this.ctx.ui.resetDisplay();
++			},
+ 		};
+ 		this.ctx.setToolUIContext(uiContext, true);
+ 		this.#toolUIContext = uiContext;
+diff --git a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
+index c72d1ab..bd0bfed 100644
+--- a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
++++ b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
+@@ -146,7 +146,10 @@ export function assistantHasVisibleContent(message: AssistantAgentMessage): bool
+  * in one assistant message; keeping every text block in the leading assistant
+  * block buries post-tool text above tool results in the transcript.
+  */
+-export function splitAssistantMessageToolTimeline(message: AssistantAgentMessage): {
++export function splitAssistantMessageToolTimeline(
++	message: AssistantAgentMessage,
++	options: { hideToolPreamble?: boolean } = {},
++): {
+ 	beforeTools: AssistantAgentMessage;
+ 	afterToolCalls: ReadonlyMap<string, AssistantAgentMessage>;
+ 	hasToolCalls: boolean;
+@@ -190,7 +193,10 @@ export function splitAssistantMessageToolTimeline(message: AssistantAgentMessage
+ 		return { beforeTools: message, afterToolCalls, hasToolCalls: false };
+ 	}
+ 
+-	return { beforeTools: displaySegment(beforeTools), afterToolCalls, hasToolCalls: true };
++	const visibleBeforeTools = options.hideToolPreamble
++		? beforeTools.filter(content => content.type !== "text")
++		: beforeTools;
++	return { beforeTools: displaySegment(visibleBeforeTools), afterToolCalls, hasToolCalls: true };
+ }
+ 
+ /**
+diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
+index f041efa..502acbc 100644
+--- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
++++ b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
+@@ -65,4 +65,41 @@ describe("tool activity visibility", () => {
+ 		wrapper.setExpanded(false);
+ 		expect(states).toEqual([true, false]);
+ 	});
++
++	it("filters named tools independently from global activity visibility", () => {
++		class NamedActivity extends Text {
++			#visible = true;
++			constructor(
++				text: string,
++				private readonly toolName: string,
++			) {
++				super(text, 1, 0);
++			}
++			getToolActivityName(): string {
++				return this.toolName;
++			}
++			setToolActivityVisible(visible: boolean): void {
++				this.#visible = visible;
++			}
++			override render(width: number): readonly string[] {
++				return this.#visible ? super.render(width) : [];
++			}
++		}
++
++		const transcript = new TranscriptContainer();
++		transcript.setHiddenToolActivityNames([" BASH "]);
++		transcript.addChild(new NamedActivity("bash output", "bash"));
++		transcript.addChild(new NamedActivity("read output", "read"));
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).toContain("read output");
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).not.toContain("bash output");
++
++		transcript.setToolActivityVisible(false);
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).toBe("");
++		transcript.setToolActivityVisible(true);
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).toContain("read output");
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).not.toContain("bash output");
++
++		transcript.setHiddenToolActivityNames([]);
++		expect(stripVTControlCharacters(transcript.render(120).join("\n"))).toContain("bash output");
++	});
+ });
+diff --git a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
+index 1833799..92af5cf 100644
+--- a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
++++ b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
+@@ -1,6 +1,9 @@
+ import { describe, expect, it } from "bun:test";
+ import type { AssistantMessage, Usage } from "@oh-my-pi/pi-ai";
+-import { assistantUsageIsBilled } from "../../../src/modes/utils/transcript-render-helpers";
++import {
++	assistantUsageIsBilled,
++	splitAssistantMessageToolTimeline,
++} from "../../../src/modes/utils/transcript-render-helpers";
+ 
+ function usage(overrides: Partial<Usage> = {}): Usage {
+ 	return {
+@@ -36,3 +39,34 @@ describe("assistantUsageIsBilled", () => {
+ 		expect(assistantUsageIsBilled(emptyFreeMessage.usage)).toBe(false);
+ 	});
+ });
++
++describe("splitAssistantMessageToolTimeline", () => {
++	it("removes only pre-tool assistant text when requested", () => {
++		const message = {
++			role: "assistant",
++			content: [
++				{ type: "thinking", thinking: "private reasoning" },
++				{ type: "text", text: "**Checking files**" },
++				{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "a.ts" } },
++				{ type: "text", text: "Final answer" },
++			],
++			stopReason: "toolUse",
++		} as AssistantMessage;
++
++		const visible = splitAssistantMessageToolTimeline(message);
++		expect(visible.beforeTools.content.map(content => content.type)).toEqual(["thinking", "text"]);
++
++		const filtered = splitAssistantMessageToolTimeline(message, { hideToolPreamble: true });
++		expect(filtered.beforeTools.content.map(content => content.type)).toEqual(["thinking"]);
++		expect(filtered.afterToolCalls.get("call-1")?.content).toEqual([{ type: "text", text: "Final answer" }]);
++	});
++
++	it("never hides text from a final assistant response without tools", () => {
++		const message = {
++			role: "assistant",
++			content: [{ type: "text", text: "Final answer" }],
++			stopReason: "stop",
++		} as AssistantMessage;
++		expect(splitAssistantMessageToolTimeline(message, { hideToolPreamble: true }).beforeTools).toBe(message);
++	});
++});

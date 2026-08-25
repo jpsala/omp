@@ -403,7 +403,7 @@ Rollback al launcher oficial 17.4:
 SHA-256
 `942767491537d14a8d2334a77cb3b4508479eef77323c4bcfe6387f2450d2e24`.
 
-## 2026-08-25 — Vista filtrada reversible sobre alternate screen
+## 2026-08-25 — Primera vista fullscreen reversible (reemplazada)
 
 El toggle nativo `Ctrl+Shift+O` no satisface el caso de sesiones reanudadas:
 OMP puede repintar componentes vivos, pero las filas ya comprometidas al
@@ -419,3 +419,25 @@ conserva mensajes de usuario y respuestas finales del assistant; omite
 thinking, preámbulos de turnos con tools, tool calls y tool results. Vuelve con
 `Esc`, `q` o `Ctrl+Shift+M`; transcript y scrollback quedan intactos debajo.
 El overlay no habilita mouse reporting para preservar selección y rueda nativas.
+
+## 2026-08-25 — Filtros granulares en el transcript principal
+
+La vista fullscreen anterior preservaba scrollback byte por byte, pero impedía
+continuar trabajando y degradaba Markdown y componentes ricos. Queda retirada.
+OMP 17.4 ya puede ejecutar `resetDisplay()` y reconstruir la sesión sobre la
+pantalla principal; se acepta reemplazar la representación terminal previa para
+conservar formato, editor, streaming e interacción normal.
+
+El delta downstream agrega filtros persistentes para thinking, preámbulos de
+mensajes que invocan tools, actividad global y tools individuales. Los
+preámbulos sólo se ocultan cuando el mensaje efectivamente contiene una tool
+call; una respuesta final sin tools nunca desaparece. La extensión accede por
+una API pública opcional y `Ctrl+Shift+M` abre un selector modal, no otro
+transcript.
+
+`patches/omp-17.4.0-workstation.patch` es el delta reproducible contra
+`v17.4.0`; incluye además los cambios downstream activos de cuota/status que el
+binario ya servía. El despliegue conserva un artifact staged separado, publica
+el addon Win32 existente como sidecar junto al launcher y sólo reemplaza
+ejecutables con copia atómica cuando Windows libera sus locks; nunca trunca ni
+sobrescribe el binario de una sesión activa.
