@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -47,6 +47,7 @@ const requiredFiles = [
 	"scripts/update-index.ts",
 	"scripts/fleet-observer.ts",
 	"scripts/runtime-child-bootstrap.ts",
+	"scripts/deploy-omp-workstation.ts",
 	"scripts/audit.ts",
 	"examples/rpc-once.ts",
 	"examples/fleet-publication.json",
@@ -61,6 +62,7 @@ const requiredFiles = [
 	"tests/runtime-handshake.test.ts",
 	"tests/runtime-child-bootstrap.test.ts",
 	"tests/runtime-launcher.test.ts",
+	"tests/deploy-omp-workstation.test.ts",
 	"package.json",
 	"tsconfig.json",
 ];
@@ -382,6 +384,19 @@ for (const contractToken of [
 ]) {
 	if (!extension.includes(contractToken))
 		issues.push(`WezTerm extension missing contract token: ${contractToken}`);
+}
+
+if (process.platform === "win32") {
+	const ompBinDir = join(homedir(), ".bun", "bin");
+	const ompBinDirStatus = await lstat(ompBinDir).catch(() => undefined);
+	if (ompBinDirStatus?.isDirectory()) {
+		const ompExeStatus = await lstat(join(ompBinDir, "omp.exe")).catch(() => undefined);
+		const ompComStatus = await lstat(join(ompBinDir, "omp.com")).catch(() => undefined);
+		if (!ompExeStatus?.isFile()) issues.push("Windows OMP installation is missing ~/.bun/bin/omp.exe");
+		if (ompComStatus?.isFile()) {
+			issues.push("Windows OMP installation must not contain omp.com; PATHEXT resolves it before omp.exe");
+		}
+	}
 }
 
 await auditProjectExtensionLoad();

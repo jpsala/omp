@@ -54,6 +54,9 @@ por nombre compone con `display.hideToolActivity`: el global prevalece y cada
 tool individual oculta su llamada y resultado. Los preámbulos sólo se eliminan
 cuando el mismo mensaje contiene una tool call; las respuestas finales sin tools
 siempre permanecen.
+El build se publica exclusivamente con `bun run deploy:omp`: instala
+`~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core
+anterior.
 
 `extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
 mediante `extensions/windows-input.ts`. WezTerm reemplaza su `Hide` default de

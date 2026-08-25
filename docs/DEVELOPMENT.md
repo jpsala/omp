@@ -26,6 +26,21 @@ bun examples/rpc-once.ts "Responde sólo: ok"
 omp
 ```
 
+## Deploy downstream de OMP en Windows
+
+El único launcher canónico es `~/.bun/bin/omp.exe`. Para publicar un build:
+
+```powershell
+bun run deploy:omp -- C:\ruta\al\build\omp.exe
+```
+
+Sin argumento usa `~/.bun/bin/omp-transcript-filters.exe`. El deploy valida que
+el artifact sea PE, copia a un staging en el mismo directorio, rota
+atómicamente `omp.exe` y retira cualquier `omp.com`; nunca escribe ambos
+launchers. Backups bloqueados por sesiones vivas quedan con sufijo no ejecutable
+y se limpian en la próxima corrida. `bun run audit` falla si reaparece
+`omp.com`, porque Windows lo resolvería antes que `.exe`.
+
 ## Extensión WezTerm Attention
 
 La extensión escribe un marcador JSON por pane en un directorio absoluto. Por defecto usa `~/.local/state/wezterm-attention`; `WEZTERM_ATTENTION_DIR` permite apuntar al directorio que ya consume la configuración de WezTerm. Si `WEZTERM_PANE` no es un entero o el directorio configurado no es absoluto, no escribe.

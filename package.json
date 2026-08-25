@@ -6,6 +6,7 @@
     "index": "bun scripts/update-index.ts",
     "index:check": "bun scripts/update-index.ts --check",
     "audit": "bun scripts/audit.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "deploy:omp": "bun scripts/deploy-omp-workstation.ts"
   }
 }

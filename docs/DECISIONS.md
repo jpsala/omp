@@ -447,3 +447,10 @@ Nombrar sólo `omp.exe` todavía dejaba resolución indirecta y permitió abrir 
 sesión con el core anterior aunque la extensión nueva ya estuviera en disco.
 Una sesión viva no puede incorporar APIs agregadas al binario; el fallback de
 la extensión avisa una sola vez y exige un tab nuevo, sin repetir errores.
+
+La instalación Windows adopta un único basename ejecutable: `omp.exe`.
+`scripts/deploy-omp-workstation.ts` es el único flujo downstream de publicación:
+valida PE/tamaño, staging y rotación con rollback, retira `omp.com` antes del
+cutover y deja backups bloqueados con sufijos fuera de `PATHEXT`. El audit falla
+si `omp.com` reaparece. No se corrige modificando `PATHEXT`, aliases ni perfiles
+de shell.
