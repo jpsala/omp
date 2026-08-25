@@ -40,6 +40,20 @@ delete, paste y reemplazo siguen operando sobre esa selección. Las TUIs
 fullscreen activan su tracking separado y conservan sus propios eventos de
 rueda.
 
+## Visibilidad reversible de tools
+
+El toggle nativo `Ctrl+Shift+O` cambia el render de los componentes que OMP aún
+puede repintar. No puede borrar tool blocks que ya entraron al scrollback nativo
+de WezTerm; esto se vuelve visible al reanudar sesiones largas o desplazarse por
+historial comprometido.
+
+`extensions/tool-activity-view.ts` registra `Ctrl+Shift+M`. Abre un overlay
+fullscreen sobre el alternate screen y reconstruye la rama activa con mensajes
+de usuario, assistant y thinking, omitiendo tool calls y tool results. `Esc`,
+`q` o el mismo hotkey vuelven al transcript original. La vista no modifica la
+sesión, no limpia scrollback y desactiva mouse reporting para conservar la
+selección nativa del terminal.
+
 
 ## Mercado de renderers y clientes (2026-08-15)
 
@@ -47,7 +61,7 @@ Revalidado con `omp/17.3.0` local y las fuentes primarias enlazadas.
 
 | Opción | Aporte | Compatibilidad con OMP | Decisión |
 | --- | --- | --- | --- |
-| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` muestra/oculta actividad de tools y `Ctrl+T` muestra/oculta thinking; themes, límites de output y status line son configurables. | **Nativa**. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Explotar primero; no instalar una extensión para estos toggles. |
+| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` cambia la visibilidad de actividad aún repintable y `Ctrl+T` muestra/oculta thinking; themes, límites de output y status line son configurables. | **Nativa con límite de scrollback**. Las filas ya comprometidas al scrollback de WezTerm no pueden borrarse. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Usar `Ctrl+Shift+M` cuando se necesite una vista reversible de toda la rama sin tools; no limpiar scrollback ni parchear renderers internos. |
 | Export/share/collab | `/export --themes` genera HTML con renderers web por tool; `/share` publica un snapshot cifrado; `/collab` ofrece transcript web vivo con thinking, tool cards y subagentes. | **Nativa**. [Session operations](https://github.com/can1357/oh-my-pi/blob/main/docs/session-operations-export-share-fork-resume.md), [Collab](https://github.com/can1357/oh-my-pi/blob/main/docs/collab.md). | Usar para lectura rica fuera del TUI antes de adoptar un cliente alternativo. |
 | Paseo | Cliente desktop/web/mobile multiagente; OMP es provider directo mediante `omp --mode rpc-ui`, con approvals y tools host. | **Explícita**, aunque el provider OMP viene deshabilitado por defecto. [Repositorio](https://github.com/getpaseo/paseo), [provider contract](https://github.com/getpaseo/paseo/blob/main/docs/providers.md). | Mejor opción externa para evaluar una UI completa y mantenida. |
 | `omp-desktop` | Tauri/React enfocado en OMP: Bash/eval streaming, código resaltado, diff unificado scrubbable, tool cards y minimapa. | **Explícita** sobre `omp --mode rpc`; proyecto pequeño y contrato RPC sujeto a drift. [Repositorio](https://github.com/apoc/omp-desktop). | Prototipo Windows prometedor; probar aislado, no volverlo interfaz principal todavía. |

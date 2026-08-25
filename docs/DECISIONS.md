@@ -402,3 +402,17 @@ Rollback al launcher oficial 17.4:
 `C:/Users/jpsal/.bun/bin/omp.exe.official-17.4-backup-2026-08-21T11-41-10.889Z`,
 SHA-256
 `942767491537d14a8d2334a77cb3b4508479eef77323c4bcfe6387f2450d2e24`.
+
+## 2026-08-25 — Vista filtrada reversible sobre alternate screen
+
+El toggle nativo `Ctrl+Shift+O` no satisface el caso de sesiones reanudadas:
+OMP puede repintar componentes vivos, pero las filas ya comprometidas al
+scrollback nativo de WezTerm son historia inmutable. Limpiar y reconstruir la
+pantalla habría destruido scrollback y selección; iniciar oculto tampoco sería
+reversible después de mostrar los bloques.
+
+Se eligió una vista filtrada fullscreen con `Ctrl+Shift+M`. La extensión
+reconstruye la rama activa sin tool calls ni tool results sobre el alternate
+screen, mantiene user/assistant/thinking y vuelve con `Esc`, `q` o el mismo
+hotkey. El transcript y el scrollback normales quedan intactos debajo. El
+overlay no habilita mouse reporting para preservar selección y rueda nativas.
