@@ -57,6 +57,10 @@ siempre permanecen.
 El build se publica exclusivamente con `bun run deploy:omp`: instala
 `~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core
 anterior.
+La política debe inicializar tanto el container vivo como el
+`stagedChatContainer` de `renderInitialMessages()`; ese swap ocurre en startup y
+replay. Configurar sólo el container constructor produce un selector correcto
+pero no filtra la superficie efectiva.
 
 `extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
 mediante `extensions/windows-input.ts`. WezTerm reemplaza su `Hide` default de

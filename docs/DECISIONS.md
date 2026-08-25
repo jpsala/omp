@@ -467,3 +467,12 @@ el addon nativo de la misma versión y desplegar mediante `bun run deploy:omp`.
 El deploy usa nombres de backup únicos; un `omp.exe.previous` bloqueado ya no
 impide publicar la versión siguiente. Las preferencias de thinking, preámbulos
 y tools se restauran después del update si el schema oficial las descarta.
+
+La primera rebase 18 era incompleta: configuraba el container creado por
+`InteractiveMode`, pero `renderInitialMessages()` lo reemplazaba por un
+`stagedChatContainer` que sólo heredaba el toggle global. El selector podía
+mostrar preferencias correctas mientras la superficie efectiva seguía
+renderizando Bash. La política granular ahora se aplica en cada creación y
+rebuild del transcript. Un test de integración construye `InteractiveMode`,
+ejecuta el swap inicial y exige que `bash` quede oculto mientras `read` sigue
+visible.

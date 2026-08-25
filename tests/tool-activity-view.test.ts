@@ -22,7 +22,7 @@ test("builds stable granular choices from configured tools", () => {
 		"tool:bash",
 		"tool:read",
 	]);
-	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[ ] Tool · bash");
+	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[ ] Ocultar tool · bash");
 });
 
 test("toggles independent transcript categories without changing the others", () => {
@@ -45,6 +45,6 @@ test("normalizes persisted hidden tool names", () => {
 		{ ...visible, hiddenTools: [" Bash ", "READ"] },
 		["bash", "read"],
 	);
-	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[x] Tool · bash");
-	expect(choices.find(choice => choice.id === "tool:read")?.label).toBe("[x] Tool · read");
+	expect(choices.find(choice => choice.id === "tool:bash")?.label).toBe("[x] Ocultar tool · bash");
+	expect(choices.find(choice => choice.id === "tool:read")?.label).toBe("[x] Ocultar tool · read");
 });

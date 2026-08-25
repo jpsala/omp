@@ -25,23 +25,23 @@ export function buildTranscriptVisibilityChoices(
 		{ id: "done", label: "Listo", description: "Cerrar y seguir trabajando en el transcript normal" },
 		{
 			id: "thinking",
-			label: `${mark(state.hideThinking)} Thinking blocks`,
+			label: `${mark(state.hideThinking)} Ocultar thinking blocks`,
 			description: "Razonamiento visible del assistant",
 		},
 		{
 			id: "preambles",
-			label: `${mark(state.hideAssistantToolPreambles)} Preámbulos internos`,
+			label: `${mark(state.hideAssistantToolPreambles)} Ocultar preámbulos internos`,
 			description: "Texto del assistant inmediatamente anterior a una tool call",
 		},
 		{
 			id: "all-tools",
-			label: `${mark(state.hideToolActivity)} Toda la actividad de tools`,
+			label: `${mark(state.hideToolActivity)} Ocultar toda la actividad de tools`,
 			description: "Toggle global nativo; prevalece sobre los filtros individuales",
 		},
 		...normalizedTools.map(
 			(name): TranscriptVisibilityChoice => ({
 				id: `tool:${name}`,
-				label: `${mark(hiddenTools.has(name))} Tool · ${name}`,
+				label: `${mark(hiddenTools.has(name))} Ocultar tool · ${name}`,
 				description: `Llamadas y resultados de ${name}`,
 			}),
 		),

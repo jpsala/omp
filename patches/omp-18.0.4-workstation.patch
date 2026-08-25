@@ -262,6 +262,18 @@ index fa23f22..b62a58d 100644
  		};
  		this.ctx.setToolUIContext(uiContext, true);
  		this.#toolUIContext = uiContext;
+diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
+index 78c168e..de86444 100644
+--- a/packages/coding-agent/src/modes/interactive-mode.ts
++++ b/packages/coding-agent/src/modes/interactive-mode.ts
+@@ -978,6 +978,7 @@ export class InteractiveMode implements InteractiveModeContext {
+ 
+ 		this.hideToolActivity = settings.get("display.hideToolActivity");
+ 		this.chatContainer.setToolActivityVisible(!this.hideToolActivity);
++		this.chatContainer.setHiddenToolActivityNames(settings.get("display.hiddenTools"));
+ 		this.hideThinkingBlock = settings.get("hideThinkingBlock");
+ 		this.proseOnlyThinking = settings.get("proseOnlyThinking");
+ 
 diff --git a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
 index 1f4888d..803a8e6 100644
 --- a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
@@ -290,6 +302,18 @@ index 1f4888d..803a8e6 100644
  }
  
  /**
+diff --git a/packages/coding-agent/src/modes/utils/ui-helpers.ts b/packages/coding-agent/src/modes/utils/ui-helpers.ts
+index e1ac002..5bc6f6c 100644
+--- a/packages/coding-agent/src/modes/utils/ui-helpers.ts
++++ b/packages/coding-agent/src/modes/utils/ui-helpers.ts
+@@ -815,6 +815,7 @@ export class UiHelpers {
+ 		const visibleChatContainer = this.ctx.chatContainer;
+ 		const stagedChatContainer = new TranscriptContainer();
+ 		stagedChatContainer.setToolActivityVisible(!this.ctx.hideToolActivity);
++		stagedChatContainer.setHiddenToolActivityNames(this.ctx.settings.get("display.hiddenTools"));
+ 		const preservedChatChildren = options.preserveExistingChat ? [...visibleChatContainer.children] : undefined;
+ 		const previousTranscriptMessageComponents = this.ctx.transcriptMessageComponents;
+ 		const previousPendingTools = this.ctx.pendingTools;
 diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 index f041efa..502acbc 100644
 --- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
