@@ -58,19 +58,30 @@ function safeTranscriptText(value: string): string {
 		.replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "");
 }
 
-function contentText(content: unknown): string {
+function userContentText(content: unknown): string {
 	if (typeof content === "string") return safeTranscriptText(content);
 	if (!Array.isArray(content)) return "";
 
 	const parts: string[] = [];
 	for (const part of content) {
 		if (typeof part !== "object" || part === null) continue;
-		const item = part as { type?: unknown; text?: unknown; thinking?: unknown };
-		if (item.type === "text" && typeof item.text === "string") {
-			parts.push(item.text);
-		} else if (item.type === "thinking" && typeof item.thinking === "string") {
-			parts.push(item.thinking);
-		}
+		const item = part as { type?: unknown; text?: unknown };
+		if (item.type === "text" && typeof item.text === "string") parts.push(item.text);
+	}
+	return safeTranscriptText(parts.join("\n\n"));
+}
+
+function assistantConversationText(content: unknown, stopReason: unknown): string {
+	if (stopReason === "toolUse") return "";
+	if (typeof content === "string") return safeTranscriptText(content);
+	if (!Array.isArray(content)) return "";
+
+	const parts: string[] = [];
+	for (const part of content) {
+		if (typeof part !== "object" || part === null) continue;
+		const item = part as { type?: unknown; text?: unknown };
+		if (item.type === "toolCall") return "";
+		if (item.type === "text" && typeof item.text === "string") parts.push(item.text);
 	}
 	return safeTranscriptText(parts.join("\n\n"));
 }
@@ -83,9 +94,13 @@ export function buildFilteredTranscript(entries: readonly unknown[]): FilteredTr
 		if (candidate.type !== "message" || typeof candidate.message !== "object" || candidate.message === null) {
 			continue;
 		}
-		const message = candidate.message as { role?: unknown; content?: unknown };
+		const message = candidate.message as { role?: unknown; content?: unknown; stopReason?: unknown };
 		if (message.role !== "user" && message.role !== "assistant") continue;
-		const text = contentText(message.content).trim();
+		const text = (
+			message.role === "user"
+				? userContentText(message.content)
+				: assistantConversationText(message.content, message.stopReason)
+		).trim();
 		if (!text) continue;
 		blocks.push({ role: message.role, text });
 	}

@@ -5,7 +5,7 @@ import {
 	wrapFilteredViewText,
 } from "../extensions/tool-activity-view-core.ts";
 
-test("keeps conversation text and removes tool activity", () => {
+test("keeps conversation turns and removes internal assistant activity", () => {
 	const transcript = buildFilteredTranscript([
 		{ type: "message", message: { role: "user", content: "revisá el repo" } },
 		{
@@ -14,21 +14,35 @@ test("keeps conversation text and removes tool activity", () => {
 				role: "assistant",
 				content: [
 					{ type: "thinking", thinking: "Voy a inspeccionarlo." },
+					{ type: "text", text: "**Revisando el estado**" },
 					{ type: "toolCall", name: "bash", arguments: { command: "git status" } },
-					{ type: "text", text: "El árbol está limpio." },
 				],
+				stopReason: "toolUse",
 			},
 		},
 		{
 			type: "message",
 			message: { role: "toolResult", toolName: "bash", content: [{ type: "text", text: "secret output" }] },
 		},
+		{
+			type: "message",
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "thinking", thinking: "Ya tengo la respuesta." },
+					{ type: "text", text: "El árbol está limpio." },
+				],
+				stopReason: "stop",
+			},
+		},
 	]);
 
 	expect(transcript).toEqual([
 		{ role: "user", text: "revisá el repo" },
-		{ role: "assistant", text: "Voy a inspeccionarlo.\n\nEl árbol está limpio." },
+		{ role: "assistant", text: "El árbol está limpio." },
 	]);
+	expect(JSON.stringify(transcript)).not.toContain("Revisando el estado");
+	expect(JSON.stringify(transcript)).not.toContain("Voy a inspeccionarlo");
 	expect(JSON.stringify(transcript)).not.toContain("git status");
 	expect(JSON.stringify(transcript)).not.toContain("secret output");
 });

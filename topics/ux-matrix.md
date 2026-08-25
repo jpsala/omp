@@ -52,8 +52,9 @@ mediante el wrapper global `extensions/windows-input.ts`, independientemente de
 que el editor WinInput opcional pueda cargar. WezTerm reemplaza su binding
 default `Hide` de `Ctrl+Shift+M` y emite directamente `CSI 111;7u` al PTY; Main
 no registra ni rerutea el chord. La extensión abre un overlay fullscreen sobre
-el alternate screen y reconstruye la rama activa con mensajes de usuario,
-assistant y thinking, omitiendo tool calls y tool results. `Esc`, `q` o
+el alternate screen y reconstruye la conversación de la rama activa: conserva
+mensajes de usuario y respuestas finales del assistant, omitiendo thinking,
+preámbulos de turnos que invocan tools, tool calls y tool results. `Esc`, `q` o
 `Ctrl+Shift+M` vuelven al transcript original. La vista no modifica la sesión,
 no limpia scrollback y desactiva mouse reporting para conservar la selección
 nativa del terminal.

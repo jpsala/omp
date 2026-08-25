@@ -414,7 +414,8 @@ reversible después de mostrar los bloques.
 Se eligió una vista filtrada fullscreen. OMP registra `Ctrl+Alt+O` como chord
 interno; WezTerm reemplaza su `Hide` default de `Ctrl+Shift+M` y emite
 directamente la secuencia privada al PTY. Main no participa. La extensión
-reconstruye la rama activa sin tool calls ni tool results sobre el alternate
-screen, mantiene user/assistant/thinking y vuelve con `Esc`, `q` o
-`Ctrl+Shift+M`. El transcript y el scrollback normales quedan intactos debajo.
+reconstruye la conversación de la rama activa sobre el alternate screen:
+conserva mensajes de usuario y respuestas finales del assistant; omite
+thinking, preámbulos de turnos con tools, tool calls y tool results. Vuelve con
+`Esc`, `q` o `Ctrl+Shift+M`; transcript y scrollback quedan intactos debajo.
 El overlay no habilita mouse reporting para preservar selección y rueda nativas.

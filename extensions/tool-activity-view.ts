@@ -32,7 +32,7 @@ function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 					}
 					next.push("");
 				}
-				cachedLines = next.length > 0 ? next : [theme.fg("muted", "No hay mensajes sin tools en esta rama.")];
+				cachedLines = next.length > 0 ? next : [theme.fg("muted", "No hay conversación visible en esta rama.")];
 				return cachedLines;
 			};
 
@@ -48,7 +48,7 @@ function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 					const body = lines.slice(scrollOffset, scrollOffset + bodyHeight);
 					while (body.length < bodyHeight) body.push("");
 					return [
-						theme.fg("accent", theme.bold("Vista filtrada · actividad de tools oculta")),
+						theme.fg("accent", theme.bold("Vista de conversación · actividad interna oculta")),
 						...body,
 						theme.fg("muted", "↑/↓ PgUp/PgDn · Esc o Ctrl+Shift+M para volver"),
 					];
@@ -94,7 +94,7 @@ function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 
 export default function toolActivityView(pi: ExtensionAPI): void {
 	pi.registerShortcut(TOOL_ACTIVITY_VIEW_SHORTCUT, {
-		description: "Toggle reversible transcript view without tool activity",
+		description: "Toggle reversible conversation-only transcript view",
 		handler: async ctx => {
 			if (!ctx.hasUI) return;
 			await openFilteredTranscript(ctx);
