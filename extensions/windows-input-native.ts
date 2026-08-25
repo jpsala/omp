@@ -2,7 +2,7 @@
  * Windows-like input editor for OMP.
  * Windows/VS Code-style selection semantics over OMP's native editor.
  *
- * This file is the durable source; the installed wrapper re-exports it.
+ * This implementation is loaded only by the direct `windows-input.ts` entrypoint.
  *
  * The extension delegates rendering to `CustomEditor`, preserving slash/file/
  * skill autocomplete, and adds selection highlighting through `decorateText`.

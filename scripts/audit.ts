@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { PROFILE_CATALOG } from "../src/profile-catalog.ts";
 
 interface WorkspaceFile {
 	absolutePath: string;
@@ -25,6 +26,7 @@ const requiredFiles = [
 	"extensions/windows-input.ts",
 	"extensions/omp-fleet.ts",
 	"extensions/agent-runtime-habitat.ts",
+	"extensions/omp-profiles.ts",
 	"extensions/tool-activity-view.ts",
 	"extensions/tool-activity-view-core.ts",
 	"extensions/windows-input-native.ts",
@@ -34,12 +36,15 @@ const requiredFiles = [
 	"src/omp-fleet.ts",
 	"src/omp-fleet-wezterm.ts",
 	"src/agent-runtime-context.ts",
+	"src/profile-catalog.ts",
 	"src/runtime-host-detect.ts",
 	"src/runtime-host-wezterm.ts",
 	"src/runtime-harness-omp.ts",
 	"src/runtime-handshake.ts",
 	"src/runtime-launcher.ts",
 	"runtime/omp-fresh-session.yml",
+	"profiles/catalog.json",
+	"patches/omp-18.0.5-workstation.patch",
 	"topics/rpc-client.md",
 	"topics/ux-matrix.md",
 	"topics/wezterm-attention.md",
@@ -56,6 +61,8 @@ const requiredFiles = [
 	"tests/omp-fleet.test.ts",
 	"tests/omp-fleet-wezterm.test.ts",
 	"tests/agent-runtime-habitat.test.ts",
+	"tests/omp-profiles.test.ts",
+	"tests/tool-activity-view.test.ts",
 	"tests/sync-close-prompt.test.ts",
 	"tests/runtime-host-wezterm.test.ts",
 	"tests/runtime-harness-omp.test.ts",
@@ -125,23 +132,7 @@ async function collectFiles(directory: string): Promise<WorkspaceFile[]> {
 async function auditProjectExtensionLoad(): Promise<void> {
 	const sandbox = await mkdtemp(join(tmpdir(), "omp-lab-audit-"));
 	try {
-		const profileExtensions = join(sandbox, "agent", "extensions");
-		await mkdir(profileExtensions, { recursive: true });
-		await writeFile(
-			join(profileExtensions, "omp-fleet.ts"),
-			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "omp-fleet.ts")).href)};\n`,
-			"utf8",
-		);
-		await writeFile(
-			join(profileExtensions, "agent-runtime-habitat.ts"),
-			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "agent-runtime-habitat.ts")).href)};\n`,
-			"utf8",
-		);
-		await writeFile(
-			join(profileExtensions, "sync-close-prompt.ts"),
-			`export { default } from ${JSON.stringify(pathToFileURL(join(workspace, "extensions", "sync-close-prompt.ts")).href)};\n`,
-			"utf8",
-		);
+		await mkdir(join(sandbox, "agent"), { recursive: true });
 		const childEnv = { ...process.env };
 		for (const name of Object.keys(childEnv)) {
 			if (name.startsWith("OMP_RUNTIME_")) delete childEnv[name];
@@ -313,6 +304,17 @@ for (const required of requiredFiles) {
 	if (!status?.isFile()) issues.push(`missing required file: ${required}`);
 }
 
+const registeredOverlays = new Set(PROFILE_CATALOG.map((profile) => profile.overlay));
+for (const profile of PROFILE_CATALOG) {
+	const status = await lstat(join(workspace, profile.overlay)).catch(() => undefined);
+	if (!status?.isFile()) issues.push(`missing catalog overlay: ${profile.overlay}`);
+}
+const unregisteredOverlays = (await readdir(join(workspace, "profiles"), { withFileTypes: true }))
+	.filter((entry) => entry.isFile() && entry.name.endsWith(".yml"))
+	.map((entry) => `profiles/${entry.name}`)
+	.filter((overlay) => !registeredOverlays.has(overlay));
+for (const overlay of unregisteredOverlays) issues.push(`unregistered profile overlay: ${overlay}`);
+
 const files = await collectFiles(workspace);
 for (const file of files) {
 	for (const forbidden of forbiddenText) {
@@ -353,7 +355,9 @@ const expectedConfig = [
 	"extensions:",
 	"  - extensions/wezterm-attention.ts",
 	"  - extensions/agent-runtime-habitat.ts",
+	"  - extensions/omp-fleet.ts",
 	"  - extensions/omp-profiles.ts",
+	"  - extensions/sync-close-prompt.ts",
 	"  - extensions/windows-input.ts",
 	"  - C:/dev/os/runtime/omp-extensions/axi-browser.ts",
 	"  - C:/dev/os/runtime/omp-extensions/user-attention.ts",

@@ -5,7 +5,7 @@ Summary: Contrato de referencia para stdio JSONL, correlación, reassembly v2 y 
 
 ## Fuente normativa
 
-La referencia primaria es [RPC Protocol Reference](https://github.com/can1357/oh-my-pi/blob/main/docs/rpc.md). Se contrastó con OMP 17.2.7 instalado:
+La referencia primaria es [RPC Protocol Reference](https://github.com/can1357/oh-my-pi/blob/main/docs/rpc.md). El contrato se revalidó con OMP 18.0.5:
 
 - `src/modes/rpc/rpc-types.ts` para comandos/frames;
 - `src/modes/rpc/rpc-frame.ts` para límites y validación de chunks;

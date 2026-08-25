@@ -6,17 +6,20 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 
 ## Estado actual
 
-- Config local: `.omp/config.yml` enlaza `wezterm-attention`,
-  `agent-runtime-habitat`, `omp-profiles`, `windows-input`, las tres extensiones
-  globales de browser/atención y `context-budget` porque las listas
-  project-local reemplazan, no fusionan, `extensions` del perfil.
-  `windows-input` conserva sólo el editor Windows opcional y `/windows-input`;
-  no registra hotkeys de perfiles ni intercepta la selección de modelos.
-- La configuración global carga `C:/dev/omp/extensions/windows-input.ts`
-  directamente. Sobre OMP 17.3.8 activa el editor y `/windows-input`; evita el
-  wrapper `~/.omp/agent/extensions/windows-input.ts`, cuya reexportación resuelve
-  `@oh-my-pi/pi-natives` 17.4.0 sin addon Win32. El wrapper permanece como
-  archivo inerte, no como discovery operativo.
+- Discovery efectivo sobre OMP 18.0.5: el perfil global carga por path directo
+  `wezterm-attention`, `agent-runtime-habitat`, `omp-fleet`,
+  `sync-close-prompt`, `windows-input` y las cuatro integraciones runtime de OS.
+  `.omp/config.yml` repite ese conjunto y suma `omp-profiles`, porque una lista
+  project-local reemplaza, no fusiona, `extensions`. Los wrappers bajo
+  `~/.omp/agent/extensions/` eran inertes frente a la lista explícita y quedan
+  retirados; `extensions/` es la única fuente durable.
+- Defaults efectivos auditados con `omp config`: `edit.autoRepair.enabled=true`,
+  `task.prewalk=false`, `advisor.enabled=false` y
+  `advisor.syncBacklog=off`. Luna queda limitada a roles o flows cortos
+  seleccionados explícitamente; no gobierna el runtime global.
+- `windows-input.ts` es el entrypoint estable: registra el selector granular y
+  carga el editor opcional 18.0.5. Sólo `windows-input-native.ts` posee
+  `/windows-input`; no hay comando diagnóstico duplicado ni hotkeys de modelos.
 - WinInput soporta selección editable por teclado y undo Windows sobre el
   prompt. No activa mouse reporting: la rueda normal recorre el scrollback de
   WezTerm y el mouse selecciona texto del terminal; `Shift + flechas` crea la
@@ -59,11 +62,12 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `Ctrl+P` queda con el comportamiento nativo de OMP, salvo overrides de un
   overlay. Los perfiles de modelos siguen reservados para overlays completos de sesión; los perfiles de visibilidad son preferencias UI independientes.
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
-- Fleet: un RPC por repo, concurrencia acotada, control por run id y artifacts sanitizados en `artifacts/fleet/<run-id>/`.
-- Cierre multi-repo: `extensions/sync-close-prompt.ts` registra
+- Fleet: `extensions/omp-fleet.ts` es la fuente directa de `/fleet`; un RPC por
+  repo, concurrencia acotada, control por run id y artifacts sanitizados en
+  `artifacts/fleet/<run-id>/`.
+- Cierre multi-repo: `extensions/sync-close-prompt.ts` es la fuente directa de
   `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
-  enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra. El
-  wrapper global permite usarlo desde cualquier repo.
+  enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
   lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]`,
   `/handoff [foco]` y promoción durable. La tool acepta un workflow cerrado

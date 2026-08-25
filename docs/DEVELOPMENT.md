@@ -71,7 +71,7 @@ Una failure sin id rechaza todos los pending como error de correlación, nunca e
 
 ## OMP Fleet
 
-`extensions/omp-fleet.ts` registra `/fleet`; el wrapper global `~/.omp/agent/extensions/omp-fleet.ts` reexporta esa fuente para discovery durable desde cualquier repo. El autocomplete nativo sugiere subcomandos y, cuando existen, run ids, repos, requests pendientes y modos de ventana. `examples/fleet-publication.json` contiene `goal`, mensajes por repo, `window: "tabs"` y concurrencia explícita; sus paths absolutos deben existir antes de usarlo:
+`extensions/omp-fleet.ts` registra `/fleet` y el perfil global carga esa fuente por path directo; `.omp/config.yml` la repite porque su lista explícita reemplaza la global. No hay wrapper de discovery. El autocomplete nativo sugiere subcomandos y, cuando existen, run ids, repos, requests pendientes y modos de ventana. `examples/fleet-publication.json` contiene `goal`, mensajes por repo, `window: "tabs"` y concurrencia explícita; sus paths absolutos deben existir antes de usarlo:
 
 ```text
 /fleet status

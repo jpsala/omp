@@ -1,7 +1,9 @@
 extensions:
   - extensions/wezterm-attention.ts
   - extensions/agent-runtime-habitat.ts
+  - extensions/omp-fleet.ts
   - extensions/omp-profiles.ts
+  - extensions/sync-close-prompt.ts
   - extensions/windows-input.ts
   - C:/dev/os/runtime/omp-extensions/axi-browser.ts
   - C:/dev/os/runtime/omp-extensions/user-attention.ts

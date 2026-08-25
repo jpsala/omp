@@ -138,15 +138,17 @@ test("activation resolves only the catalog overlay and does not claim live mutat
 });
 
 
-test("keeps model selection native while registering the global filtered view", async () => {
+test("keeps model selection native without duplicating the optional editor command", async () => {
 	const shortcuts: string[] = [];
+	const commands: string[] = [];
 	await expect(
 		windowsInput({
 			registerShortcut(shortcut: string) { shortcuts.push(shortcut); },
-			registerCommand() {},
+			registerCommand(command: string) { commands.push(command); },
 			on() {},
 			logger: { warn() {} },
 		} as never),
 	).resolves.toBeUndefined();
 	expect(shortcuts).toEqual([TOOL_ACTIVITY_VIEW_SHORTCUT]);
+	expect(commands).toEqual([]);
 });

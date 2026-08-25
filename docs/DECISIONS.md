@@ -21,7 +21,7 @@ Windows input, status line/cuota y renderers se conservan nativos cuando el runt
 
 El cliente usa stdio JSONL, negocia v2, correlaciona por id, valida/reensambla `rpc_chunk` y separa ack de finalización. Es código de referencia autocontenido, no una librería publicada ni una dependencia impuesta a otros repositorios.
 
-## 2026-08-08 — Fleet local, explícito y sin dependencias
+## 2026-08-08 — Fleet local, explícito y sin dependencias (discovery reemplazado)
 
 `extensions/omp-fleet.ts` es la fuente durable. El perfil OMP carga un wrapper mínimo en `~/.omp/agent/extensions/omp-fleet.ts` que reexporta esa fuente, evitando copias divergentes y haciendo `/fleet` global entre repos y reinicios; `.omp/config.yml` ya no duplica su discovery. La implementación usa APIs públicas de OMP y módulos `node:`, sin dependencias de terceros.
 
@@ -29,7 +29,7 @@ Cada repo habilitado obtiene un RPC independiente; los comandos que cambian work
 
 WezTerm y `fleet-observer.ts` son observadores de artifacts, no propietarios de workers; cerrarlos no cancela el run. La persistencia local conserva sólo metadatos, estados y resúmenes sanitizados, nunca texto crudo de resultados o errores.
 
-## 2026-08-11 — Runtime Habitat global, launch explícito y fast fail
+## 2026-08-11 — Runtime Habitat global, launch explícito y fast fail (discovery reemplazado)
 
 `extensions/agent-runtime-habitat.ts` es la fuente durable del contexto runtime
 y del lanzamiento de sesiones hijas. El `config.yml` global declara esa fuente
@@ -93,9 +93,8 @@ implementa ni monitorea el pane después del handshake.
 
 `agent_runtime_session` también admite workflow `prewalk`, pero nunca argv
 libre. El target es un selector de rol nativo OMP, no un `model.spec`; ausencia
-de workflow conserva exactamente el lanzamiento anterior. Esta integración es
-workstation-specific mientras plan-yolo permanezca en el build granular y debe
-revalidarse al rebasar OMP.
+de workflow conserva exactamente el lanzamiento anterior. Esta integración usa
+el `plan-yolo` nativo de OMP 18 y debe revalidarse al actualizar OMP.
 
 ## 2026-08-14 — Nombre y cierre del pane son contrato explícito
 
@@ -124,7 +123,7 @@ demanda desde `agent-runtime-habitat`. Actualizan fuentes existentes, preservan
 certeza, riesgos y gates, y ejecutan los checks documentales definidos por el
 repo. No introducen una auto-memory ni otra fuente de verdad.
 
-## 2026-08-16 — Cierre multi-repo revisable y gobernado por Infra
+## 2026-08-16 — Cierre multi-repo revisable y gobernado por Infra (discovery reemplazado)
 
 `/cerrar-computadora [foco]` es una extensión UX pequeña, no un sincronizador.
 Precarga mediante `ctx.ui.setEditorText()` una instrucción para cerrar el trabajo
@@ -143,7 +142,7 @@ La fuente durable es `extensions/sync-close-prompt.ts`; el perfil global carga
 un wrapper mínimo. Así el comando queda disponible desde cualquier repo sin
 copiar reglas de Infra ni estado privado al laboratorio.
 
-## 2026-08-18 — Agente DeepSeek project-local con prewalk económico
+## 2026-08-18 — Agente DeepSeek project-local con prewalk económico (reemplazada)
 
 El workspace incorpora `.omp/agents/deepseek-pro.md`. Su lista de modelos
 prioriza `deepseek/deepseek-v4-pro:high` cuando existe una credencial directa y
@@ -511,3 +510,31 @@ pasó 23 tests focales, 94 assertions y el check completo de
 `packages/coding-agent`. El build Windows embebe el addon nativo 18.0.5 y se
 publica sólo mediante `bun run deploy:omp`; el smoke real confirmó
 `omp/18.0.5` y el selector granular con presets, perfil `zen` y 39 opciones.
+
+## 2026-08-25 — Discovery directo y una sola fuente por extensión
+
+Las listas explícitas de `extensions` reemplazan, no fusionan, el discovery del
+perfil. Los wrappers históricos bajo `~/.omp/agent/extensions/` quedaban
+inertes cuando el perfil global declaraba su propia lista y además abrían una
+segunda ruta de resolución de módulos. Se retiran: el perfil global carga por
+path directo `wezterm-attention`, `agent-runtime-habitat`, `omp-fleet`,
+`sync-close-prompt` y `windows-input` desde `C:/dev/omp/extensions/`.
+`.omp/config.yml` repite ese conjunto, suma `omp-profiles` y conserva las
+integraciones runtime de OS para ser un superset efectivo.
+
+`extensions/windows-input.ts` continúa como entrypoint global que compone el
+selector granular con el editor opcional, pero deja de registrar un
+`/windows-input` diagnóstico antes del import. El único dueño del comando es
+`windows-input-native.ts`; así una carga exitosa no registra dos handlers y una
+carga fallida no aparenta que el editor esté disponible.
+
+El agente suelto `.omp/agents/deepseek-pro.md` y su copia legacy
+`.omp.borrar/` quedan retirados. Los overlays allowlisteados bajo `profiles/`,
+su catálogo y `/profiles` son la única autoridad para combinaciones completas
+de modelos, Task, `prewalk` y concurrencia. La selección viva permanece en el
+hub nativo `Alt+M`/`/models`.
+
+La selección por trigger no habilita Advisor globalmente:
+`advisor.enabled=false`, `advisor.syncBacklog=off` y `task.prewalk=false`
+siguen siendo los defaults. `/plan-implement-short` es el único flow mantenido
+que solicita Advisor y el target económico de forma explícita.

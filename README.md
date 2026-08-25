@@ -13,12 +13,13 @@ Para abrir OMP desde este workspace:
 omp
 ```
 
-`extensions/omp-fleet.ts` es la fuente durable de `/fleet` y
-`extensions/sync-close-prompt.ts` la de `/cerrar-computadora`. El perfil OMP
-instala punteros mínimos en `~/.omp/agent/extensions/`, por lo que ambos
-comandos sobreviven reinicios y aparecen desde cualquier repo. `.omp/config.yml`
-conserva la lista explícita de extensiones project-local y globales requerida
-para probar este workspace sin copiar sus fuentes.
+`extensions/agent-runtime-habitat.ts`, `extensions/omp-fleet.ts`,
+`extensions/sync-close-prompt.ts`, `extensions/wezterm-attention.ts` y
+`extensions/windows-input.ts` son las fuentes durables cargadas directamente
+por el perfil global. No hay wrappers bajo `~/.omp/agent/extensions/`.
+Como una lista project-local de `extensions` reemplaza la global,
+`.omp/config.yml` repite esas fuentes, agrega `omp-profiles` y conserva las
+integraciones runtime de OS.
 
 ## Mapa
 
@@ -77,9 +78,9 @@ omp --config profiles/glm-flash-qwen-coder-minimax.yml
 ## Catálogo de perfiles
 
 `profiles/catalog.json` es el catálogo mantenible y
-`extensions/omp-profiles.ts` expone el comando nativo `/profiles`. Los siete
-overlays existentes siguen siendo YAML nativo de OMP; la metadata no se mezcla
-con ese schema.
+`extensions/omp-profiles.ts` expone `/profiles` como integración acotada sobre
+las APIs nativas de modelo. Los siete overlays siguen siendo YAML nativo de OMP;
+la metadata no se mezcla con ese schema ni reemplaza `Alt+M`/`/models`.
 
 Dentro de OMP:
 
@@ -149,4 +150,6 @@ El ejemplo RPC y `/fleet run` invocan modelos configurados y pueden tener coste.
 - [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md)
 - [Repositorio OMP](https://github.com/can1357/oh-my-pi)
 
-La evaluación local se hizo contra `@oh-my-pi/pi-coding-agent` 17.2.7 instalado; las rutas exactas se registran en los topics para que futuras actualizaciones puedan revalidarlas.
+La clasificación vigente se revalidó contra OMP 18.0.5; las rutas y deltas
+exactos se registran en los topics para que cada actualización pueda volver a
+contrastarlos.

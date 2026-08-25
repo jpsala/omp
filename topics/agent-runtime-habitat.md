@@ -225,19 +225,20 @@ antes de la limpieza; eso no debe ocultar el error primario.
 ## Discovery global
 
 La fuente durable vive en `extensions/agent-runtime-habitat.ts`. El
-`config.yml` global la declara por path absoluto porque una lista explícita de
-`extensions` reemplaza el discovery implícito del perfil:
+`config.yml` global la declara por path absoluto y `.omp/config.yml` repite la
+misma fuente para este workspace, porque cualquier lista explícita de
+`extensions` reemplaza la lista heredada:
 
 ```yaml
 extensions:
   - C:/dev/omp/extensions/agent-runtime-habitat.ts
 ```
 
-El wrapper mínimo en `~/.omp/agent/extensions/agent-runtime-habitat.ts`
-conserva discovery para perfiles sin lista explícita, pero no sustituye esa
-entrada. `bun run audit` prueba el import con un agent dir temporal, sin prompt
-ni modelo, y los tests usan runner fake para que ninguna prueba unitaria
-controle WezTerm real.
+No se mantiene un wrapper bajo `~/.omp/agent/extensions/`: con configuración
+global explícita era inerte y constituía una segunda ruta de resolución.
+`bun run audit` prueba el import con un agent dir temporal, sin prompt ni
+modelo, y los tests usan runner fake para que ninguna prueba unitaria controle
+WezTerm real.
 
 ## Verificación
 

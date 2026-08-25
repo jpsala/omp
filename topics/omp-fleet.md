@@ -5,7 +5,7 @@ Summary: Ejecución multi-repositorio por RPC con control explícito, aprobacion
 
 ## Fuente y discovery
 
-`extensions/omp-fleet.ts` es la fuente durable de `/fleet`; `~/.omp/agent/extensions/omp-fleet.ts` es un wrapper global mínimo que la reexporta para que el comando sobreviva reinicios y esté disponible desde cualquier repo, sin copiar la implementación. `.omp/config.yml` conserva únicamente la extensión project-local de atención WezTerm. La implementación usa módulos `node:` y las APIs públicas de extensiones de OMP, sin paquetes de terceros.
+`extensions/omp-fleet.ts` es la única fuente durable de `/fleet`. El perfil global la carga por path absoluto y `.omp/config.yml` repite la fuente porque una lista project-local explícita reemplaza la global; no existe un wrapper de discovery. La implementación usa módulos `node:` y las APIs públicas de extensiones de OMP, sin paquetes de terceros.
 
 El autocomplete nativo completa los subcomandos (`run`, `status`, `send`, `follow-up`, `approve`, `deny`, `cancel`, `results`, `window`, `clear`) y agrega contexto vivo cuando existe: run ids, repositorios, request ids pendientes y `--window=tabs|dashboard|none`.
 

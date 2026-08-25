@@ -1,11 +1,15 @@
 # WezTerm Attention
 
 Status: active
-Summary: Productor OMP project-local de marcadores atómicos de atención por pane.
+Summary: Productor OMP global de marcadores atómicos de atención por pane, cargado desde una única fuente durable.
 
 ## Alcance
 
 La extensión no configura WezTerm, no lee su configuración y no conserva estado de usuario. Sólo publica un marcador pequeño para el pane indicado por `WEZTERM_PANE`.
+
+El perfil global carga `extensions/wezterm-attention.ts` por path directo y
+`.omp/config.yml` repite esa fuente por semántica de reemplazo; no existe un
+wrapper de discovery.
 
 ## Procedencia y saneamiento
 
