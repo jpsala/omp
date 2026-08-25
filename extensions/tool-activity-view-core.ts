@@ -27,7 +27,7 @@ const VIEW_KEY_SEQUENCES: Record<Exclude<FilteredViewKey, "q" | "toggle">, reado
 
 export function matchesFilteredViewKey(data: string, key: FilteredViewKey): boolean {
 	if (key === "q") return data === "q" || data === "\x1b[113u" || data === "\x1b[113;1u";
-	if (key === "toggle") return /^\x1b\[109;6(?::[123])?u$/.test(data);
+	if (key === "toggle") return /^\x1b\[111;7(?::[123])?u$/.test(data);
 	return VIEW_KEY_SEQUENCES[key].includes(data);
 }
 

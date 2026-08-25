@@ -47,13 +47,16 @@ puede repintar. No puede borrar tool blocks que ya entraron al scrollback nativo
 de WezTerm; esto se vuelve visible al reanudar sesiones largas o desplazarse por
 historial comprometido.
 
-`extensions/tool-activity-view.ts` registra `Ctrl+Shift+M` mediante el wrapper
-global `extensions/windows-input.ts`, independientemente de que el editor WinInput
-opcional pueda cargar. Abre un overlay fullscreen sobre el alternate screen y
-reconstruye la rama activa con mensajes de usuario, assistant y thinking,
-omitiendo tool calls y tool results. `Esc`, `q` o el mismo hotkey vuelven al
-transcript original. La vista no modifica la sesión, no limpia scrollback y
-desactiva mouse reporting para conservar la selección nativa del terminal.
+`extensions/tool-activity-view.ts` registra el chord privado `Ctrl+Alt+O`
+mediante el wrapper global `extensions/windows-input.ts`, independientemente de
+que el editor WinInput opcional pueda cargar. En esta workstation, Main consume
+el `Ctrl+Shift+M` físico dentro de WezTerm y lo rerutea a ese chord para evitar
+la acción de minimizar. La extensión abre un overlay fullscreen sobre el
+alternate screen y reconstruye la rama activa con mensajes de usuario,
+assistant y thinking, omitiendo tool calls y tool results. `Esc`, `q` o el mismo
+hotkey físico vuelven al transcript original. La vista no modifica la sesión,
+no limpia scrollback y desactiva mouse reporting para conservar la selección
+nativa del terminal.
 
 
 ## Mercado de renderers y clientes (2026-08-15)

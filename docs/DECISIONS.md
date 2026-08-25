@@ -411,8 +411,10 @@ scrollback nativo de WezTerm son historia inmutable. Limpiar y reconstruir la
 pantalla habría destruido scrollback y selección; iniciar oculto tampoco sería
 reversible después de mostrar los bloques.
 
-Se eligió una vista filtrada fullscreen con `Ctrl+Shift+M`. La extensión
-reconstruye la rama activa sin tool calls ni tool results sobre el alternate
-screen, mantiene user/assistant/thinking y vuelve con `Esc`, `q` o el mismo
-hotkey. El transcript y el scrollback normales quedan intactos debajo. El
-overlay no habilita mouse reporting para preservar selección y rueda nativas.
+Se eligió una vista filtrada fullscreen. OMP registra `Ctrl+Alt+O` como chord
+interno; Main consume el `Ctrl+Shift+M` físico dentro de WezTerm y lo rerutea
+para evitar la minimización observada. La extensión reconstruye la rama activa
+sin tool calls ni tool results sobre el alternate screen, mantiene
+user/assistant/thinking y vuelve con `Esc`, `q` o el mismo hotkey físico. El
+transcript y el scrollback normales quedan intactos debajo. El overlay no
+habilita mouse reporting para preservar selección y rueda nativas.

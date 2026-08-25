@@ -42,9 +42,10 @@ test("strips terminal control bytes from transcript text", () => {
 });
 
 test("recognizes the reversible view keys without conflating Enter", () => {
-	expect(matchesFilteredViewKey("\u001b[109;6u", "toggle")).toBe(true);
-	expect(matchesFilteredViewKey("\r", "toggle")).toBe(false);
+	expect(matchesFilteredViewKey("\u001b[111;7u", "toggle")).toBe(true);
+	expect(matchesFilteredViewKey("\u001b[109;6u", "toggle")).toBe(false);
 	expect(matchesFilteredViewKey("\u001b", "escape")).toBe(true);
+	expect(matchesFilteredViewKey("\r", "toggle")).toBe(false);
 });
 
 test("wraps filtered prose to terminal cell width", () => {

@@ -8,7 +8,7 @@ import {
 	wrapFilteredViewText,
 } from "./tool-activity-view-core.ts";
 
-export const TOOL_ACTIVITY_VIEW_SHORTCUT = "ctrl+shift+m" as const;
+export const TOOL_ACTIVITY_VIEW_SHORTCUT = "ctrl+alt+o" as const;
 
 function openFilteredTranscript(ctx: ExtensionContext): Promise<void> {
 	const entries = ctx.sessionManager.getBranch();
