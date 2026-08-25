@@ -48,6 +48,12 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   pendiente. El audit rechaza futuras colisiones. El update oficial reemplazó
   el antiguo delta downstream de status/cuota; OMP 18 usa ahora su
   implementación oficial y sólo se rebasaron los filtros granulares.
+- Propuesta upstream de granularidad publicada el 2026-08-25 en
+  [Discord `#feature-requests`](https://discord.com/channels/1465833614603325562/1465867712000692459/1541865268798820362):
+  settings y rendering general en core; shortcuts, presets y perfiles en la
+  extensión. Se vinculó el issue `#2158`. La implementación/PR upstream espera
+  dirección del maintainer, como exige `CONTRIBUTING.md` para cambios amplios de
+  UI; el build downstream 18.0.5 permanece estable mientras tanto.
 - Selección de modelos: el mecanismo elegido es el hub nativo de OMP
   (`Alt+M`/`/models`, Roles). Se retiraron los favoritos y el ciclo custom;
   `Ctrl+P` queda con el comportamiento nativo de OMP, salvo overrides de un

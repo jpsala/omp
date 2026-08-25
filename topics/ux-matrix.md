@@ -65,6 +65,17 @@ la semántica nueva de silent abort en `EventController`. Por eso el delta sigue
 siendo necesario. Está fijado a `v18.0.5`; cada update posterior exige rebase y
 tests focales, nunca aplicación ciega.
 
+### Promoción upstream
+
+La propuesta previa a PR está publicada en
+[Discord `#feature-requests`](https://discord.com/channels/1465833614603325562/1465867712000692459/1541865268798820362).
+Propone upstreamar sólo los settings y la semántica de rendering general; el
+selector, shortcuts, presets y perfiles permanecen en la extensión. Está
+relacionada con [#2158](https://github.com/can1357/oh-my-pi/issues/2158), pero
+resuelve filtros persistentes por categoría/tool en vez de auto-fold por turno.
+No crear branch o PR upstream hasta que el maintainer indique si prefiere
+settings nativos o un hook genérico de transcript.
+
 El build se publica exclusivamente con `bun run deploy:omp`: instala
 `~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core
 anterior.
