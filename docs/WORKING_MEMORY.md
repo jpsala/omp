@@ -29,7 +29,18 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; el par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia de esa corrida, no el costo actual de la cuenta DeepSeek.
 - Smoke comparativo 2026-08-18: Luna Max padre+hijo pasó 3 tests en 165.51 s; DeepSeek Pro `max` padre + Flash `low` hijo pasó los mismos 3 tests en 138.33 s (-16.4%). DeepSeek padre reportó `$0.08508346308`; Codex sólo expuso cuota gruesa 96%, sin costo unitario. Fixture temporal en `tmp/`, no durable.
 - Estado de costo DeepSeek 2026-08-18: el usuario confirmó una única API key y que el plan comenzó ese día; el panel del proveedor mostró `$4.31` y 1.180 requests. `omp stats` usa 24 horas por defecto y mostró 527 filas/$1.25; el panel DeepSeek es la autoridad de facturación y OMP puede subcontar requests no persistidas.
-- Perfil visual global sobre OMP 18.0.4: `Ctrl+Shift+M` abre el selector modal sobre el transcript nativo. Controla thinking, preámbulos, métricas por turno, actividad global y tools individuales; todos los `TranscriptContainer`, incluido el staging de startup/replay, reciben la misma política. Incluye presets atómicos `Conversación limpia`, `Trabajo enfocado` y `Diagnóstico`; permite guardar, aplicar y eliminar perfiles nombrados globales bajo `display.transcriptVisibilityProfiles`. Estado actual: thinking, preámbulos, métricas y `bash` ocultos. Smokes reales verificaron Bash ejecutado sin card/output y una respuesta `METRIC_OK` sin usage row.
+- Perfil visual global sobre OMP 18.0.4: la extensión registra `Ctrl+Alt+O`; en
+  esta workstation, WezTerm convierte el chord físico `Ctrl+Shift+M` en esa
+  secuencia privada. El selector modal opera sobre el transcript nativo y
+  controla thinking, preámbulos, métricas por turno, actividad global y tools
+  individuales; todos los `TranscriptContainer`, incluido el staging de
+  startup/replay, reciben la misma política. Incluye presets atómicos
+  `Conversación limpia`, `Trabajo enfocado` y `Diagnóstico`; permite guardar,
+  aplicar y eliminar perfiles nombrados globales bajo
+  `display.transcriptVisibilityProfiles`. Estado global actual: perfil `zen`,
+  con thinking, preámbulos, métricas y toda la actividad de tools ocultos.
+  Smokes reales verificaron el selector sobre OMP 18.0.4, Bash ejecutado sin
+  card/output y una respuesta `METRIC_OK` sin usage row.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.4`, con sidecar nativo 18.0.4. `bun run deploy:omp` usa backups únicos para rotar aun cuando sesiones anteriores mantienen artifacts mapeados, retira `omp.com` y deja fuera de `PATHEXT` cualquier cleanup pendiente. El audit rechaza futuras colisiones. El update oficial reemplazó el antiguo delta downstream de status/cuota; OMP 18 usa ahora su implementación oficial y sólo se rebasaron los filtros granulares.
 - Selección de modelos: el mecanismo elegido es el hub nativo de OMP
   (`Alt+M`/`/models`, Roles). Se retiraron los favoritos y el ciclo custom;

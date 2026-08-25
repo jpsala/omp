@@ -432,7 +432,8 @@ El delta downstream agrega filtros persistentes para thinking, preámbulos de
 mensajes que invocan tools, actividad global y tools individuales. Los
 preámbulos sólo se ocultan cuando el mensaje efectivamente contiene una tool
 call; una respuesta final sin tools nunca desaparece. La extensión accede por
-una API pública opcional y `Ctrl+Shift+M` abre un selector modal, no otro
+una API pública opcional. Registra `Ctrl+Alt+O`; WezTerm convierte el chord
+físico `Ctrl+Shift+M` en esa secuencia y abre un selector modal, no otro
 transcript.
 
 `patches/omp-18.0.4-workstation.patch` es el delta reproducible contra

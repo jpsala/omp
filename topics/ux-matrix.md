@@ -55,6 +55,15 @@ global y tools individuales. El filtro por nombre compone con
 `display.hideToolActivity`; las respuestas finales sin tools siempre permanecen.
 Tres presets atómicos y perfiles nombrados globales permiten cambiar de contexto
 sin repetir toggles.
+
+Revisión contra el tag oficial `v18.0.4`: upstream conserva los toggles globales
+de thinking, actividad de tools y métricas, pero no expone filtros por nombre,
+ocultamiento de preámbulos ni perfiles atómicos. Sus mejoras de streaming,
+layout, scrollback y paneles son complementarias: el selector basado en
+`ctx.ui.select` hereda el panel nuevo y el patch se rebasó después de esos fixes.
+Por eso el delta sigue siendo necesario. Está fijado a `v18.0.4`; cada update
+posterior exige rebase y tests focales, nunca aplicación ciega.
+
 El build se publica exclusivamente con `bun run deploy:omp`: instala
 `~/.bun/bin/omp.exe`, retira `omp.com` y evita que `PATHEXT` seleccione un core
 anterior.
@@ -76,7 +85,7 @@ Revalidado con `omp/17.3.0` local y las fuentes primarias enlazadas.
 
 | Opción | Aporte | Compatibilidad con OMP | Decisión |
 | --- | --- | --- | --- |
-| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` cambia toda la actividad y `Ctrl+T` muestra/oculta thinking. El patch downstream suma filtros por tool y preámbulos mediante `Ctrl+Shift+M`. | **Nativa con replay explícito**. `resetDisplay()` reconstruye la sesión con componentes ricos; reemplaza el scrollback visual previo en vez de preservar sus bytes. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Trabajar en el transcript principal. Usar el selector granular; no mantener una segunda vista fullscreen. |
+| Controles TUI nativos | `Ctrl+O` expande outputs, `Ctrl+Shift+O` cambia toda la actividad y `Ctrl+T` muestra/oculta thinking. El patch downstream suma filtros por tool y preámbulos mediante el chord interno `Ctrl+Alt+O`; WezTerm traduce el chord físico `Ctrl+Shift+M` a esa secuencia privada. | **Nativa con replay explícito**. `resetDisplay()` reconstruye la sesión con componentes ricos; reemplaza el scrollback visual previo en vez de preservar sus bytes. [Keybindings](https://github.com/can1357/oh-my-pi/blob/main/docs/keybindings.md), [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md). | Trabajar en el transcript principal. Usar el selector granular; no mantener una segunda vista fullscreen. |
 | Export/share/collab | `/export --themes` genera HTML con renderers web por tool; `/share` publica un snapshot cifrado; `/collab` ofrece transcript web vivo con thinking, tool cards y subagentes. | **Nativa**. [Session operations](https://github.com/can1357/oh-my-pi/blob/main/docs/session-operations-export-share-fork-resume.md), [Collab](https://github.com/can1357/oh-my-pi/blob/main/docs/collab.md). | Usar para lectura rica fuera del TUI antes de adoptar un cliente alternativo. |
 | Paseo | Cliente desktop/web/mobile multiagente; OMP es provider directo mediante `omp --mode rpc-ui`, con approvals y tools host. | **Explícita**, aunque el provider OMP viene deshabilitado por defecto. [Repositorio](https://github.com/getpaseo/paseo), [provider contract](https://github.com/getpaseo/paseo/blob/main/docs/providers.md). | Mejor opción externa para evaluar una UI completa y mantenida. |
 | `omp-desktop` | Tauri/React enfocado en OMP: Bash/eval streaming, código resaltado, diff unificado scrubbable, tool cards y minimapa. | **Explícita** sobre `omp --mode rpc`; proyecto pequeño y contrato RPC sujeto a drift. [Repositorio](https://github.com/apoc/omp-desktop). | Prototipo Windows prometedor; probar aislado, no volverlo interfaz principal todavía. |
