@@ -28,5 +28,11 @@ Bootstrap estable: OMP gobierna la ejecución y el runtime de agentes; este labo
 
 - Preferir APIs documentadas de OMP y evidencia del paquete instalado.
 - No inventar eventos, settings o contratos wire.
+- Ante cualquier pedido de actualizar OMP, revisar primero
+  `topics/ux-matrix.md` y el patch `patches/omp-*-workstation.patch`; comparar
+  la versión destino con los filtros granulares upstream, retirar sólo lo que
+  ya sea nativo, rebasar el delta restante, ejecutar sus tests y un smoke TUI
+  real, y desplegar únicamente por `bun run deploy:omp`. Nunca permitir que el
+  updater oficial reemplace silenciosamente el build granular.
 - Mantener los scripts sin dependencias externas.
 - Crear tests sólo para contratos observables nuevos; el cliente RPC sí tiene tests de framing, correlación y finalización.
