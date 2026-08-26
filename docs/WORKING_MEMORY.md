@@ -69,9 +69,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
   enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
-  lanzamiento OMP fresco sobre WezTerm, `/plan-implement-short [objetivo]`,
-  `/handoff [foco]` y promoción durable. La tool acepta un workflow cerrado
-  `prewalk|plan-yolo`, target de rol nativo y Advisor opt-in; nunca argv libre.
+  lanzamiento OMP fresco sobre WezTerm, `/orquestar [objetivo]`,
+  `/plan-implement-short [objetivo]`, `/handoff [foco]` y promoción durable. La
+  tool acepta un workflow cerrado `prewalk|plan-yolo`, target de rol nativo y
+  Advisor opt-in; nunca argv libre.
   `/plan-implement-short` abre una hija Sol en split derecho, plan-yolo entrega
   la implementación a `@smol` y Advisor revisa el corte, sin duplicar plan en
   el parent. El benchmark nativo corto pasó 8/8 turnos con Sol medium y Luna
@@ -88,6 +89,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
   por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
   hijas. El smoke transitivo window → tab → parent pasó el 2026-08-25.
+  `/orquestar` expone ese flow sin flags: dispatcher liviano, owner enfocado en
+  ventana nueva, delegación sólo cuando aporta valor y resultado consolidado de
+  vuelta a la sesión origen.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.

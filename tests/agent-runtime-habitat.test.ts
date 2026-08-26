@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
 
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
@@ -97,6 +97,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(schema.properties?.workflow.additionalProperties).toBeFalse();
     expect(schema.properties?.workflow.properties).toHaveProperty("target");
     expect(sessionTool?.description).toContain("never model.spec");
+    expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-window orchestration owner");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
     expect(planCommand?.description).toContain("planning-and-implementation owner");
     await planCommand!.handler('corregir "framing"', {});
@@ -185,4 +186,18 @@ test("prefixes tab titles with the source session without duplicating inherited 
   expect(childSessionTitle("  os\norquestador  ", "Implementador")).toBe("os orquestador: Implementador");
   expect(childSessionTitle(undefined, "Implementador")).toBe("Implementador");
   expect(childSessionTitle("x".repeat(600), "child").length).toBeLessThanOrEqual(500);
+});
+test("builds a closed dedicated-window orchestration command", () => {
+  const prompt = buildOrchestratePrompt('resolver "metadata"');
+  expect(prompt).toContain(JSON.stringify('resolver "metadata"'));
+  expect(prompt).toContain('placement {kind:"window"}');
+  expect(prompt).toContain('pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}');
+  expect(prompt).toContain('fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true');
+  expect(prompt).toContain("si no, trabaja solo");
+  expect(prompt).toContain("paraleliza únicamente frentes independientes");
+  expect(prompt).toContain("retornos automáticos");
+  expect(prompt.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
+  const implicit = buildOrchestratePrompt("   ");
+  expect(implicit).toContain("solicitud de usuario accionable inmediatamente anterior");
+  expect(implicit).toContain("pedí sólo el objetivo y no invoques agent_runtime_session");
 });

@@ -33,6 +33,22 @@ Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con 
 
 Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
+export const ORCHESTRATE_COMMAND = "orquestar";
+export function buildOrchestratePrompt(objective: string): string {
+ const explicitObjective=objective.trim();
+ const target=explicitObjective
+   ? `Objetivo explícito de la orquestación (JSON string): ${JSON.stringify(explicitObjective)}`
+   : "Derivá el objetivo de la solicitud de usuario accionable inmediatamente anterior a este comando. Si no existe una, pedí sólo el objetivo y no invoques agent_runtime_session.";
+ return `Actuá únicamente como dispatcher: empaquetá el objetivo y lanzá exactamente un owner de orquestación; no planifiques ni implementes en esta sesión.
+
+${target}
+
+Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile tabs.
+
+Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"window"}, pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras implementadores desde esta sesión, no agregues workflow o argv libre, no monitorees la ventana y no hagas polling: el resultado consolidado volverá automáticamente.
+
+Si el lanzamiento funciona, respondé sólo con nombre, pane y session id del owner; si falla, informá el error exacto y no abras una segunda ventana.`;
+}
 export const HANDOFF_COMMAND = "handoff";
 export function parseAtomicHandoffInput(text: string): string | undefined {
  const match=/^\/handoff(?:\s+(.*))?$/s.exec(text.trim());
@@ -230,6 +246,10 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
    description:"Start one planning-and-implementation owner with native plan-yolo in a right split",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
+ });
+ pi.registerCommand(ORCHESTRATE_COMMAND,{
+   description:"Start a dedicated-window orchestration owner with automatic child returns",
+   handler:(args)=>{pi.sendUserMessage(buildOrchestratePrompt(String(args??"")));},
  });
  pi.on("input",(event)=>{
    const focus=parseAtomicHandoffInput(event.text);

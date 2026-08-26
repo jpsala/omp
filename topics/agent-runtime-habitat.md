@@ -32,6 +32,21 @@ El pane recibe un título corto `Implementador · <objetivo>`. El parent no abre
 panes adicionales ni monitorea al child después del handshake. Salir de OMP
 devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo.
 
+### Orquestación visible en ventana
+
+`/orquestar [objetivo]` convierte la sesión actual en dispatcher y lanza
+exactamente un owner fresh saved con modelo heredado, `focus:true`,
+`onExit:"keep-open"` y `placement:{kind:"window"}`. Sin argumento deriva la
+solicitud accionable inmediatamente anterior; si no existe, pide sólo el
+objetivo y no abre una ventana.
+
+El dispatcher sólo construye un kickoff autocontenido. El owner decide si
+delegar aporta valor: puede trabajar solo o fijar contratos, dependencias y
+ownership antes de abrir implementadores o revisores en tabs. Paraleliza
+únicamente frentes independientes, integra todos los retornos automáticos y
+verifica el conjunto antes de responder upstream. El dispatcher no abre workers,
+no monitorea la ventana y un fallo de launch no crea una segunda.
+
 ### Promoción de contexto durable
 
 `/promote-context [foco]` y su alias en español `/guardar-sesion [foco]`
