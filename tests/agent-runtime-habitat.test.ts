@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput } from "../extensions/agent-runtime-habitat.ts";
-
+import { markerRoot } from "../src/runtime-handshake.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -97,6 +98,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(schema.properties?.workflow.additionalProperties).toBeFalse();
     expect(schema.properties?.workflow.properties).toHaveProperty("target");
     expect(sessionTool?.description).toContain("never model.spec");
+    expect(sessionTool?.description).toContain("background Task agents must return through Task");
     expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-window orchestration owner");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
     expect(planCommand?.description).toContain("planning-and-implementation owner");
@@ -164,6 +166,22 @@ test("extension registers context and an explicit nested launch contract", async
       workflow: { mode: "plan-yolo", target: "", argv: ["--anything"] },
     }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(invalidWorkflow.content[0].text)).toMatchObject({ status: "unsupported", reason: expect.stringContaining("invalid launch request") });
+    const backgroundLaunch = await sessionTool!.execute("id", {
+      cwd: agentDir,
+      prompt: "x",
+      placement: { kind: "tab" },
+      pane: { title: "Implementador", onExit: "keep-open" },
+      fresh: true,
+      persistence: "saved",
+      model: { mode: "inherit" },
+      focus: false,
+    }, new AbortController().signal, () => {}, {
+      cwd: agentDir,
+      hasUI: false,
+      sessionManager: { getSessionId: () => "background-session" },
+      model: { provider: "openai-codex", id: "gpt-5.6-luna" },
+    });
+    expect(JSON.parse(backgroundLaunch.content[0].text)).toMatchObject({ status: "unsupported", reason: expect.stringContaining("background Task agents must return through Task") });
 
     const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");
@@ -171,7 +189,31 @@ test("extension registers context and an explicit nested launch contract", async
 });
 test("runtime fragment stays below fixed limit", () => {
   const context = { version: 1 as const, harness: { id: "omp", hasUI: false }, host: { kind: "terminal" as const, provider: "wezterm", trust: "validated-local-probe" as const }, location: { instanceRef: "x", cwd: "x" }, capabilities: {} };
+  expect(compactRuntimeFragment(context)).toContain("ui=no");
   expect(compactRuntimeFragment(context).length).toBeLessThanOrEqual(MAX_RUNTIME_FRAGMENT_LENGTH);
+});
+test("background Task agents cannot publish inherited visible-session acknowledgements", async () => {
+  const launchId = "backgroundtaskack0000000000000001";
+  const marker = join(markerRoot(), `${launchId}.session_start.json`);
+  const inherited = {
+    OMP_RUNTIME_LAUNCH_ID: launchId,
+    OMP_RUNTIME_NONCE: "nonce",
+    OMP_RUNTIME_PANE_ID: "104",
+    OMP_RUNTIME_INSTANCE: "instance",
+    OMP_RUNTIME_PARENT_SESSION: "visible-parent",
+  };
+  Object.assign(process.env, inherited);
+  try {
+    await publishRuntimeAck("session_start", {
+      hasUI: false,
+      sessionManager: { getSessionId: () => "background-child" },
+      model: { provider: "openai-codex", id: "gpt-5.6-luna" },
+    });
+    expect(await Bun.file(marker).exists()).toBeFalse();
+  } finally {
+    for (const name of Object.keys(inherited)) delete process.env[name];
+    await rm(marker, { force: true });
+  }
 });
 test("increments bounded handoff session generations", () => {
   expect(nextHandoffTitle("os · Handoff", "")).toBe("os · Handoff · 2");

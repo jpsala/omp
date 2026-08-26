@@ -153,6 +153,14 @@ elimina.
 `persistence: "saved"|"ephemeral"` gobierna el almacenamiento de la sesión OMP;
 no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
 
+La tool es exclusiva de un owner interactivo con `harness.hasUI:true`. Los
+subagentes background de Task pueden heredar variables WezTerm y metadata
+`OMP_RUNTIME_*`, pero no poseen la UI ni el pane: `agent_runtime_session`
+devuelve `unsupported`, y sus hooks no publican acks ni completions heredadas.
+Esos subagentes deben devolver por Task; nunca pueden abrir splits, tabs o
+ventanas visibles usando el pane del parent. El fragmento runtime expone
+`ui=yes|no` para que el agente conozca este gate antes de invocar.
+
 ### Retorno automático de hijas
 
 Cada launch exitoso registra transitoriamente la identidad de la hija bajo el

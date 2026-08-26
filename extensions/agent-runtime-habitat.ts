@@ -15,7 +15,7 @@ export const MAX_RUNTIME_FRAGMENT_LENGTH = 500;
 const CHILD_BOOTSTRAP = fileURLToPath(new URL("../scripts/runtime-child-bootstrap.ts", import.meta.url));
 export function compactRuntimeFragment(context: AgentRuntimeContextV1): string {
  const loc=context.location; const where=loc?` host=${context.host.provider} pane=${loc.paneId??"?"} cwd=${loc.cwd}`:` host=${context.host.provider}`;
- return `Runtime context (read-only): harness=${context.harness.id} host=${context.host.kind}${where} trust=${context.host.trust}`.slice(0,MAX_RUNTIME_FRAGMENT_LENGTH);
+ return `Runtime context (read-only): harness=${context.harness.id} host=${context.host.kind}${where} ui=${context.harness.hasUI?"yes":"no"} trust=${context.host.trust}`.slice(0,MAX_RUNTIME_FRAGMENT_LENGTH);
 }
 export const PLAN_IMPLEMENT_SHORT_COMMAND = "plan-implement-short";
 export function buildPlanImplementShortPrompt(objective: string): string {
@@ -166,6 +166,7 @@ export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: 
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
 export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"], sessionName?:string):Promise<void> {
+ if(ctx.hasUI!==true) return Promise.resolve();
  const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), nonce=envString("OMP_RUNTIME_NONCE"), paneId=envString("OMP_RUNTIME_PANE_ID"), instanceRef=envString("OMP_RUNTIME_INSTANCE"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION");
  if(!launchId||!nonce||!paneId||!instanceRef||!parentSessionId) return Promise.resolve();
  const sessionId=ctx.sessionManager?.getSessionId?.(); const model=ctx.model?.provider&&ctx.model.id?`${ctx.model.provider}/${ctx.model.id}`:undefined;
@@ -233,7 +234,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
  pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
  pi.on("agent_end",async(event,ctx)=>{
-   if(upstreamCompletionReported) return;
+   if(ctx.hasUI!==true||upstreamCompletionReported) return;
    const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
    const childSessionId=ctx.sessionManager?.getSessionId?.(), childName=pi.getSessionName();
    if(!launchId||!parentSessionId||!paneId||!childSessionId||!childName||childSessionId===parentSessionId) return;
@@ -267,7 +268,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh child session. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source session name (`<source>: <title>`) unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source session name (`<source>: <title>`) unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
@@ -307,6 +308,8 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       const runtime=await context(ctx);
+      if(!runtime.harness.hasUI)
+        return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"})}],details:{status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"}};
       const translated=await translateOmpRequest(request,runtime);
       if("kind" in translated) return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:translated.message})}],details:{status:"unsupported",reason:translated.message}};
       if(runtime.host.provider!=="WezTerm"||runtime.host.kind!=="terminal"||!runtime.location?.paneId||!runtime.location.instanceRef)

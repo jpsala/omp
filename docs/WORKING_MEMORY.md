@@ -92,6 +92,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/orquestar` expone ese flow sin flags: dispatcher liviano, owner enfocado en
   ventana nueva, delegación sólo cuando aporta valor y resultado consolidado de
   vuelta a la sesión origen.
+  `agent_runtime_session` exige `hasUI:true`: subagentes Task background
+  devuelven por Task y sus hooks ignoran metadata runtime heredada, evitando que
+  secuestren el pane del owner o contaminen acks/completions.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.
