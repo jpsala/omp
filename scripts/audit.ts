@@ -44,7 +44,7 @@ const requiredFiles = [
 	"src/runtime-launcher.ts",
 	"runtime/omp-fresh-session.yml",
 	"profiles/catalog.json",
-	"patches/omp-18.0.5-workstation.patch",
+	"patches/omp-18.0.6-workstation.patch",
 	"topics/rpc-client.md",
 	"topics/ux-matrix.md",
 	"topics/wezterm-attention.md",

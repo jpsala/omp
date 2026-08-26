@@ -499,9 +499,9 @@ se mezclan con perfiles de modelos.
 
 ## 2026-08-25 — Rebase granular sobre OMP 18.0.5
 
-El tag estable `v18.0.5` sigue sin ofrecer filtros por tool, preámbulos o
-perfiles de visibilidad. Se reemplaza el patch 18.0.4 por
-`patches/omp-18.0.5-workstation.patch`; no se conservan dos bases activas.
+El tag estable `v18.0.5` seguía sin ofrecer filtros por tool, preámbulos o
+perfiles de visibilidad. En ese update se reemplazó el patch 18.0.4 por un
+delta fijado a `v18.0.5`; cada versión mantiene una sola base activa.
 
 El único conflicto del rebase estaba en el render final de
 `EventController`: se preservó la semántica 18.0.5 de `SilentAbort` estructural
@@ -538,3 +538,21 @@ La selección por trigger no habilita Advisor globalmente:
 `advisor.enabled=false`, `advisor.syncBacklog=off` y `task.prewalk=false`
 siguen siendo los defaults. `/plan-implement-short` es el único flow mantenido
 que solicita Advisor y el target económico de forma explícita.
+
+## 2026-08-26 — Rebase granular sobre OMP 18.0.6
+
+El updater oficial instaló los paquetes 18.0.6, pero no reemplazó el
+`omp.exe` compilado downstream; esa advertencia es esperable en este layout.
+El tag `v18.0.6` tampoco ofrece filtros por tool, preámbulos, perfiles ni un
+hook genérico de transcript, por lo que el delta sigue siendo necesario.
+
+El patch 18.0.5 aplicó limpio. Los únicos archivos del delta tocados por
+upstream fueron `settings-schema.ts` y `transcript-container.ts`; se conserva
+el endurecimiento nuevo que congela publicaciones de filas estables cuando
+retraen bytes ya emitidos. La base durable pasa a
+`patches/omp-18.0.6-workstation.patch` y se retira la anterior.
+
+Los 23 tests focales pasaron con 94 assertions y el check completo de
+`packages/coding-agent` quedó limpio. El binario embebe el addon Win32 18.0.6,
+se publicó mediante `bun run deploy:omp`, y el smoke TUI real confirmó
+`omp/18.0.6`, los tres presets, el perfil `zen` y 39 opciones.

@@ -1,5 +1,5 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index 5bbe36a..57f8e61 100644
+index d35aae8..5411f62 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
 @@ -1286,6 +1286,33 @@ export const SETTINGS_SCHEMA = {
@@ -149,10 +149,10 @@ index 485ae94..5d5d989 100644
  		this.#showImages = show;
  		this.#updateDisplay();
 diff --git a/packages/coding-agent/src/modes/components/transcript-container.ts b/packages/coding-agent/src/modes/components/transcript-container.ts
-index 2960905..140b0dc 100644
+index ef824dd..a26a146 100644
 --- a/packages/coding-agent/src/modes/components/transcript-container.ts
 +++ b/packages/coding-agent/src/modes/components/transcript-container.ts
-@@ -119,10 +119,19 @@ export class TranscriptContainer extends Container {
+@@ -131,10 +131,19 @@ export class TranscriptContainer extends Container {
  	#replayPending = false;
  	#replayRequested = false;
  	#toolActivityVisible = true;
@@ -173,7 +173,7 @@ index 2960905..140b0dc 100644
  		super.addChild(component);
  		this.#entries.push({
  			component,
-@@ -153,9 +162,20 @@ export class TranscriptContainer extends Container {
+@@ -166,9 +175,20 @@ export class TranscriptContainer extends Container {
  	setToolActivityVisible(visible: boolean): void {
  		if (this.#toolActivityVisible === visible) return;
  		this.#toolActivityVisible = visible;
@@ -377,86 +377,6 @@ index e1ac002..5bc6f6c 100644
  		const preservedChatChildren = options.preserveExistingChat ? [...visibleChatContainer.children] : undefined;
  		const previousTranscriptMessageComponents = this.ctx.transcriptMessageComponents;
  		const previousPendingTools = this.ctx.pendingTools;
-diff --git a/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
-new file mode 100644
-index 0000000..53f745a
---- /dev/null
-+++ b/packages/coding-agent/test/interactive-mode-tool-visibility.test.ts
-@@ -0,0 +1,74 @@
-+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-+import * as path from "node:path";
-+import { Agent } from "@oh-my-pi/pi-agent-core";
-+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-+import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-+import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-+import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-+import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-+import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-+import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-+import { Text } from "@oh-my-pi/pi-tui";
-+import { TempDir } from "@oh-my-pi/pi-utils";
-+
-+class NamedToolActivity extends Text {
-+	#visible = true;
-+	constructor(
-+		text: string,
-+		private readonly toolName: string,
-+	) {
-+		super(text, 0, 0);
-+	}
-+	getToolActivityName(): string {
-+		return this.toolName;
-+	}
-+	setToolActivityVisible(visible: boolean): void {
-+		this.#visible = visible;
-+	}
-+	override render(width: number): readonly string[] {
-+		return this.#visible ? super.render(width) : [];
-+	}
-+}
-+
-+describe("InteractiveMode startup tool visibility", () => {
-+	let authStorage: AuthStorage;
-+	let mode: InteractiveMode;
-+	let session: AgentSession;
-+	let tempDir: TempDir;
-+
-+	beforeAll(async () => {
-+		initTheme();
-+		resetSettingsForTest();
-+		tempDir = TempDir.createSync("@pi-tool-visibility-");
-+		await Settings.init({ inMemory: true, cwd: tempDir.path() });
-+		settings.set("display.hiddenTools", ["bash"]);
-+		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
-+		const modelRegistry = new ModelRegistry(authStorage);
-+		const model = modelRegistry.find("anthropic", "claude-sonnet-4-5");
-+		if (!model) throw new Error("Expected claude-sonnet-4-5 test model");
-+		session = new AgentSession({
-+			agent: new Agent({ initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] } }),
-+			sessionManager: SessionManager.create(tempDir.path(), tempDir.path()),
-+			settings: Settings.isolated(),
-+			modelRegistry,
-+		});
-+		mode = new InteractiveMode(session, "test");
-+	});
-+
-+	afterAll(async () => {
-+		mode.stop();
-+		await session.dispose();
-+		authStorage.close();
-+		tempDir.removeSync();
-+		resetSettingsForTest();
-+	});
-+
-+	it("keeps persisted per-tool filters across the staged startup transcript swap", async () => {
-+		await mode.renderInitialMessages();
-+		mode.chatContainer.addChild(new NamedToolActivity("bash output", "bash"));
-+		mode.chatContainer.addChild(new NamedToolActivity("read output", "read"));
-+		const rendered = mode.chatContainer.renderViewport(120, 20, { tick: 0, now: Date.now() }).join("\n");
-+		expect(rendered).not.toContain("bash output");
-+		expect(rendered).toContain("read output");
-+	});
-+});
 diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 index f041efa..502acbc 100644
 --- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
