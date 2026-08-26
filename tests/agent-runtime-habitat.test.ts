@@ -57,8 +57,14 @@ test("extension registers context and an explicit nested launch contract", async
     habitat(pi as unknown as Parameters<typeof habitat>[0]);
     const contextTool = tools.get("agent_runtime_context");
     const sessionTool = tools.get("agent_runtime_session");
+    const statusTool = tools.get("agent_runtime_status");
     expect(contextTool?.approval).toBe("read");
     expect(sessionTool?.approval).toBe("write");
+    expect(statusTool?.approval).toBe("write");
+    expect(statusTool?.parameters).toMatchObject({
+      required: ["state", "detail"],
+      additionalProperties: false,
+    });
     const schema = sessionTool!.parameters as { required?: string[]; properties?: Record<string, { anyOf?: unknown[]; required?: string[]; additionalProperties?: boolean; properties?: Record<string, unknown> }> };
     expect(schema.required).toEqual(["cwd", "prompt", "pane", "fresh", "persistence", "model", "focus"]);
     expect(schema.properties?.placement.anyOf).toHaveLength(3);
@@ -182,6 +188,18 @@ test("extension registers context and an explicit nested launch contract", async
       model: { provider: "openai-codex", id: "gpt-5.6-luna" },
     });
     expect(JSON.parse(backgroundLaunch.content[0].text)).toMatchObject({ status: "unsupported", reason: expect.stringContaining("background Task agents must return through Task") });
+    const rootStatus = await statusTool!.execute("id", {
+      state: "working",
+      detail: "Integrando resultados",
+    }, new AbortController().signal, () => {}, {
+      cwd: agentDir,
+      hasUI: true,
+      sessionManager: { getSessionId: () => "root-session" },
+    });
+    expect(JSON.parse(rootStatus.content[0].text)).toMatchObject({
+      status: "unsupported",
+      reason: expect.stringContaining("registered parent"),
+    });
 
     const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");
@@ -238,6 +256,12 @@ test("builds a closed dedicated-window orchestration command", () => {
   expect(prompt).toContain("si no, trabaja solo");
   expect(prompt).toContain("paraleliza únicamente frentes independientes");
   expect(prompt).toContain("retornos automáticos");
+  expect(prompt).toContain("agent_runtime_status");
+  expect(prompt).toContain("working");
+  expect(prompt).toContain("waiting");
+  expect(prompt).toContain("blocked");
+  expect(prompt).toContain("No respondas sólo con identificadores");
+  expect(prompt).toContain("superficie persistente");
   expect(prompt.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
   const implicit = buildOrchestratePrompt("   ");
   expect(implicit).toContain("solicitud de usuario accionable inmediatamente anterior");

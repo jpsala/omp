@@ -88,10 +88,17 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos.
   Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
   por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
-  hijas. El smoke transitivo window → tab → parent pasó el 2026-08-25.
-  `/orquestar` expone ese flow sin flags: dispatcher liviano, owner enfocado en
-  ventana nueva, delegación sólo cuando aporta valor y resultado consolidado de
-  vuelta a la sesión origen.
+  hijas. El dispatcher conserva un widget persistente con la última transición
+  comprobada `working|waiting|blocked`; lanzamientos y retornos anidados se
+  propagan automáticamente y `agent_runtime_status` cubre estados conocidos
+  sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked` difieren
+  sólo ese turno para que una dependencia no se convierta en falso final; el
+  siguiente `agent_start` de un completion consume su token y publica upstream.
+  El smoke transitivo window → tab → parent pasó el 2026-08-25; el smoke de
+  estados, widget, integración y retorno upstream pasó el 2026-08-26.
+  `/orquestar` expone ese flow sin flags: confirma el owner y la observabilidad,
+  delega sólo cuando aporta valor y devuelve el resultado consolidado a la
+  sesión origen.
   `agent_runtime_session` exige `hasUI:true`: subagentes Task background
   devuelven por Task y sus hooks ignoran metadata runtime heredada, evitando que
   secuestren el pane del owner o contaminen acks/completions.

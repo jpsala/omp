@@ -45,7 +45,16 @@ delegar aporta valor: puede trabajar solo o fijar contratos, dependencias y
 ownership antes de abrir implementadores o revisores en tabs. Paraleliza
 únicamente frentes independientes, integra todos los retornos automáticos y
 verifica el conjunto antes de responder upstream. El dispatcher no abre workers,
-no monitorea la ventana y un fallo de launch no crea una segunda.
+no monitorea la ventana y un fallo de launch no crea una segunda. Tras el
+handshake confirma owner, pane y session id, pero no queda en silencio: mantiene
+un widget persistente con el último estado comprobado y el retorno automático.
+
+El owner publica sólo transiciones reales mediante `agent_runtime_status`:
+`working`, `waiting` o `blocked`, con detalle acotado y sin heartbeats. Lanzar
+una hija y recibir su retorno también generan transiciones automáticas que se
+propagan hacia el dispatcher. `waiting` y `blocked` difieren el cierre upstream
+de ese turno; la sesión visible puede continuar cuando se resuelva la
+dependencia, sin convertir una pregunta o bloqueo en un falso resultado final.
 
 ### Promoción de contexto durable
 
@@ -161,22 +170,42 @@ Esos subagentes deben devolver por Task; nunca pueden abrir splits, tabs o
 ventanas visibles usando el pane del parent. El fragmento runtime expone
 `ui=yes|no` para que el agente conozca este gate antes de invocar.
 
-### Retorno automático de hijas
+### Retorno automático y estado observable
 
 Cada launch exitoso registra transitoriamente la identidad de la hija bajo el
-directorio runtime privado del usuario. En el primer `agent_end` terminal, la
-hija publica estado y texto final acotado; no persiste prompts ni transcripts.
-El parent consume y elimina el resultado, retira el pending correspondiente e
-inyecta un `followUp` que reanuda automáticamente su orquestación. Los reportes
-se escapan antes de entrar al prompt y el parent debe verificar cambios y
-afirmaciones contra las fuentes reales.
+directorio runtime privado del usuario. En el primer `agent_end` realmente
+terminal, la hija publica estado y texto final acotado; no persiste prompts ni
+transcripts. Un turno que haya publicado `waiting` o `blocked` no se considera
+final: el owner queda retomable en su sesión visible.
+
+El mismo mailbox acepta transiciones acotadas `working|waiting|blocked`.
+El parent las consume, actualiza un widget persistente sobre el editor y las
+propaga transitivamente si también es una hija. No consulta procesos, panes,
+scrollback ni sesiones OMP y no inventa liveness entre transiciones. Los
+lanzamientos anidados publican `waiting` y los retornos recibidos publican
+`working` de forma automática; `agent_runtime_status` cubre los cambios de
+estado que sólo el owner conoce.
+
+Al llegar un resultado final, el parent consume el reporte, retira el pending e
+inyecta un `followUp` que reanuda automáticamente su orquestación. Si la
+inyección sincrónica falla, restaura pending y completion para reintento en vez
+de perder el resultado. Los reportes se escapan antes de entrar al prompt y el
+parent debe verificar cambios y afirmaciones contra las fuentes reales.
+Cada follow-up de completion reserva un token in-memory antes de llamar
+`sendUserMessage`; el siguiente `agent_start` consume exactamente uno y marca
+ese loop como integración. `agent_start`, no `before_agent_start`, es la
+frontera fiable porque los follow-ups internos pueden continuar sin repetir el
+preflight de un prompt interactivo. El `agent_end` anterior no consume un token
+que llegó después de haber empezado; el loop de integración sí publica
+upstream.
+
 
 Si una hija actúa como orquestador y todavía conserva pending propios, no
 reporta upstream al cerrar su primer turno. Integra los retornos que recibe y
 sólo publica su resultado cuando ya no quedan hijas pendientes. El registro es
 atómico y forma parte del launch: si falla, el pane recién creado se revierte.
-El mailbox permite recuperar completions pendientes cuando una sesión guardada
-se reabre; los archivos consumidos se eliminan.
+El mailbox permite recuperar completions y estados pendientes cuando una sesión
+guardada se reabre; los archivos consumidos se eliminan.
 
 
 ### Modelo: rol de agente vs spec real
@@ -194,10 +223,11 @@ en un model spec por convención.
 ### Después del lanzamiento
 
 Un resultado `ok` con `paneId`, `sessionId` y `model` confirma que la sesión hija
-recibió el prompt, empezó y quedó registrada para retorno. El parent vuelve a
-su trabajo; cuando la hija finaliza, el runtime lo reanuda con su resultado. No
-debe pedir al usuario que vigile tabs ni monitorear panes con Computer Use,
-screenshots, scrollback o polling visual.
+recibió el prompt, empezó y quedó registrada para retorno. El parent muestra el
+último estado recibido en el widget de orquestación y vuelve a su trabajo;
+cuando la hija finaliza, el runtime lo reanuda con su resultado. No debe pedir al
+usuario que vigile tabs ni monitorear panes con Computer Use, screenshots,
+scrollback o polling visual.
 
 Un host, placement o request no soportado devuelve `unsupported`. No debe activar investigación de source, procesos, sesiones o fallbacks ad hoc.
 
@@ -318,6 +348,14 @@ window dedicada `3`. Los títulos quedaron
 `WORKER_WINDOW_OK`; el mailbox reanudó al orquestador, que respondió
 `ORCHESTRATOR_RETURN_OK`; ese retorno reanudó al dispatcher y llegó al parent
 original como `DISPATCHER_RETURN_OK`, sin aviso manual.
+
+Smoke vivo del 2026-08-26: owner pane `184`, session
+`01a03f67-474d-7000-a646-e4f921991b52`, publicó `working`, lanzó worker pane
+`185`, session `01a03f67-94e6-7000-a47c-35ae50df1462`, y publicó `waiting`.
+El worker devolvió `WORKER_STATUS_6_OK`; el widget cambió a integración con cero
+pendientes, el owner publicó `working`, respondió
+`ORCHESTRATION_STATUS_6_OK` y el widget se retiró al cerrar el loop. El retorno
+upstream eliminó el pending del owner; los artifacts de smoke se limpiaron.
 
 El smoke vivo requiere pedido explícito. Para splits debe demostrar mismo tab,
 nuevo pane, session id distinta, modelo esperado y acknowledgment exacto. Para

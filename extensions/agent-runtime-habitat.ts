@@ -3,8 +3,8 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
-import { completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion } from "../src/runtime-completion-channel.ts";
-import { createMarkerStore, markerRoot, promptSha256, type HandshakeAck } from "../src/runtime-handshake.ts";
+import { CompletionTurnGate, completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState } from "../src/runtime-completion-channel.ts";
+import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
@@ -45,9 +45,11 @@ ${target}
 
 Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile tabs.
 
-Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"window"}, pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras implementadores desde esta sesión, no agregues workflow o argv libre, no monitorees la ventana y no hagas polling: el resultado consolidado volverá automáticamente.
+El owner debe usar agent_runtime_status para publicar cambios reales de estado, no heartbeats: working al cerrar alcance o comenzar integración; waiting cuando dependa de retornos o una condición externa; blocked antes de pedir una acción humana, con el bloqueo exacto. El runtime propaga además lanzamientos y retornos anidados. No inventes actividad entre transiciones.
 
-Si el lanzamiento funciona, respondé sólo con nombre, pane y session id del owner; si falla, informá el error exacto y no abras una segunda ventana.`;
+Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"window"}, pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras implementadores desde esta sesión, no agregues workflow o argv libre, no monitorees la ventana y no hagas polling: el estado aparecerá en la superficie persistente de esta sesión y el resultado consolidado volverá automáticamente.
+
+Si el lanzamiento funciona, confirmá nombre, pane y session id del owner, explicá en una línea que el estado visible y el retorno automático quedaron activos, y terminá el turno. No respondas sólo con identificadores. Si falla, informá el error exacto y no abras una segunda ventana.`;
 }
 export const HANDOFF_COMMAND = "handoff";
 export function parseAtomicHandoffInput(text: string): string | undefined {
@@ -105,11 +107,34 @@ Actualizá fuentes existentes antes de crear otras. Preservá grado de certeza, 
 
 Después regenerá los índices y ejecutá el audit documental que el repo defina. Si no hay delta durable, no edites archivos. Respondé con qué promoviste y dónde, qué omitiste deliberadamente por temporal o derivable, y los checks ejecutados.`;
 }
-type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string};setInterval?:(callback:(...args:unknown[])=>void,ms?:number,...args:unknown[])=>unknown};
+type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string};setInterval?:(callback:(...args:unknown[])=>void,ms?:number,...args:unknown[])=>unknown;ui?:{setWidget?:(key:string,content:string[]|undefined,options?:{placement?:"aboveEditor"|"belowEditor"})=>void}};
 type Event={systemPrompt?:readonly string[];prompt?:string};
 export type SessionToolInput=Omit<SpawnAgentSessionRequestV1,"version"|"placement">&{placement?:SpawnAgentSessionRequestV1["placement"]};
 export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:50} as const;
 const MAX_SESSION_TITLE_LENGTH=500;
+const RUNTIME_STATUS_WIDGET_KEY="agent-runtime-orchestration";
+type RuntimeStatusInput={state:ChildProgressState;detail:string};
+function isRuntimeStatusInput(value:unknown):value is RuntimeStatusInput {
+ if(!value||typeof value!=="object"||Array.isArray(value)) return false;
+ const input=value as Record<string,unknown>;
+ return Object.keys(input).length===2
+   && (input.state==="working"||input.state==="waiting"||input.state==="blocked")
+   && typeof input.detail==="string"
+   && !!input.detail.trim()
+   && input.detail.length<=2_000
+   && !/[\u0000-\u001f\u007f]/.test(input.detail);
+}
+function setRuntimeStatus(ctx:Ctx,name:string,state:ChildProgressState,detail:string,remaining?:number):void {
+ const lines=[
+   "Orquestación visible",
+   `${name} · ${state}`,
+   detail,
+ ];
+ if(remaining!==undefined) lines.push(`${remaining} sesión(es) pendiente(s)`);
+ try{
+   ctx.ui?.setWidget?.(RUNTIME_STATUS_WIDGET_KEY,lines,{placement:"aboveEditor"});
+ }catch{}
+}
 function isRequestInput(value: unknown): value is SessionToolInput {
  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
  const r=value as Record<string, unknown>;
@@ -177,24 +202,73 @@ export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ct
 }
 export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  const completionStore=createCompletionStore(completionRoot());
+ const completionTurnGate=new CompletionTurnGate();
  const monitoredParents=new Set<string>(), drainingParents=new Set<string>();
- const drainCompletions=async(parentSessionId:string)=>{
+ let launchedChildren=false, upstreamCompletionReported=false, deferUpstreamCompletion=false;
+ const publishProgressUpstream=async(ctx:Ctx,state:ChildProgressState,detail:string)=>{
+   if(ctx.hasUI!==true) return false;
+   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
+   const childSessionId=ctx.sessionManager?.getSessionId?.(), childName=pi.getSessionName();
+   if(!launchId||!parentSessionId||!paneId||!childSessionId||!childName||childSessionId===parentSessionId) return false;
+   await completionStore.publishProgress({
+     version:1,
+     reportId:randomLaunchId(),
+     launchId,
+     parentSessionId,
+     childSessionId,
+     childName,
+     paneId,
+     state,
+     detail:detail.slice(0,2_000),
+     updatedAt:Date.now(),
+   });
+   return true;
+ };
+ const drainCompletions=async(parentSessionId:string,ctx:Ctx)=>{
    if(drainingParents.has(parentSessionId)) return;
    drainingParents.add(parentSessionId);
    try{
      const batch=await completionStore.consume(parentSessionId);
-     if(batch.completions.length>0) pi.sendUserMessage(renderCompletionFollowUp(batch),{deliverAs:"followUp"});
+     const latest=batch.progress.at(-1);
+     if(latest){
+       setRuntimeStatus(ctx,latest.childName,latest.state,latest.detail,batch.remaining);
+       await publishProgressUpstream(ctx,latest.state,`${latest.childName}: ${latest.detail}`).catch(()=>false);
+     }
+     if(batch.completions.length>0){
+       const names=batch.completions.map(completion=>completion.childName).join(", ");
+       const detail=`Retorno recibido de ${names}; integrando y verificando.`;
+       setRuntimeStatus(ctx,names,"working",detail,batch.remaining);
+       await publishProgressUpstream(ctx,"working",detail).catch(()=>false);
+       completionTurnGate.queue();
+       try{
+         pi.sendUserMessage(renderCompletionFollowUp(batch),{deliverAs:"followUp"});
+       }catch(error){
+         completionTurnGate.rollbackQueue();
+         for(const completion of batch.completions){
+           await completionStore.register({
+             version:1,
+             launchId:completion.launchId,
+             parentSessionId:completion.parentSessionId,
+             childSessionId:completion.childSessionId,
+             childName:completion.childName,
+             paneId:completion.paneId,
+             startedAt:completion.completedAt,
+           });
+           await completionStore.publish(completion);
+         }
+         throw error;
+       }
+     }
    }finally{drainingParents.delete(parentSessionId);}
  };
  const ensureCompletionMonitor=async(parentSessionId:string,ctx:Ctx)=>{
    if(!monitoredParents.has(parentSessionId)){
      if(!ctx.setInterval) throw new Error("completion monitor requires ExtensionContext.setInterval");
      monitoredParents.add(parentSessionId);
-     ctx.setInterval(()=>{void drainCompletions(parentSessionId);},750);
+     ctx.setInterval(()=>{void drainCompletions(parentSessionId,ctx);},750);
    }
-   await drainCompletions(parentSessionId);
+   await drainCompletions(parentSessionId,ctx);
  };
- let launchedChildren=false, upstreamCompletionReported=false;
  const context=(ctx:Ctx)=>{
    const model=ctx.model?.provider&&ctx.model.id
      ? {provider:ctx.model.provider,id:ctx.model.id,thinking:pi.getThinkingLevel()}
@@ -232,14 +306,26 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    }
    if(prompt!==undefined) pi.sendUserMessage(prompt);
  });
- pi.on("before_agent_start",async(event,ctx)=>{await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};});
+ pi.on("before_agent_start",async(event,ctx)=>{
+   deferUpstreamCompletion=false;
+   await publishRuntimeAck("before_agent_start",ctx,event.prompt,undefined,pi.getSessionName());
+   return {systemPrompt:[...(event.systemPrompt??[]),compactRuntimeFragment(await context(ctx))]};
+ });
+ pi.on("agent_start",()=>{completionTurnGate.agentStart();});
  pi.on("agent_end",async(event,ctx)=>{
    if(ctx.hasUI!==true||upstreamCompletionReported) return;
-   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
-   const childSessionId=ctx.sessionManager?.getSessionId?.(), childName=pi.getSessionName();
-   if(!launchId||!parentSessionId||!paneId||!childSessionId||!childName||childSessionId===parentSessionId) return;
+   const completionFollowUpTurn=completionTurnGate.endAgentTurn();
+   const deferThisTurn=deferUpstreamCompletion;
+   deferUpstreamCompletion=false;
+   const childSessionId=ctx.sessionManager?.getSessionId?.();
+   if(!childSessionId) return;
    const hasPendingChildren=await completionStore.hasPending(childSessionId);
-   if(!shouldReportCompletionUpstream({launchedChildren,hasPendingChildren,willContinue:event.willContinue===true,messages:event.messages})) return;
+   if(!hasPendingChildren && completionFollowUpTurn) ctx.ui?.setWidget?.(RUNTIME_STATUS_WIDGET_KEY,undefined);
+   if(deferThisTurn) return;
+   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
+   const childName=pi.getSessionName();
+   if(!launchId||!parentSessionId||!paneId||!childName||childSessionId===parentSessionId) return;
+   if(!shouldReportCompletionUpstream({launchedChildren,hasPendingChildren,willContinue:event.willContinue===true,completionFollowUp:completionFollowUpTurn})) return;
    const completion=summarizeAgentCompletion(event.messages);
    await completionStore.publish({version:1,launchId,parentSessionId,childSessionId,childName,paneId,...completion,completedAt:Date.now()});
    upstreamCompletionReported=true;
@@ -265,6 +351,34 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  pi.registerCommand(SAVE_SESSION_COMMAND,{
    description:"Guardar deltas durables de la sesión en la documentación canónica",
    handler:(args)=>{pi.sendUserMessage(buildPromoteContextPrompt(String(args??"")));},
+ });
+ pi.registerTool({
+   name:"agent_runtime_status",
+   label:"Report orchestration status",
+   description:"Publish a real working, waiting, or blocked state transition to the parent orchestration surface. Use transitions only, never heartbeat noise. Waiting and blocked updates defer terminal upstream reporting for this turn so the owner can continue after the dependency clears in its visible session.",
+   approval:"write",
+   parameters:{
+     type:"object",
+     properties:{
+       state:{type:"string",enum:["working","waiting","blocked"]},
+       detail:{type:"string",minLength:1,maxLength:2_000},
+     },
+     required:["state","detail"],
+     additionalProperties:false,
+   },
+   execute:async(_id,raw,_signal,_onUpdate,ctx)=>{
+     if(!isRuntimeStatusInput(raw)){
+       const result={status:"unsupported",reason:"expected closed status {state:'working'|'waiting'|'blocked',detail} without control characters"};
+       return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
+     }
+     if(!await publishProgressUpstream(ctx,raw.state,raw.detail)){
+       const result={status:"unsupported",reason:"status reporting requires an interactive child session with a registered parent"};
+       return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
+     }
+     if(raw.state==="waiting"||raw.state==="blocked") deferUpstreamCompletion=true;
+     const result={status:"ok",state:raw.state};
+     return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
+   },
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
@@ -334,6 +448,8 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
           onReady:async ready=>{
             await completionStore.register({version:1,launchId:ready.launchId,parentSessionId:runtime.harness.sessionId!,childSessionId:ready.sessionId,childName:value.pane.title,paneId:ready.paneId,startedAt:Date.now()});
             launchedChildren=true;
+            setRuntimeStatus(ctx,value.pane.title,"working","Sesión iniciada; estado visible y retorno automático activos.");
+            await publishProgressUpstream(ctx,"waiting",`Sesión hija activa: ${value.pane.title}; esperando su retorno automático.`).catch(()=>false);
           }
         });
         await ensureCompletionMonitor(runtime.harness.sessionId,ctx);
