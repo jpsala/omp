@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, stat, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMarkerStore, MARKER_TTL_MS, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
@@ -18,6 +18,28 @@ test("publishes atomically with restrictive modes and consumes once", async () =
   const root = await mkdtemp(join(tmpdir(), "omp-marker-"));
   try { const store = createMarkerStore(root); const value = ack(); await store.publish(value); const names = await readdir(root); expect(names).toEqual([`${value.launchId}.session_start.json`]); expect(await store.consume(value.launchId, "session_start")).toEqual(value); expect(await store.consume(value.launchId, "session_start")).toBeUndefined(); }
   finally { await rm(root, { recursive: true, force: true }); }
+});
+test("publish tolerates a consumer claiming the final marker immediately after rename", async () => {
+  const root = await mkdtemp(join(tmpdir(), "omp-marker-race-"));
+  const claimed = join(root, "claimed.json");
+  try {
+    const store = createMarkerStore(root, {
+      chmod,
+      mkdir,
+      readFile,
+      readdir,
+      unlink,
+      writeFile,
+      rename: async (source, destination) => {
+        await rename(source, destination);
+        if (destination.endsWith(".session_start.json")) await rename(destination, claimed);
+      },
+    });
+    await expect(store.publish(ack())).resolves.toBeUndefined();
+    expect((await stat(claimed)).isFile()).toBeTrue();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("persists only allowlisted structured failure codes", async () => {

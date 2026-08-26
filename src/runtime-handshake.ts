@@ -58,7 +58,7 @@ export function createMarkerStore(root: string, fs: MarkerFs = nativeFs): Marker
       const final = pathFor(ack.launchId, ack.stage);
       const temp = `${final}.${randomLaunchId().slice(0, 16)}.tmp`;
       await fs.writeFile(temp, JSON.stringify(ack), { encoding: "utf8", flag: "wx", mode: 0o600 });
-      await secure(temp, 0o600); await fs.rename(temp, final); await secure(final, 0o600);
+      await secure(temp, 0o600); await fs.rename(temp, final);
     },
     async consume(id, stage) {
       if (!safe(id) || !stages.includes(stage)) return undefined;

@@ -165,7 +165,6 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
     await fs.writeFile(temporary, JSON.stringify(value), { encoding: "utf8", flag: "wx", mode: 0o600 });
     await secure(temporary, 0o600);
     await fs.rename(temporary, path);
-    await secure(path, 0o600);
   };
   const names = async (parentSessionId: string) => {
     try { return await fs.readdir(parentDirectory(parentSessionId)); }

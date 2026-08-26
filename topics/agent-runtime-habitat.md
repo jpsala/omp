@@ -247,6 +247,11 @@ hash antes de devolver éxito. Un ack rechazado conserva sólo el código de la
 validación fallida (`model_mismatch`, `prompt_hash_mismatch`, etc.); no persiste
 valores, prompt, URL ni nonce.
 
+La publicación atómica aplica permisos al archivo temporal antes del `rename`.
+Ese rename es el último acceso del publisher al path final: el consumer puede
+claimarlo inmediatamente y no existe un `chmod` posterior que compita contra su
+rename. El mismo orden rige los mailboxes de completion.
+
 La tool devuelve fallos estructurados con etapa, creación del pane, confirmación
 de `session_start`, rollback y último código de ack rechazado. El canal se cierra
 después de una única lectura válida o durante rollback; el prompt no aparece en

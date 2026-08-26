@@ -95,6 +95,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `agent_runtime_session` exige `hasUI:true`: subagentes Task background
   devuelven por Task y sus hooks ignoran metadata runtime heredada, evitando que
   secuestren el pane del owner o contaminen acks/completions.
+  Acks y completions fijan permisos en el temp antes del rename atómico; el
+  publisher no toca el path final después de publicarlo porque el consumer puede
+  claimarlo inmediatamente.
 - Índice: `bun run index`.
 - Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
 - Tests focales del contrato RPC: `bun test`.
