@@ -138,6 +138,7 @@ async function auditProjectExtensionLoad(): Promise<void> {
 			if (name.startsWith("OMP_RUNTIME_")) delete childEnv[name];
 		}
 		childEnv.PI_CODING_AGENT_DIR = join(sandbox, "agent");
+		childEnv.OPENAI_API_KEY = "omp-audit-placeholder";
 		childEnv.WEZTERM_PANE = "";
 
 		const child = spawn(
@@ -464,10 +465,9 @@ const expectedIndex = [
 	...indexRows,
 	"",
 ].join("\n");
-const actualIndex = await readFile(
-	join(workspace, "docs", "TOPICS.md"),
-	"utf8",
-).catch(() => "");
+const actualIndex = (
+	await readFile(join(workspace, "docs", "TOPICS.md"), "utf8").catch(() => "")
+).replaceAll("\r\n", "\n");
 if (actualIndex !== expectedIndex)
 	issues.push("docs/TOPICS.md is stale; run bun run index");
 
