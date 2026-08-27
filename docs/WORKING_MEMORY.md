@@ -13,6 +13,11 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   project-local reemplaza, no fusiona, `extensions`. Los wrappers bajo
   `~/.omp/agent/extensions/` eran inertes frente a la lista explícita y quedan
   retirados; `extensions/` es la única fuente durable.
+- Paridad workstation revalidada en PC `JP` y notebook `ASUS`: repo, binario
+  compilado OMP 18.0.6, configuración global y perfil administrado coinciden.
+  El audit del laboratorio inyecta un provider sintético sin red para probar
+  discovery sin depender del auth privado del host y normaliza CRLF al validar
+  el índice generado; por eso el mismo checkout audita en ambas workstations.
 - Defaults efectivos auditados con `omp config`: `edit.autoRepair.enabled=true`,
   `task.prewalk=false`, `advisor.enabled=false` y
   `advisor.syncBacklog=off`. Luna queda limitada a roles o flows cortos
