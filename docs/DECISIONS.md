@@ -180,7 +180,6 @@ Se ejecutó un benchmark controlado con una solicitud normal por modelo (`maxTok
 128, `par=1`) y un par cold/warm de cache (`maxTokens` 64), usando los selectors
 OpenRouter V4 Pro 0813 `high` y V4 Flash 0731 `low`. Las cuatro solicitudes
 terminaron correctamente.
-
 La corrida normal observó TTFT de 1732 ms y duración de 2297 ms para Pro, frente
 a 690 ms y 1557 ms para Flash. En el par de cache, Pro costó `$0.0022842864`
 en frío y `$0.00034394976` en caliente, con 1536 tokens leídos de cache; Flash
@@ -556,3 +555,17 @@ Los 23 tests focales pasaron con 94 assertions y el check completo de
 `packages/coding-agent` quedó limpio. El binario embebe el addon Win32 18.0.6,
 se publicó mediante `bun run deploy:omp`, y el smoke TUI real confirmó
 `omp/18.0.6`, los tres presets, el perfil `zen` y 39 opciones.
+
+## 2026-08-27 — Tabs de orquestación cierran tras entregar su retorno
+
+`pane.closeOnComplete` es un opt-in independiente de `pane.onExit`. El parent
+conserva en memoria el adapter y el `WezTermPaneHandle` exactos del launch; tras
+encolar correctamente el follow-up del completion, cierra sólo ese pane
+runtime-owned. `/orquestar` lo activa para el owner y exige el mismo flag en cada
+worker tab, por lo que el cleanup se propaga worker → owner → dispatcher.
+
+No se persiste ni reconstruye una capacidad de cierre desde un `paneId`. Una
+recarga o reapertura pierde deliberadamente ese cleanup automático y conserva
+el tab sobreviviente: evitar cerrar un pane reutilizado pesa más que recuperar
+la limpieza visual. Un fallo de cierre no descarta ni bloquea el resultado; un
+fallo sincrónico al encolar el follow-up conserva el pane y restaura el mailbox.

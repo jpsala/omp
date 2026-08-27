@@ -92,10 +92,14 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   Para orquestaciones visibles, `placement:{kind:"window"}` crea un owner en
   ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos
   cuya raíz es el título real del tab dispatcher; el nombre de sesión queda como
-  fallback cuando WezTerm no expone ese título. Cada hija registra un mailbox
-  runtime transitorio: su settle reanuda al parent por follow-up, y un
-  orquestador no reporta upstream hasta integrar todas sus hijas. El dispatcher
-  conserva un widget persistente con la última transición
+  fallback cuando WezTerm no expone ese título. Los launches de orquestación
+  declaran `closeOnComplete:true`: el owner cierra cada worker sólo después de
+  encolar su retorno y el dispatcher cierra el owner después de recibir el
+  resultado consolidado. El cierre usa el adapter y handle exactos conservados
+  en memoria; nunca mata por pane id desnudo ni reclama tabs tras reload/resume.
+  Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
+  por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
+  hijas. El dispatcher conserva un widget persistente con la última transición
   comprobada `working|waiting|blocked`; lanzamientos y retornos anidados se
   propagan automáticamente y `agent_runtime_status` cubre estados conocidos
   sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked` difieren

@@ -36,18 +36,22 @@ devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo.
 
 `/orquestar [objetivo]` convierte la sesión actual en dispatcher y lanza
 exactamente un owner fresh saved con modelo heredado, `focus:true`,
-`onExit:"keep-open"` y `placement:{kind:"window"}`. Sin argumento deriva la
-solicitud accionable inmediatamente anterior; si no existe, pide sólo el
-objetivo y no abre una ventana.
+`onExit:"keep-open"`, `closeOnComplete:true` y
+`placement:{kind:"window"}`. Sin argumento deriva la solicitud accionable
+inmediatamente anterior; si no existe, pide sólo el objetivo y no abre una
+ventana.
 
 El dispatcher sólo construye un kickoff autocontenido. El owner decide si
 delegar aporta valor: puede trabajar solo o fijar contratos, dependencias y
-ownership antes de abrir implementadores o revisores en tabs. Paraleliza
-únicamente frentes independientes, integra todos los retornos automáticos y
-verifica el conjunto antes de responder upstream. El dispatcher no abre workers,
-no monitorea la ventana y un fallo de launch no crea una segunda. Tras el
-handshake confirma owner, pane y session id, pero no queda en silencio: mantiene
-un widget persistente con el último estado comprobado y el retorno automático.
+ownership antes de abrir implementadores o revisores en tabs. Cada tab de
+orquestación declara `closeOnComplete:true`: el owner cierra sus workers cuando
+ya recibió el resultado, y el dispatcher cierra el owner cuando recibe el
+resultado consolidado. Paraleliza únicamente frentes independientes, integra
+todos los retornos automáticos y verifica el conjunto antes de responder
+upstream. El dispatcher no abre workers, no monitorea la ventana y un fallo de
+launch no crea una segunda. Tras el handshake confirma owner, pane y session id,
+pero no queda en silencio: mantiene un widget persistente con el último estado
+comprobado y el retorno automático.
 
 El owner publica sólo transiciones reales mediante `agent_runtime_status`:
 `working`, `waiting` o `blocked`, con detalle acotado y sin heartbeats. Lanzar
@@ -136,13 +140,13 @@ origen.
 
 ### Ciclo de vida y nombre de panes
 
-Todo request de `agent_runtime_session` declara `pane: { title, onExit }`.
-`placement` es opcional: si se omite, el runtime abre un split derecho al 50%;
-`{ kind: "tab" }` crea un tab inmediatamente después del origen y
-`{ kind: "window" }` crea el primer tab de una ventana dedicada. Una ubicación
-split explícita conserva soporte para otra dirección. `title` se persiste como
-nombre de sesión OMP; para tab y window placement también se aplica mediante
-`wezterm cli set-tab-title`.
+Todo request de `agent_runtime_session` declara
+`pane: { title, onExit, closeOnComplete? }`. `placement` es opcional: si se
+omite, el runtime abre un split derecho al 50%; `{ kind: "tab" }` crea un tab
+inmediatamente después del origen y `{ kind: "window" }` crea el primer tab de
+una ventana dedicada. Una ubicación split explícita conserva soporte para otra
+dirección. `title` se persiste como nombre de sesión OMP; para tab y window
+placement también se aplica mediante `wezterm cli set-tab-title`.
 
 Los tabs y ventanas nuevos conservan genealogía visual automáticamente. El
 runtime toma como origen el título real del tab creador leído del probe validado
@@ -159,6 +163,13 @@ PowerShell 7 y otros hosts usan `$SHELL` o `/bin/sh`. El shell recibe un entorno
 limpio: no hereda metadata `OMP_RUNTIME_*`, el canal efímero del prompt ni
 marcadores de recursión. Cerrar explícitamente el pane en WezTerm siempre lo
 elimina.
+`closeOnComplete:true` es un opt-in distinto de `onExit`: el parent conserva en
+memoria el handle exacto que creó y cierra sólo ese pane después de encolar con
+éxito el `followUp` de su resultado final. No cierra por transiciones
+`working|waiting|blocked`, no opera por pane id desnudo y no afecta handoffs o
+launches que omiten el flag. Si el parent se recarga o reabre, no intenta
+reclamar ownership histórico; deja el tab sobreviviente intacto antes que
+arriesgar cerrar un pane reutilizado.
 
 `persistence: "saved"|"ephemeral"` gobierna el almacenamiento de la sesión OMP;
 no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
@@ -188,10 +199,12 @@ lanzamientos anidados publican `waiting` y los retornos recibidos publican
 estado que sólo el owner conoce.
 
 Al llegar un resultado final, el parent consume el reporte, retira el pending e
-inyecta un `followUp` que reanuda automáticamente su orquestación. Si la
-inyección sincrónica falla, restaura pending y completion para reintento en vez
-de perder el resultado. Los reportes se escapan antes de entrar al prompt y el
-parent debe verificar cambios y afirmaciones contra las fuentes reales.
+inyecta un `followUp` que reanuda automáticamente su orquestación. Si la hija
+declaró `closeOnComplete:true`, después de encolar ese follow-up cierra el pane
+runtime-owned con el mismo adapter y handle del launch. Si la inyección
+sincrónica falla, restaura pending y completion para reintento y mantiene el
+pane abierto. Los reportes se escapan antes de entrar al prompt y el parent debe
+verificar cambios y afirmaciones contra las fuentes reales.
 Cada follow-up de completion reserva un token in-memory antes de llamar
 `sendUserMessage`; el siguiente `agent_start` consume exactamente uno y marca
 ese loop como integración. `agent_start`, no `before_agent_start`, es la
@@ -299,11 +312,13 @@ forma explícita inválida falla como `unsupported` antes del launch.
 
 El adapter sólo puede enfocar o cerrar un pane creado por esa instancia de la
 operación. Un window placement crea una ventana nueva cuyo primer pane queda
-bajo el mismo ownership; nunca mueve el pane origen. Si creación, título,
-handshake o registro de completion fallan, intenta cerrar exactamente el pane
-owned —y con él la ventana vacía— y devuelve `rollback: completed|failed`.
-Nunca crea otro pane como retry, cierra el origen ni usa el último pane enfocado
-como fallback.
+bajo el mismo ownership; nunca mueve el pane origen. Ese handle habilita dos
+cierres seguros: rollback ante fallo posterior a la creación y cleanup opt-in
+tras un completion ya entregado. Si creación, título, handshake o registro de
+completion fallan, intenta cerrar exactamente el pane owned —y con él la ventana
+vacía— y devuelve `rollback: completed|failed`. Nunca crea otro pane como retry,
+cierra el origen, adopta un pane tras reload ni usa el último pane enfocado como
+fallback.
 
 Cerrar un pane owned que ya terminó se considera rollback satisfecho. WezTerm
 puede devolver `no such pane` cuando el programa child falla y el pane desaparece

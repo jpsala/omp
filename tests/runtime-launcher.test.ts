@@ -55,8 +55,11 @@ function harness(acks: HandshakeAck[], opts: { timeoutMs?: number; pollMs?: numb
 
 test("launches through the explicit source and hands off the exact unicode prompt", async () => {
   const h = harness([ack("session_start"), ack("before_agent_start", { promptHash: promptSha256(request.prompt) })]);
+  let readyPaneId: string | undefined;
+  h.deps.onReady = async (_result, pane) => { readyPaneId = pane.ownedPaneId; };
   const result = await launchAgent(request, h.deps);
   expect(result.ok).toBe(true);
+  expect(readyPaneId).toBe("child-pane");
   expect(h.events).toEqual(["build:source-pane:wez-instance", "split", "focus"]);
   expect(h.channelPrompts).toEqual([request.prompt]);
   expect(h.channelClosed).toBe(true);

@@ -3,9 +3,9 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
-import { CompletionTurnGate, completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState } from "../src/runtime-completion-channel.ts";
+import { CompletionTurnGate, completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
-import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
+import { createWezTermAdapter, type WezTermHostAdapter, type WezTermPaneHandle } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { translateOmpRequest } from "../src/runtime-harness-omp.ts";
@@ -43,11 +43,11 @@ export function buildOrchestratePrompt(objective: string): string {
 
 ${target}
 
-Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile tabs.
+Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Todo tab de implementador o revisor debe lanzarse con pane.closeOnComplete:true para que el runtime lo cierre sólo después de recibir su retorno. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile o cierre tabs.
 
 El owner debe usar agent_runtime_status para publicar cambios reales de estado, no heartbeats: working al cerrar alcance o comenzar integración; waiting cuando dependa de retornos o una condición externa; blocked antes de pedir una acción humana, con el bloqueo exacto. El runtime propaga además lanzamientos y retornos anidados. No inventes actividad entre transiciones.
 
-Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"window"}, pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras implementadores desde esta sesión, no agregues workflow o argv libre, no monitorees la ventana y no hagas polling: el estado aparecerá en la superficie persistente de esta sesión y el resultado consolidado volverá automáticamente.
+Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese kickoff como prompt, placement {kind:"window"}, pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}, fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras implementadores desde esta sesión, no agregues workflow o argv libre, no monitorees la ventana y no hagas polling: el estado seguirá en la superficie persistente y el runtime cerrará el tab owner sólo después de entregar su resultado consolidado a esta sesión.
 
 Si el lanzamiento funciona, confirmá nombre, pane y session id del owner, explicá en una línea que el estado visible y el retorno automático quedaron activos, y terminá el turno. No respondas sólo con identificadores. Si falla, informá el error exacto y no abras una segunda ventana.`;
 }
@@ -144,8 +144,8 @@ function isRequestInput(value: unknown): value is SessionToolInput {
  if (typeof r.fresh!=="boolean" || typeof r.focus!=="boolean" || (r.persistence!=="saved"&&r.persistence!=="ephemeral")) return false;
  if (!r.pane || typeof r.pane!=="object" || Array.isArray(r.pane)) return false;
  const pane=r.pane as Record<string, unknown>;
- if (Object.keys(pane).length!==2 || typeof pane.title!=="string" || !pane.title.trim() || pane.title.length>MAX_SESSION_TITLE_LENGTH
-   || /[\u0000-\u001f\u007f]/.test(pane.title) || (pane.onExit!=="close"&&pane.onExit!=="keep-open")) return false;
+ if (Object.keys(pane).some(key=>!["title","onExit","closeOnComplete"].includes(key)) || typeof pane.title!=="string" || !pane.title.trim() || pane.title.length>MAX_SESSION_TITLE_LENGTH
+   || /[\u0000-\u001f\u007f]/.test(pane.title) || (pane.onExit!=="close"&&pane.onExit!=="keep-open") || (pane.closeOnComplete!==undefined&&typeof pane.closeOnComplete!=="boolean")) return false;
  const placement=r.placement;
  const validPlacement=placement===undefined || (!!placement && typeof placement==="object" && !Array.isArray(placement) && (
    ((placement as Record<string,unknown>).kind==="tab" || (placement as Record<string,unknown>).kind==="window")
@@ -188,6 +188,18 @@ export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: 
  const title=placement.kind!=="split" ? childSessionTitle(sourceTabTitle??sourceName,input.pane.title) : input.pane.title;
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
+export type OwnedChildToClose={adapter:Pick<WezTermHostAdapter,"killOwnedPane">;pane:WezTermPaneHandle};
+export async function closeCompletedOwnedChildren(completions:readonly ChildSessionCompletion[],ownedChildren:Map<string,OwnedChildToClose>):Promise<string[]>{
+ const failed:string[]=[];
+ for(const completion of completions){
+   const owned=ownedChildren.get(completion.launchId);
+   if(!owned) continue;
+   ownedChildren.delete(completion.launchId);
+   if(owned.pane.ownedPaneId!==completion.paneId){failed.push(completion.childName);continue;}
+   try{await owned.adapter.killOwnedPane(owned.pane);}catch{failed.push(completion.childName);}
+ }
+ return failed;
+}
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
 export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"], sessionName?:string):Promise<void> {
@@ -204,6 +216,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  const completionStore=createCompletionStore(completionRoot());
  const completionTurnGate=new CompletionTurnGate();
  const monitoredParents=new Set<string>(), drainingParents=new Set<string>();
+ const ownedChildren=new Map<string,OwnedChildToClose>();
  let launchedChildren=false, upstreamCompletionReported=false, deferUpstreamCompletion=false;
  const publishProgressUpstream=async(ctx:Ctx,state:ChildProgressState,detail:string)=>{
    if(ctx.hasUI!==true) return false;
@@ -242,6 +255,9 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
        completionTurnGate.queue();
        try{
          pi.sendUserMessage(renderCompletionFollowUp(batch),{deliverAs:"followUp"});
+         const closeFailures=await closeCompletedOwnedChildren(batch.completions,ownedChildren);
+         if(closeFailures.length>0)
+           setRuntimeStatus(ctx,names,"working",`${detail} No se pudieron cerrar automáticamente: ${closeFailures.join(", ")}.`,batch.remaining);
        }catch(error){
          completionTurnGate.rollbackQueue();
          for(const completion of batch.completions){
@@ -382,7 +398,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source WezTerm tab title, falling back to the source session name (`<source>: <title>`), unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source WezTerm tab title, falling back to the source session name (`<source>: <title>`), unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title; pane.closeOnComplete:true asks the parent to close only that runtime-owned pane after its completion follow-up was queued. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
@@ -392,7 +408,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         {type:"object",properties:{kind:{const:"window"}},required:["kind"],additionalProperties:false},
         {type:"object",properties:{kind:{const:"split"},direction:{enum:["left","right","top","bottom"]},percent:{type:"number",exclusiveMinimum:0,exclusiveMaximum:100}},required:["kind","direction","percent"],additionalProperties:false}
       ]},
-      pane:{type:"object",properties:{title:{type:"string",minLength:1,maxLength:500},onExit:{type:"string",enum:["close","keep-open"]}},required:["title","onExit"],additionalProperties:false},
+      pane:{type:"object",properties:{title:{type:"string",minLength:1,maxLength:500},onExit:{type:"string",enum:["close","keep-open"]},closeOnComplete:{type:"boolean"}},required:["title","onExit"],additionalProperties:false},
       fresh:{type:"boolean",const:true},
       persistence:{type:"string",enum:["saved","ephemeral"]},
       model:{anyOf:[
@@ -408,7 +424,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
     },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for an adjacent named tab, {kind:'window'} for a dedicated window, or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for an adjacent named tab, {kind:'window'} for a dedicated window, or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open',closeOnComplete?:boolean} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       let cwdPath=raw.cwd;
@@ -445,8 +461,9 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
               ...(runtime.harness.agentDir?{agentDir:runtime.harness.agentDir}:{})
             },translated.executable,translated.argv)]
           }),
-          onReady:async ready=>{
+          onReady:async(ready,pane)=>{
             await completionStore.register({version:1,launchId:ready.launchId,parentSessionId:runtime.harness.sessionId!,childSessionId:ready.sessionId,childName:value.pane.title,paneId:ready.paneId,startedAt:Date.now()});
+            if(value.pane.closeOnComplete) ownedChildren.set(ready.launchId,{adapter,pane});
             launchedChildren=true;
             setRuntimeStatus(ctx,value.pane.title,"working","Sesión iniciada; estado visible y retorno automático activos.");
             await publishProgressUpstream(ctx,"waiting",`Sesión hija activa: ${value.pane.title}; esperando su retorno automático.`).catch(()=>false);

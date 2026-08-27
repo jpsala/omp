@@ -4,7 +4,7 @@ import type { WezTermPaneHandle, WezTermHostAdapter } from "./runtime-host-wezte
 import { openPromptChannel, type PromptChannelHandle } from "./runtime-prompt-channel.ts";
 export type LaunchRequest = SpawnAgentSessionRequestV1;
 export interface LaunchEnvironment { launchId:string; nonce:string; promptHash:string; sourcePaneId:string; instanceRef:string; parentSessionId:string }
-export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"window"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; onReady?:(result:LaunchResult)=>Promise<void>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
+export interface LaunchDeps { adapter: Pick<WezTermHostAdapter,"split"|"tab"|"window"|"finalizeTab"|"focus"|"killOwnedPane">; markers:MarkerStore; now?:()=>number; random?:()=>Uint8Array; nonce?:()=>string; pollMs?:number; timeoutMs?:number; sleep?:(ms:number)=>Promise<void>; signal?:AbortSignal; openPromptChannel?:(prompt:string)=>Promise<PromptChannelHandle>; buildChild:(request:LaunchRequest,env:LaunchEnvironment)=>Promise<{program:string;args:readonly string[];env?:Record<string,string|undefined>}>; onReady?:(result:LaunchResult,pane:WezTermPaneHandle)=>Promise<void>; source:{instanceRef:string;paneId:string};parentSessionId:string;model?:string }
 export interface LaunchResult { ok:true; launchId:string; paneId:string; sessionId:string; model:string }
 export type LaunchFailureStage = "prompt_channel" | "build_child" | "create_pane" | "finalize_tab" | AckStage | "focus" | "register_completion";
 export type RollbackStatus = "not-needed" | "completed" | "failed";
@@ -125,7 +125,7 @@ export async function launchAgent(request:LaunchRequest,deps:LaunchDeps):Promise
     await deps.markers.cleanup(id);
     const result:LaunchResult={ok:true,launchId:id,paneId:h.ownedPaneId,sessionId:first.sessionId,model:first.model};
     stage="register_completion";
-    await deps.onReady?.(result);
+    await deps.onReady?.(result,h);
     return result;
   }catch(e){
     return fail(e);

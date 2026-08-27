@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
 import { markerRoot } from "../src/runtime-handshake.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -92,13 +92,14 @@ test("extension registers context and an explicit nested launch contract", async
       cwd: "C:\\dev\\omp",
       prompt: "orchestrate",
       placement: { kind: "window" },
-      pane: { title: "Orquestador", onExit: "keep-open" },
+      pane: { title: "Orquestador", onExit: "keep-open", closeOnComplete: true },
       fresh: true,
       persistence: "saved",
       model: { mode: "inherit" },
       focus: true,
     }, "Sesión extensa", "OMP").pane.title).toBe("OMP: Orquestador");
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
+    expect(schema.properties?.pane.properties).toHaveProperty("closeOnComplete");
     expect(schema.properties?.model.anyOf).toHaveLength(2);
     expect(schema.properties?.workflow.required).toEqual(["mode"]);
     expect(schema.properties?.workflow.additionalProperties).toBeFalse();
@@ -247,15 +248,50 @@ test("prefixes tab titles with the source session without duplicating inherited 
   expect(childSessionTitle(undefined, "Implementador")).toBe("Implementador");
   expect(childSessionTitle("x".repeat(600), "child").length).toBeLessThanOrEqual(500);
 });
+test("closes only matching runtime-owned panes after receiving completions", async () => {
+  const closed: string[] = [];
+  const pane = (ownedPaneId: string) => ({
+    instanceRef: "wez-instance",
+    sourcePaneId: "source-pane",
+    ownedPaneId,
+    location: { instanceRef: "wez-instance", windowId: "1", tabId: "1", paneId: ownedPaneId },
+  });
+  const adapter = { killOwnedPane: async (handle: { ownedPaneId: string }) => { closed.push(handle.ownedPaneId); } };
+  const owned = new Map([
+    ["launch-a", { adapter, pane: pane("pane-a") }],
+    ["launch-mismatch", { adapter, pane: pane("pane-b") }],
+  ]);
+  const completion = (launchId: string, childName: string, paneId: string) => ({
+    version: 1 as const,
+    launchId,
+    parentSessionId: "parent",
+    childSessionId: `session-${launchId}`,
+    childName,
+    paneId,
+    status: "completed" as const,
+    summary: "done",
+    completedAt: Date.now(),
+  });
+  const failures = await closeCompletedOwnedChildren([
+    completion("launch-a", "Worker A", "pane-a"),
+    completion("launch-unowned", "Manual tab", "pane-manual"),
+    completion("launch-mismatch", "Wrong pane", "other-pane"),
+  ], owned);
+  expect(closed).toEqual(["pane-a"]);
+  expect(failures).toEqual(["Wrong pane"]);
+  expect(owned.size).toBe(0);
+});
 test("builds a closed dedicated-window orchestration command", () => {
   const prompt = buildOrchestratePrompt('resolver "metadata"');
   expect(prompt).toContain(JSON.stringify('resolver "metadata"'));
   expect(prompt).toContain('placement {kind:"window"}');
-  expect(prompt).toContain('pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open"}');
+  expect(prompt).toContain('pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}');
   expect(prompt).toContain('fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true');
   expect(prompt).toContain("si no, trabaja solo");
   expect(prompt).toContain("paraleliza únicamente frentes independientes");
   expect(prompt).toContain("retornos automáticos");
+  expect(prompt).toContain("pane.closeOnComplete:true");
+  expect(prompt).toContain("cerrará el tab owner sólo después de entregar su resultado");
   expect(prompt).toContain("agent_runtime_status");
   expect(prompt).toContain("working");
   expect(prompt).toContain("waiting");
