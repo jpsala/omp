@@ -6,7 +6,7 @@ export interface AgentRuntimeContextV1 {
  version: 1;
  harness: { id: HarnessId; sessionId?: string; agentDir?: string; model?: { provider: string; id: string; thinking?: string }; hasUI: boolean };
  host: { kind: HostKind; provider: string; trust: HostTrust };
- location?: { instanceRef: string; windowId?: string; tabId?: string; paneId?: string; workspace?: string; cwd: string };
+ location?: { instanceRef: string; windowId?: string; tabId?: string; paneId?: string; tabTitle?: string; workspace?: string; cwd: string };
  capabilities: Readonly<Record<string, boolean | readonly string[]>>;
 }
 export type AgentSessionWorkflow = {
@@ -27,7 +27,7 @@ export function validateAgentRuntimeContext(value: unknown): AgentRuntimeContext
  const result: AgentRuntimeContextV1={version:1,harness:{id:str(h.id,"context.harness.id"),hasUI:bool(h.hasUI,"context.harness.hasUI")},host:{kind:host.kind as HostKind,provider:str(host.provider,"context.host.provider"),trust:host.trust as HostTrust},capabilities:{}};
  for(const k of ["sessionId","agentDir"] as const) if(h[k]!==undefined) result.harness[k]=str(h[k],`context.harness.${k}`);
  if(h.model!==undefined){const m=keys(h.model,["provider","id","thinking"],"context.harness.model"); result.harness.model={provider:str(m.provider,"model.provider"),id:str(m.id,"model.id"),...(m.thinking===undefined?{}:{thinking:str(m.thinking,"model.thinking")})};}
- if(r.location!==undefined){const l=keys(r.location,["instanceRef","windowId","tabId","paneId","workspace","cwd"],"context.location"); const loc={instanceRef:str(l.instanceRef,"location.instanceRef"),cwd:str(l.cwd,"location.cwd")} as NonNullable<AgentRuntimeContextV1["location"]>; for(const k of ["windowId","tabId","paneId","workspace"] as const) if(l[k]!==undefined) loc[k]=str(l[k],`location.${k}`); result.location=loc;}
+ if(r.location!==undefined){const l=keys(r.location,["instanceRef","windowId","tabId","paneId","tabTitle","workspace","cwd"],"context.location"); const loc={instanceRef:str(l.instanceRef,"location.instanceRef"),cwd:str(l.cwd,"location.cwd")} as NonNullable<AgentRuntimeContextV1["location"]>; for(const k of ["windowId","tabId","paneId","tabTitle","workspace"] as const) if(l[k]!==undefined) loc[k]=str(l[k],`location.${k}`); result.location=loc;}
  const c = (r.capabilities && typeof r.capabilities === "object" && !Array.isArray(r.capabilities)) ? r.capabilities as Record<string, unknown> : (()=>{ throw new Error("context.capabilities must be an object"); })();
  const caps: Record<string,boolean|readonly string[]> = {};
  for(const [k,v] of Object.entries(c)){ if(typeof v!=="boolean" && !(Array.isArray(v)&&v.every(x=>typeof x==="string"))) throw new Error(`context.capabilities.${k} must be boolean or string array`); caps[k]=Array.isArray(v)?[...v as string[]]:v; }

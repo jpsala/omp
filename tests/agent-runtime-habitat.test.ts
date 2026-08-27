@@ -11,13 +11,13 @@ interface ToolSpec { name: string; label: string; description: string; approval:
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
 interface PluginApi { on: (event: string, handler: Function) => void; registerTool: (definition: ToolSpec) => void; registerCommand: (name: string, definition: CommandSpec) => void; sendUserMessage: (content: string, options?: { deliverAs?: "steer" | "followUp" }) => void; getThinkingLevel: () => string; getSessionName: () => string | undefined; setSessionName: (name: string) => Promise<void>; setInterval: (callback: (...args: unknown[]) => void, ms?: number) => unknown; pi: { getAgentDir: () => string } }
 const env = { TERM_PROGRAM: "WezTerm", WEZTERM_PANE: "42", WEZTERM_UNIX_SOCKET: "\\\\?\\pipe\\wez" };
-const listed = JSON.stringify([{ pane_id: 42, window_id: 7, tab_id: 8, workspace: "ws", cwd: "C:\\dev\\omp" }]);
+const listed = JSON.stringify([{ pane_id: 42, window_id: 7, tab_id: 8, tab_title: "OMP", workspace: "ws", cwd: "C:\\dev\\omp" }]);
 
 const detect = (overrides: Record<string, string | undefined> = {}, stdout = listed, status = 0, runner?: HostProbeRunner) => detectRuntimeContext({ env: { ...env, ...overrides }, run: runner ?? (async () => ({ status, stdout })) });
 
 test("detects valid OMP + WezTerm context without secrets", async () => {
   const value = await detect();
-  expect(value).toEqual({ version: 1, harness: { id: "omp", hasUI: false }, host: { kind: "terminal", provider: "WezTerm", trust: "validated-local-probe" }, location: { instanceRef: "\\\\?\\pipe\\wez", windowId: "7", tabId: "8", paneId: "42", workspace: "ws", cwd: "C:\\dev\\omp" }, capabilities: {} });
+  expect(value).toEqual({ version: 1, harness: { id: "omp", hasUI: false }, host: { kind: "terminal", provider: "WezTerm", trust: "validated-local-probe" }, location: { instanceRef: "\\\\?\\pipe\\wez", windowId: "7", tabId: "8", paneId: "42", tabTitle: "OMP", workspace: "ws", cwd: "C:\\dev\\omp" }, capabilities: {} });
   expect(JSON.stringify(value)).not.toContain("TOKEN");
   expect(JSON.stringify(value)).not.toContain("SECRET");
   expect(JSON.stringify(value)).not.toContain("WEZTERM_UNIX_SOCKET");
@@ -97,7 +97,7 @@ test("extension registers context and an explicit nested launch contract", async
       persistence: "saved",
       model: { mode: "inherit" },
       focus: true,
-    }, "OMP Habitat").pane.title).toBe("OMP Habitat: Orquestador");
+    }, "Sesión extensa", "OMP").pane.title).toBe("OMP: Orquestador");
     expect(schema.properties?.pane.required).toEqual(["title", "onExit"]);
     expect(schema.properties?.model.anyOf).toHaveLength(2);
     expect(schema.properties?.workflow.required).toEqual(["mode"]);

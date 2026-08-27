@@ -90,10 +90,12 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   efímero, dos acks, hash, ownership del pane y fast fail sin persistir prompt,
   URL ni nonce.
   Para orquestaciones visibles, `placement:{kind:"window"}` crea un owner en
-  ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos.
-  Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
-  por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
-  hijas. El dispatcher conserva un widget persistente con la última transición
+  ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos
+  cuya raíz es el título real del tab dispatcher; el nombre de sesión queda como
+  fallback cuando WezTerm no expone ese título. Cada hija registra un mailbox
+  runtime transitorio: su settle reanuda al parent por follow-up, y un
+  orquestador no reporta upstream hasta integrar todas sus hijas. El dispatcher
+  conserva un widget persistente con la última transición
   comprobada `working|waiting|blocked`; lanzamientos y retornos anidados se
   propagan automáticamente y `agent_runtime_status` cubre estados conocidos
   sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked` difieren

@@ -183,9 +183,9 @@ export function childSessionTitle(sourceName: string | undefined, requestedTitle
  const suffix=requested.slice(0,MAX_SESSION_TITLE_LENGTH-prefix.length-separator.length).trimEnd();
  return `${prefix}${separator}${suffix}`;
 }
-export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: string): SpawnAgentSessionRequestV1 {
+export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: string, sourceTabTitle?: string): SpawnAgentSessionRequestV1 {
  const placement=input.placement??DEFAULT_SESSION_PLACEMENT;
- const title=placement.kind!=="split" ? childSessionTitle(sourceName,input.pane.title) : input.pane.title;
+ const title=placement.kind!=="split" ? childSessionTitle(sourceTabTitle??sourceName,input.pane.title) : input.pane.title;
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
@@ -382,7 +382,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source session name (`<source>: <title>`) unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source WezTerm tab title, falling back to the source session name (`<source>: <title>`), unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
@@ -411,17 +411,17 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for an adjacent named tab, {kind:'window'} for a dedicated window, or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open'} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
-      const request=normalizeSessionToolInput(raw,pi.getSessionName());
-      let cwdPath=request.cwd;
+      let cwdPath=raw.cwd;
       try {
         if (cwdPath.startsWith("file:")) cwdPath=fileURLToPath(cwdPath);
         const cwdStatus=await stat(cwdPath);
         if (!cwdStatus.isDirectory()) throw new Error("not a directory");
       } catch {
-        const result={status:"unsupported",reason:`launch cwd must already exist as a directory: ${request.cwd}`};
+        const result={status:"unsupported",reason:`launch cwd must already exist as a directory: ${raw.cwd}`};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       const runtime=await context(ctx);
+      const request=normalizeSessionToolInput(raw,pi.getSessionName(),runtime.location?.tabTitle);
       if(!runtime.harness.hasUI)
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"})}],details:{status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"}};
       const translated=await translateOmpRequest(request,runtime);
