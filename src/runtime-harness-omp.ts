@@ -68,8 +68,10 @@ function validRequest(value: unknown): value is SpawnAgentSessionRequestV1 {
   const pane = request.pane;
   if (!pane || typeof pane !== "object" || Array.isArray(pane)) return false;
   const paneOptions = pane as Record<string, unknown>;
-  if (Object.keys(paneOptions).length !== 2 || typeof paneOptions.title !== "string" || !paneOptions.title.trim()
-    || (paneOptions.onExit !== "close" && paneOptions.onExit !== "keep-open")) return false;
+  if (Object.keys(paneOptions).some(key => !["title", "onExit", "closeOnComplete"].includes(key))
+    || typeof paneOptions.title !== "string" || !paneOptions.title.trim()
+    || (paneOptions.onExit !== "close" && paneOptions.onExit !== "keep-open")
+    || (paneOptions.closeOnComplete !== undefined && typeof paneOptions.closeOnComplete !== "boolean")) return false;
   const placement = request.placement;
   if (!placement || typeof placement !== "object" || Array.isArray(placement)) return false;
   const p = placement as Record<string, unknown>;

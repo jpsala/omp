@@ -39,6 +39,13 @@ describe("OMP Phase 3 translation", () => {
     const result = await translateOmpRequest({ ...request(), placement: { kind: "window" as const } }, context());
     expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH] });
   });
+  test("accepts close-on-complete pane ownership without changing child argv", async () => {
+    const result = await translateOmpRequest({
+      ...request(),
+      pane: { ...request().pane, closeOnComplete: true },
+    }, context());
+    expect(result).toMatchObject({ argv: ["--cwd", "C:/dev/omp", "--model", "fallback/wrong", "--config", OMP_FRESH_OVERLAY_PATH] });
+  });
   test("incompatible non-fresh request is structured", async () => {
     const result = await translateOmpRequest({ ...request(), fresh: false }, context());
     expect(result).toEqual({ kind: "unsupported", code: "incompatible-request", message: "Only fresh sessions are supported" });
@@ -83,6 +90,7 @@ describe("OMP Phase 3 translation", () => {
       [{ ...request(), cwd: 42 }, context()],
       [{ ...request(), model: { mode: "bogus" } }, context()],
       [{ ...request(), persistence: "mystery" }, context()],
+      [{ ...request(), pane: { ...request().pane, closeOnComplete: "yes" } }, context()],
       [request(), { ...context(), version: 2 }],
     ];
     for (const [badRequest, badContext] of cases) {
