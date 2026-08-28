@@ -49,6 +49,13 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   con thinking, preámbulos, métricas y toda la actividad de tools ocultos.
   El smoke real de 18.0.6 verificó el selector con sus tres presets, el perfil
   `zen` y 39 opciones; los 23 tests focales cubren filtrado y persistencia.
+- Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
+  oficiales `message_update` sólo en sesiones TUI y publica un archivo por
+  sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. El archivo muestra conversación,
+  thinking como blockquote, Markdown crudo y estado `generating|idle`; omite
+  payloads de tools y nunca vive dentro de Git. `/live-markdown` informa la ruta
+  activa. Un smoke real capturó la respuesta cuando llevaba 88/120 líneas con
+  `status: generating` y luego las 120 líneas completas con `status: idle`.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.6`, con el
   addon Win32 18.0.6 embebido en el build. `bun run deploy:omp` usa backups
   únicos para rotar aun cuando sesiones anteriores mantienen artifacts

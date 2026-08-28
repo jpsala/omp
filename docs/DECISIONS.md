@@ -569,3 +569,23 @@ recarga o reapertura pierde deliberadamente ese cleanup automático y conserva
 el tab sobreviviente: evitar cerrar un pane reutilizado pesa más que recuperar
 la limpieza visual. Un fallo de cierre no descarta ni bloquea el resultado; un
 fallo sincrónico al encolar el follow-up conserva el pane y restaura el mailbox.
+
+## 2026-08-28 — Espejo Markdown fuera de Git mediante eventos oficiales
+
+La lectura de una respuesta mientras todavía se genera no justifica otro patch
+del renderer. La extensión `live-markdown.ts` consume `message_update`, conserva
+el Markdown crudo del asistente y reescribe un archivo por sesión cada 60 ms.
+Thinking se presenta como blockquote, las tools no se copian y el documento
+reconstruye primero la rama persistida mediante `SessionManager.getBranch()`.
+
+Los archivos viven por defecto en `C:/dev/omp-live/<ruta-relativa-del-repo>/`,
+nunca dentro del checkout ni de Git. Cada nombre fija fecha, hora, título o pane
+y prefijo de session id; el propio documento conserva cwd, sesión, pane, estado
+y timestamp. `/live-markdown` muestra la ruta activa y
+`OMP_LIVE_MARKDOWN_ROOT` permite cambiar sólo la raíz. Sesiones headless no
+publican y una sesión interactiva vacía no deja archivos huérfanos.
+
+Se acepta que VS Code u Obsidian vuelvan a renderizar el archivo completo: este
+primer contrato busca lectura Markdown viva sin modificar OMP. Si el preview no
+preserva la posición al hacer scroll, el siguiente paso es un visor local sobre
+el mismo productor, no volver mutable el scrollback nativo.

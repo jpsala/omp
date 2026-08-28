@@ -91,6 +91,24 @@ selector modal pequeño con presets, perfiles guardados y filtros individuales;
 al cerrar se continúa en el transcript principal. Main no participa.
 
 
+## Espejo Markdown durante streaming
+
+El texto normal del asistente permanece mutable hasta `message_end`, por lo que
+el renderer nativo no puede retirarlo de forma segura al scrollback mientras
+crece. Para lectura paralela sin otro delta core, `extensions/live-markdown.ts`
+consume `message_update` y publica Markdown local por sesión en
+`C:/dev/omp-live/<repo>/<fecha>/`. Usa la rama persistida como base, reemplaza
+el snapshot vivo con debounce de 60 ms, representa thinking como blockquote y
+omite payloads de tools. Sesiones background/headless y sesiones interactivas
+vacías no generan archivos.
+
+La raíz central conserva la jerarquía relativa bajo `C:/dev` sin introducir
+transcripts privados en los checkouts. `/live-markdown` muestra el archivo
+actual y `OMP_LIVE_MARKDOWN_ROOT` permite otro destino. Esta salida prueba el
+contrato de streaming con VS Code u Obsidian; si esos previews no conservan el
+scroll del lector, la evolución correcta es un visor local que consuma el mismo
+productor, no publicar Markdown incompleto en el scrollback de OMP.
+
 ## Mercado de renderers y clientes (2026-08-15)
 
 Revalidado con `omp/17.3.0` local y las fuentes primarias enlazadas.
