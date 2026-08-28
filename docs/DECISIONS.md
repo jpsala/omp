@@ -456,10 +456,11 @@ la extensión avisa una sola vez y exige un tab nuevo, sin repetir errores.
 
 La instalación Windows adopta un único basename ejecutable: `omp.exe`.
 `scripts/deploy-omp-workstation.ts` es el único flujo downstream de publicación:
-valida PE/tamaño, staging y rotación con rollback, retira `omp.com` antes del
-cutover y deja backups bloqueados con sufijos fuera de `PATHEXT`. El audit falla
-si `omp.com` reaparece. No se corrige modificando `PATHEXT`, aliases ni perfiles
-de shell.
+exige el path explícito del artifact para impedir que un nombre implícito
+degrade el launcher a un build granular anterior; valida PE/tamaño, staging y
+rotación con rollback, retira `omp.com` antes del cutover y deja backups
+bloqueados con sufijos fuera de `PATHEXT`. El audit falla si `omp.com` reaparece.
+No se corrige modificando `PATHEXT`, aliases ni perfiles de shell.
 
 ## 2026-08-25 — `omp update` exige rebase explícito del delta downstream
 

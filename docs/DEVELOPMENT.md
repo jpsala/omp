@@ -28,14 +28,16 @@ omp
 
 ## Deploy downstream de OMP en Windows
 
-El único launcher canónico es `~/.bun/bin/omp.exe`. Para publicar un build:
+El único launcher canónico es `~/.bun/bin/omp.exe`. Para publicar un build,
+pasar siempre el artifact exacto ya compilado y verificado:
 
 ```powershell
 bun run deploy:omp -- C:\ruta\al\build\omp.exe
 ```
 
-Sin argumento usa `~/.bun/bin/omp-transcript-filters.exe`. El deploy valida que
-el artifact sea PE, copia a un staging en el mismo directorio, rota
+El comando sin artifact falla: un nombre implícito puede apuntar a un build
+granular anterior y degradar silenciosamente el launcher. El deploy valida que
+el artifact explícito sea PE, copia a un staging en el mismo directorio, rota
 atómicamente `omp.exe` y retira cualquier `omp.com`; nunca escribe ambos
 launchers. Backups bloqueados por sesiones vivas quedan con sufijo no ejecutable
 y se limpian en la próxima corrida. `bun run audit` falla si reaparece

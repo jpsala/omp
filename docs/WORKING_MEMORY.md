@@ -65,10 +65,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   la sesión. No se operó VS Code u Obsidian; las lecturas por etapas del mismo
   archivo verificaron el contrato vivo.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.6`, con el
-  addon Win32 18.0.6 embebido en el build. `bun run deploy:omp` usa backups
-  únicos para rotar aun cuando sesiones anteriores mantienen artifacts
-  mapeados, retira `omp.com` y deja fuera de `PATHEXT` cualquier cleanup
-  pendiente. El audit rechaza futuras colisiones. El update oficial reemplazó
+  addon Win32 18.0.6 embebido en el build. `bun run deploy:omp -- <artifact>`
+  exige el PE exacto, usa backups únicos para rotar aun cuando sesiones
+  anteriores mantienen artifacts mapeados, retira `omp.com` y deja fuera de
+  `PATHEXT` cualquier cleanup pendiente. El audit rechaza futuras colisiones. El update oficial reemplazó
   el antiguo delta downstream de status/cuota; OMP 18 usa ahora su
   implementación oficial y sólo se rebasaron los filtros granulares.
 - Propuesta upstream de granularidad publicada el 2026-08-25 en

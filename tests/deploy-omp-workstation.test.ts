@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deployOmpWorkstation } from "../scripts/deploy-omp-workstation.ts";
+import { deploymentSourceArgument, deployOmpWorkstation } from "../scripts/deploy-omp-workstation.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -15,6 +15,15 @@ async function fakeExecutable(path: string, marker: number): Promise<void> {
 	bytes[1] = 0x5a;
 	await writeFile(path, bytes);
 }
+
+test("requires the exact compiled artifact path", () => {
+	expect(() => deploymentSourceArgument(["bun", "deploy-omp-workstation.ts"])).toThrow(
+		"Usage: bun run deploy:omp -- <compiled-omp.exe>",
+	);
+	expect(deploymentSourceArgument(["bun", "deploy-omp-workstation.ts", "C:\\build\\omp.exe"])).toBe(
+		"C:\\build\\omp.exe",
+	);
+});
 
 test("deploys only omp.exe and retires a conflicting omp.com", async () => {
 	const root = await mkdtemp(join(tmpdir(), "omp-deploy-"));

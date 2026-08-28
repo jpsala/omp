@@ -95,8 +95,16 @@ export async function deployOmpWorkstation(source: string, binDir = join(homedir
 	return { target, retiredCollision: collisionRetired, pendingCleanup };
 }
 
+export function deploymentSourceArgument(argv: readonly string[]): string {
+	const source = argv[2]?.trim();
+	if (!source) {
+		throw new Error("Usage: bun run deploy:omp -- <compiled-omp.exe>");
+	}
+	return source;
+}
+
 if (import.meta.main) {
-	const source = process.argv[2] ?? join(homedir(), ".bun", "bin", "omp-transcript-filters.exe");
+	const source = deploymentSourceArgument(process.argv);
 	const result = await deployOmpWorkstation(source);
 	console.log(`OMP deployed: ${result.target}`);
 	if (result.retiredCollision) console.log("Retired conflicting omp.com launcher");
