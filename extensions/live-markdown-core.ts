@@ -15,31 +15,31 @@ export interface MirrorMessage {
 	content?: string | readonly MirrorContentBlock[];
 }
 
+export interface MirrorVisibility {
+	includeThinking: boolean;
+	includeAssistantToolPreambles: boolean;
+}
+
+export const PRIVATE_MIRROR_VISIBILITY: MirrorVisibility = {
+	includeThinking: false,
+	includeAssistantToolPreambles: false,
+};
+
 export interface LiveMarkdownMetadata {
 	repository: string;
 	cwd: string;
 	sessionId: string;
-	sessionName: string;
 	pane?: string;
 	generating: boolean;
 	updatedAt: Date;
 }
 
 interface RenderedMessage {
-	role: "user" | "assistant";
 	body: string;
 }
 
 function cleanText(value: string): string {
 	return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").replaceAll("\r\n", "\n");
-}
-
-function textBlocks(message: MirrorMessage): string[] {
-	if (typeof message.content === "string") return [cleanText(message.content)];
-	if (!Array.isArray(message.content)) return [];
-	return message.content
-		.filter(block => block?.type === "text" && typeof block.text === "string")
-		.map(block => cleanText(block.text!));
 }
 
 function quoteThinking(value: string): string {
@@ -48,55 +48,77 @@ function quoteThinking(value: string): string {
 	return ["> **Pensando**", ">", ...lines.map(line => `> ${line}`)].join("\n");
 }
 
-export function renderMirrorMessage(message: MirrorMessage): RenderedMessage | undefined {
-	if (message.role === "user") {
-		const body = textBlocks(message).join("\n\n").trim();
-		return body ? { role: "user", body } : undefined;
-	}
+export function renderMirrorMessage(
+	message: MirrorMessage,
+	visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY,
+): RenderedMessage | undefined {
 	if (message.role !== "assistant" || !Array.isArray(message.content)) return undefined;
 
+	let lastToolCall = -1;
+	for (let index = 0; index < message.content.length; index += 1) {
+		if (message.content[index]?.type === "toolCall") lastToolCall = index;
+	}
+
 	const blocks: string[] = [];
-	for (const block of message.content) {
-		if (block?.type === "thinking" && typeof block.thinking === "string") {
+	for (let index = 0; index < message.content.length; index += 1) {
+		const block = message.content[index];
+		if (
+			visibility.includeThinking &&
+			block?.type === "thinking" &&
+			typeof block.thinking === "string"
+		) {
 			const thinking = quoteThinking(block.thinking);
 			if (thinking) blocks.push(thinking);
-		} else if (block?.type === "text" && typeof block.text === "string") {
+		} else if (
+			block?.type === "text" &&
+			typeof block.text === "string" &&
+			(visibility.includeAssistantToolPreambles || index > lastToolCall)
+		) {
 			const text = cleanText(block.text).trim();
 			if (text) blocks.push(text);
 		}
 	}
 	const body = blocks.join("\n\n").trim();
-	return body ? { role: "assistant", body } : undefined;
+	return body ? { body } : undefined;
 }
 
 export class LiveMarkdownDocument {
-	#messages: RenderedMessage[] = [];
-	#liveAssistant: RenderedMessage | undefined;
+	#messages: MirrorMessage[] = [];
+	#liveAssistant: MirrorMessage | undefined;
 
 	reset(messages: readonly MirrorMessage[]): void {
-		this.#messages = messages.map(renderMirrorMessage).filter((message): message is RenderedMessage => Boolean(message));
+		this.#messages = messages.filter(message => message.role === "assistant");
 		this.#liveAssistant = undefined;
-	}
-
-	appendUser(message: MirrorMessage): void {
-		const rendered = renderMirrorMessage(message);
-		if (rendered?.role === "user") this.#messages.push(rendered);
 	}
 
 	updateAssistant(message: MirrorMessage): void {
-		const rendered = renderMirrorMessage(message);
-		this.#liveAssistant = rendered?.role === "assistant" ? rendered : undefined;
+		this.#liveAssistant = message.role === "assistant" ? message : undefined;
 	}
 
 	finishAssistant(message: MirrorMessage): void {
-		const rendered = renderMirrorMessage(message) ?? this.#liveAssistant;
-		if (rendered?.role === "assistant") this.#messages.push(rendered);
+		const finalMessage = message.role === "assistant" ? message : this.#liveAssistant;
+		if (finalMessage) this.#messages.push(finalMessage);
 		this.#liveAssistant = undefined;
 	}
 
-	render(metadata: LiveMarkdownMetadata): string {
-		const messages = this.#liveAssistant ? [...this.#messages, this.#liveAssistant] : this.#messages;
-		const sections = messages.map(message => `## ${message.role === "user" ? "Vos" : "Agente"}\n\n${message.body}`);
+	hasContent(visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY): boolean {
+		if (this.#messages.some(message => renderMirrorMessage(message, visibility))) return true;
+		return Boolean(this.#liveAssistant && renderMirrorMessage(this.#liveAssistant, visibility));
+	}
+
+	render(
+		metadata: LiveMarkdownMetadata,
+		visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY,
+	): string {
+		const sections: string[] = [];
+		for (const message of this.#messages) {
+			const rendered = renderMirrorMessage(message, visibility);
+			if (rendered) sections.push(`## Agente\n\n${rendered.body}`);
+		}
+		if (this.#liveAssistant) {
+			const rendered = renderMirrorMessage(this.#liveAssistant, visibility);
+			if (rendered) sections.push(`## Agente\n\n${rendered.body}`);
+		}
 		const paneLine = metadata.pane ? `\n- **Pane:** ${metadata.pane}` : "";
 		return [
 			"---",
@@ -107,7 +129,7 @@ export class LiveMarkdownDocument {
 			`updated_at: ${JSON.stringify(metadata.updatedAt.toISOString())}`,
 			"---",
 			"",
-			`# ${cleanText(metadata.sessionName)}`,
+			`# ${cleanText(metadata.repository)} · ${cleanText(metadata.sessionId)}`,
 			"",
 			`- **Repositorio:** ${metadata.repository}`,
 			`- **Ruta:** \`${cleanText(metadata.cwd)}\``,
@@ -153,10 +175,14 @@ function twoDigits(value: number): string {
 	return String(value).padStart(2, "0");
 }
 
+function sessionFileId(sessionId: string): string {
+	const value = sessionId.trim();
+	return value ? encodeURIComponent(value).replaceAll("*", "%2A") : "sin-id";
+}
+
 export function sessionMarkdownPath(options: {
 	cwd: string;
 	sessionId: string;
-	sessionName?: string;
 	pane?: string;
 	startedAt: Date;
 	outputRoot?: string;
@@ -165,8 +191,8 @@ export function sessionMarkdownPath(options: {
 	const { startedAt } = options;
 	const day = `${startedAt.getFullYear()}-${twoDigits(startedAt.getMonth() + 1)}-${twoDigits(startedAt.getDate())}`;
 	const time = `${twoDigits(startedAt.getHours())}-${twoDigits(startedAt.getMinutes())}`;
-	const label = sanitizeFileSegment(options.sessionName || (options.pane ? `pane ${options.pane}` : "sesión"), "sesión");
-	const id = sanitizeFileSegment(options.sessionId, "sin-id").slice(0, 12);
+	const label = sanitizeFileSegment(options.pane ? `pane ${options.pane}` : "sesión", "sesión");
+	const id = sessionFileId(options.sessionId);
 	return win32.join(
 		repositoryMirrorDirectory(options.cwd, options.outputRoot, options.devRoot),
 		day,

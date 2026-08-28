@@ -51,11 +51,19 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `zen` y 39 opciones; los 23 tests focales cubren filtrado y persistencia.
 - Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
   oficiales `message_update` sólo en sesiones TUI y publica un archivo por
-  sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. El archivo muestra conversación,
-  thinking como blockquote, Markdown crudo y estado `generating|idle`; omite
-  payloads de tools y nunca vive dentro de Git. `/live-markdown` informa la ruta
-  activa. Un smoke real capturó la respuesta cuando llevaba 88/120 líneas con
-  `status: generating` y luego las 120 líneas completas con `status: idle`.
+  sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. El nombre usa pane y session id
+  completo; el documento contiene sólo respuestas del agente, Markdown crudo y
+  estado `generating|idle`. Nunca copia prompts, nombres derivados del prompt ni
+  payloads de tools; thinking y preámbulos siguen la política viva del
+  transcript y quedan ocultos por defecto si esa API no existe. Las escrituras
+  coalescen el último snapshot y todo I/O corre fuera del lifecycle de OMP:
+  fallar el destino sólo registra el error.
+  `/live-markdown` informa la ruta activa. El smoke real concurrente creó
+  archivos distintos para `omp` y `dictation-tauri`, capturó 50/160 y 76/80
+  líneas con `status: generating`, conservó 160/160 y 80/80 con `status: idle`
+  tras cerrar y reiniciar OMP, y una raíz deliberadamente inválida no interrumpió
+  la sesión. No se operó VS Code u Obsidian; las lecturas por etapas del mismo
+  archivo verificaron el contrato vivo.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.6`, con el
   addon Win32 18.0.6 embebido en el build. `bun run deploy:omp` usa backups
   únicos para rotar aun cuando sesiones anteriores mantienen artifacts

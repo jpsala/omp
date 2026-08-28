@@ -98,16 +98,29 @@ el renderer nativo no puede retirarlo de forma segura al scrollback mientras
 crece. Para lectura paralela sin otro delta core, `extensions/live-markdown.ts`
 consume `message_update` y publica Markdown local por sesión en
 `C:/dev/omp-live/<repo>/<fecha>/`. Usa la rama persistida como base, reemplaza
-el snapshot vivo con debounce de 60 ms, representa thinking como blockquote y
-omite payloads de tools. Sesiones background/headless y sesiones interactivas
-vacías no generan archivos.
+el snapshot vivo con debounce de 60 ms y conserva el session id completo en el
+nombre. Dos procesos concurrentes con ids distintos no comparten archivo.
 
-La raíz central conserva la jerarquía relativa bajo `C:/dev` sin introducir
+El mirror es assistant-only: nunca copia prompts, nombres derivados del prompt
+ni payloads de tools. Thinking y preámbulos de mensajes que invocan tools siguen
+`ctx.ui.getTranscriptVisibility()`; ante un build sin esa API aplica el default
+privado y los omite. Sesiones background/headless y sesiones interactivas sin
+respuesta visible no generan archivos.
+
+La cola coalesce snapshots pendientes y ejecuta `mkdir`/`writeFile` sin hacer
+esperar eventos de agente, mensaje o sesión. Un error del destino se registra y
+la sesión OMP continúa; cerrar o reiniciar no elimina salidas anteriores. La
+raíz central conserva la jerarquía relativa bajo `C:/dev` sin introducir
 transcripts privados en los checkouts. `/live-markdown` muestra el archivo
-actual y `OMP_LIVE_MARKDOWN_ROOT` permite otro destino. Esta salida prueba el
-contrato de streaming con VS Code u Obsidian; si esos previews no conservan el
-scroll del lector, la evolución correcta es un visor local que consuma el mismo
-productor, no publicar Markdown incompleto en el scrollback de OMP.
+actual y `OMP_LIVE_MARKDOWN_ROOT` permite cambiar sólo la raíz.
+
+El smoke concurrente sobre `omp` y `dictation-tauri` observó ambos archivos
+mientras crecían y completos después de cerrar las sesiones; una raíz que
+resolvía dentro de un archivo existente falló sin interrumpir OMP. No se operó
+VS Code u Obsidian: se verificó la actualización por etapas leyendo el mismo
+path. Si esos previews no conservan el scroll del lector, la evolución correcta
+es un visor local que consuma el mismo productor, no publicar Markdown
+incompleto en el scrollback de OMP.
 
 ## Mercado de renderers y clientes (2026-08-15)
 

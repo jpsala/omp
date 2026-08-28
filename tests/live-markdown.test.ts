@@ -15,35 +15,61 @@ test("maps repositories under C dev into a centralized familiar tree", () => {
 	expect(external).toMatch(/^C:\\dev\\omp-live\\_externos\\portal--[a-f0-9]{8}$/);
 });
 
-test("creates chronological stable Markdown paths for one session", () => {
+test("creates chronological paths with the complete session identity", () => {
 	const filePath = sessionMarkdownPath({
 		cwd: "C:\\dev\\omp",
 		sessionId: "12345678-abcd-ef00",
-		sessionName: "Diseño: streaming / Markdown",
 		pane: "2",
 		startedAt: new Date(2026, 7, 28, 15, 7),
 	});
 	expect(filePath).toBe(
-		"C:\\dev\\omp-live\\omp\\2026-08-28\\15-07 - Diseño streaming Markdown - 12345678-abc.md",
+		"C:\\dev\\omp-live\\omp\\2026-08-28\\15-07 - pane 2 - 12345678-abcd-ef00.md",
 	);
+
+	const concurrentPath = sessionMarkdownPath({
+		cwd: "C:\\dev\\omp",
+		sessionId: "12345678-abcd-ef01",
+		pane: "2",
+		startedAt: new Date(2026, 7, 28, 15, 7),
+	});
+	expect(concurrentPath).not.toBe(filePath);
 });
 
-test("renders assistant thinking and prose without tool payloads", () => {
+test("defaults to assistant-only output without internal activity", () => {
+	expect(renderMirrorMessage({ role: "user", content: [{ type: "text", text: "private prompt" }] })).toBeUndefined();
 	const rendered = renderMirrorMessage({
 		role: "assistant",
 		content: [
-			{ type: "thinking", thinking: "Checking the contract\nbefore editing" },
-			{ type: "toolCall", text: "must not leak" },
-			{ type: "text", text: "## Resultado\n\nTexto **útil**." },
+			{ type: "thinking", thinking: "private reasoning" },
+			{ type: "text", text: "internal preamble" },
+			{ type: "toolCall", text: "private tool payload" },
+			{ type: "text", text: "Final answer" },
 		],
 	});
+	expect(rendered).toEqual({ body: "Final answer" });
+});
+
+test("includes thinking and preambles only when visibility allows them", () => {
+	const rendered = renderMirrorMessage(
+		{
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "Checking the contract\nbefore editing" },
+				{ type: "text", text: "Internal preamble" },
+				{ type: "toolCall", text: "must not leak" },
+				{ type: "text", text: "## Resultado\n\nTexto **útil**." },
+			],
+		},
+		{ includeThinking: true, includeAssistantToolPreambles: true },
+	);
 	expect(rendered).toEqual({
-		role: "assistant",
 		body: [
 			"> **Pensando**",
 			">",
 			"> Checking the contract",
 			"> before editing",
+			"",
+			"Internal preamble",
 			"",
 			"## Resultado",
 			"",
@@ -52,7 +78,7 @@ test("renders assistant thinking and prose without tool payloads", () => {
 	});
 });
 
-test("replaces the live assistant snapshot and finalizes it once", () => {
+test("replaces the live assistant snapshot, excludes prompts, and finalizes once", () => {
 	const document = new LiveMarkdownDocument();
 	document.reset([{ role: "user", content: [{ type: "text", text: "Probemos esto" }] }]);
 	document.updateAssistant({ role: "assistant", content: [{ type: "text", text: "Primera" }] });
@@ -62,13 +88,13 @@ test("replaces the live assistant snapshot and finalizes it once", () => {
 		repository: "omp",
 		cwd: "C:\\dev\\omp",
 		sessionId: "session-1",
-		sessionName: "Espejo Markdown",
 		pane: "2",
 		generating: true,
 		updatedAt: new Date("2026-08-28T15:07:00.000Z"),
 	});
 	expect(live).toContain("status: generating");
-	expect(live).toContain("## Vos\n\nProbemos esto");
+	expect(live).not.toContain("Probemos esto");
+	expect(live).not.toContain("## Vos");
 	expect(live).toContain("## Agente\n\nPrimera versión ampliada");
 	expect(live).not.toContain("## Agente\n\nPrimera\n");
 
@@ -80,7 +106,6 @@ test("replaces the live assistant snapshot and finalizes it once", () => {
 		repository: "omp",
 		cwd: "C:\\dev\\omp",
 		sessionId: "session-1",
-		sessionName: "Espejo Markdown",
 		generating: false,
 		updatedAt: new Date("2026-08-28T15:08:00.000Z"),
 	});
