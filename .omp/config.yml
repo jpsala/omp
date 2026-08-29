@@ -1,3 +1,18 @@
+extendedContext: false
+contextPromotion:
+  enabled: false
+compaction:
+  enabled: true
+  midTurnEnabled: true
+  asyncEnabled: true
+  thresholdTokens: 220000
+  methodOrder:
+    - remote
+    - snapcompact
+    - handoff
+    - shake
+    - soft
+
 extensions:
   - extensions/wezterm-attention.ts
   - extensions/agent-runtime-habitat.ts

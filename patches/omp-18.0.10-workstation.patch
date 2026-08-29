@@ -1,5 +1,5 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index d46af36..ec6b4d5 100644
+index d46af36338..ec6b4d57fb 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
 @@ -1291,6 +1291,33 @@ export const SETTINGS_SCHEMA = {
@@ -37,7 +37,7 @@ index d46af36..ec6b4d5 100644
  		type: "boolean",
  		default: false,
 diff --git a/packages/coding-agent/src/extensibility/extensions/types.ts b/packages/coding-agent/src/extensibility/extensions/types.ts
-index d7a0e39..ff44417 100644
+index d7a0e396c5..ff444174f5 100644
 --- a/packages/coding-agent/src/extensibility/extensions/types.ts
 +++ b/packages/coding-agent/src/extensibility/extensions/types.ts
 @@ -253,6 +253,14 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
@@ -75,7 +75,7 @@ index d7a0e39..ff44417 100644
  
  /** Visual composer style and selector copy registered by an extension. */
 diff --git a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
-index 55265d5..ede7d4c 100644
+index 55265d5c2e..ede7d4c29c 100644
 --- a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
 +++ b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
 @@ -102,6 +102,7 @@ export class ChatTranscriptBuilder {
@@ -106,7 +106,7 @@ index 55265d5..ede7d4c 100644
  			timeline.beforeTools,
  			hideThinkingBlock,
 diff --git a/packages/coding-agent/src/modes/components/read-tool-group.ts b/packages/coding-agent/src/modes/components/read-tool-group.ts
-index 8ff97e6..87f3d6d 100644
+index 8ff97e63ac..87f3d6da31 100644
 --- a/packages/coding-agent/src/modes/components/read-tool-group.ts
 +++ b/packages/coding-agent/src/modes/components/read-tool-group.ts
 @@ -530,6 +530,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
@@ -121,7 +121,7 @@ index 8ff97e6..87f3d6d 100644
  		return this;
  	}
 diff --git a/packages/coding-agent/src/modes/components/tool-activity.ts b/packages/coding-agent/src/modes/components/tool-activity.ts
-index 5772a9b..646661f 100644
+index 5772a9b7fd..646661f7e6 100644
 --- a/packages/coding-agent/src/modes/components/tool-activity.ts
 +++ b/packages/coding-agent/src/modes/components/tool-activity.ts
 @@ -2,6 +2,8 @@ import { type Component, Container } from "@oh-my-pi/pi-tui";
@@ -134,7 +134,7 @@ index 5772a9b..646661f 100644
  
  export function isToolActivityComponent(component: Component): component is Component & ToolActivityComponent {
 diff --git a/packages/coding-agent/src/modes/components/tool-execution.ts b/packages/coding-agent/src/modes/components/tool-execution.ts
-index 485ae94..5d5d989 100644
+index 485ae94378..5d5d989c3a 100644
 --- a/packages/coding-agent/src/modes/components/tool-execution.ts
 +++ b/packages/coding-agent/src/modes/components/tool-execution.ts
 @@ -952,6 +952,10 @@ export class ToolExecutionComponent extends Container {
@@ -149,7 +149,7 @@ index 485ae94..5d5d989 100644
  		this.#showImages = show;
  		this.#updateDisplay();
 diff --git a/packages/coding-agent/src/modes/components/transcript-container.ts b/packages/coding-agent/src/modes/components/transcript-container.ts
-index ef824dd..a26a146 100644
+index ef824dd05d..a26a146e1e 100644
 --- a/packages/coding-agent/src/modes/components/transcript-container.ts
 +++ b/packages/coding-agent/src/modes/components/transcript-container.ts
 @@ -131,10 +131,19 @@ export class TranscriptContainer extends Container {
@@ -197,7 +197,7 @@ index ef824dd..a26a146 100644
  	}
  
 diff --git a/packages/coding-agent/src/modes/controllers/event-controller.ts b/packages/coding-agent/src/modes/controllers/event-controller.ts
-index a6e6f56..71816d5 100644
+index a6e6f56ffd..71816d50fa 100644
 --- a/packages/coding-agent/src/modes/controllers/event-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/event-controller.ts
 @@ -952,7 +952,9 @@ export class EventController {
@@ -234,7 +234,7 @@ index a6e6f56..71816d5 100644
  
  			if (this.ctx.streamingMessage.stopReason !== "aborted" && this.ctx.streamingMessage.stopReason !== "error") {
 diff --git a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
-index ea89d1a..5bb3e08 100644
+index ea89d1ab76..5bb3e0877a 100644
 --- a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 @@ -20,6 +20,7 @@ import type {
@@ -326,7 +326,7 @@ index ea89d1a..5bb3e08 100644
  		this.ctx.setToolUIContext(uiContext, true);
  		this.#toolUIContext = uiContext;
 diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
-index f27b08e..f2183a0 100644
+index f27b08e903..f2183a0037 100644
 --- a/packages/coding-agent/src/modes/interactive-mode.ts
 +++ b/packages/coding-agent/src/modes/interactive-mode.ts
 @@ -995,6 +995,7 @@ export class InteractiveMode implements InteractiveModeContext {
@@ -338,7 +338,7 @@ index f27b08e..f2183a0 100644
  		this.proseOnlyThinking = settings.get("proseOnlyThinking");
  
 diff --git a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
-index 1f4888d..803a8e6 100644
+index 1f4888db26..803a8e640d 100644
 --- a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
 +++ b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
 @@ -180,7 +180,10 @@ export function assistantHasVisibleContent(message: AssistantAgentMessage): bool
@@ -366,7 +366,7 @@ index 1f4888d..803a8e6 100644
  
  /**
 diff --git a/packages/coding-agent/src/modes/utils/ui-helpers.ts b/packages/coding-agent/src/modes/utils/ui-helpers.ts
-index 7309cc7..28c334a 100644
+index 7309cc70a3..28c334a9e4 100644
 --- a/packages/coding-agent/src/modes/utils/ui-helpers.ts
 +++ b/packages/coding-agent/src/modes/utils/ui-helpers.ts
 @@ -853,6 +853,7 @@ export class UiHelpers {
@@ -377,8 +377,284 @@ index 7309cc7..28c334a 100644
  		const preservedChatChildren = options.preserveExistingChat ? [...visibleChatContainer.children] : undefined;
  		const previousTranscriptMessageComponents = this.ctx.transcriptMessageComponents;
  		const previousPendingTools = this.ctx.pendingTools;
+diff --git a/packages/coding-agent/src/session/session-maintenance.ts b/packages/coding-agent/src/session/session-maintenance.ts
+index 9d8c17182c..ee4638e54b 100644
+--- a/packages/coding-agent/src/session/session-maintenance.ts
++++ b/packages/coding-agent/src/session/session-maintenance.ts
+@@ -1543,6 +1543,25 @@ export class SessionMaintenance {
+ 		);
+ 	}
+ 
++	#assertProviderDispatchFitsContextWindow(contextWindow: number, messages: AgentMessage[]): void {
++		const opts = { excludeEncryptedReasoning: true } as const;
++		const outboundTokens =
++			computeNonMessageTokens(this.#host.nonMessageTokenSource(), this.#tokenizer) +
++			this.#tokenizer.countMessages(messages, opts);
++		if (outboundTokens <= contextWindow) return;
++		throw new Error(
++			`Provider request blocked before dispatch: ${outboundTokens} estimated input tokens exceed the ${contextWindow}-token context window after synchronous compaction.`,
++		);
++	}
++	#assertPendingProviderDispatchFitsContextWindow(contextWindow: number, pendingMessages: AgentMessage[]): void {
++		const outboundTokens = this.#estimateStoredContextTokens(pendingMessages);
++		if (outboundTokens <= contextWindow) return;
++		throw new Error(
++			`Provider request blocked before dispatch: ${outboundTokens} estimated input tokens exceed the ${contextWindow}-token context window after synchronous compaction.`,
++		);
++	}
++
++
+ 	#estimatePrePromptContextTokens(messages: AgentMessage[], contextWindow: number): number {
+ 		const breakdown = this.#host.getContextBreakdown({ contextWindow, pendingMessages: messages });
+ 		const localEstimate = this.#estimateStoredContextTokens(messages);
+@@ -1579,11 +1598,12 @@ export class SessionMaintenance {
+ 		if (!model) return;
+ 		const contextWindow = model.contextWindow ?? 0;
+ 		if (contextWindow <= 0) return;
++		const providerRequestLimit = Math.min(contextWindow, model.cost.longContext?.inputThreshold ?? contextWindow);
+ 		const compactionSettings = this.#host.settings.getGroup("compaction");
+ 		const contextTokens = this.#estimatePrePromptContextTokens(messages, contextWindow);
+ 		const pendingMidTurnDeadEnd = this.#midTurnDeadEndPendingPrePrompt;
+ 		this.#midTurnDeadEndPendingPrePrompt = false;
+-		if (!shouldCompact(contextTokens, contextWindow, compactionSettings)) {
++		if (!shouldCompact(contextTokens, contextWindow, compactionSettings) && contextTokens <= providerRequestLimit) {
+ 			this.maybeStartSpeculativeCompaction(contextTokens, contextWindow);
+ 			return;
+ 		}
+@@ -1595,12 +1615,16 @@ export class SessionMaintenance {
+ 			// The prior tool loop already attempted the rescue and warned for this
+ 			// persisted oversized turn. Only a later persisted cut point makes a
+ 			// pre-prompt retry useful; the new agent loop may warn for its own turn.
++			this.#assertPendingProviderDispatchFitsContextWindow(providerRequestLimit, messages);
+ 			return;
+ 		}
+ 		// Grace band: a live (or just-started) background speculation absorbs the
+ 		// blocking summarization; the user's prompt goes out immediately and the
+ 		// armed result is spliced in at the next boundary.
+-		if (this.deferThresholdCompactionToSpeculation(contextTokens, contextWindow)) {
++		if (
++			contextTokens <= providerRequestLimit &&
++			this.deferThresholdCompactionToSpeculation(contextTokens, contextWindow)
++		) {
+ 			logger.debug("Pre-prompt threshold deferred to speculative compaction", {
+ 				contextTokens,
+ 				contextWindow,
+@@ -1633,6 +1657,7 @@ export class SessionMaintenance {
+ 			preparedContextTokens: this.#estimateStoredContextTokens(),
+ 			phase: "pre_turn",
+ 		});
++		this.#assertPendingProviderDispatchFitsContextWindow(providerRequestLimit, messages);
+ 	}
+ 
+ 	/**
+@@ -1661,6 +1686,10 @@ export class SessionMaintenance {
+ 		const model = this.#model;
+ 		const contextWindow = model?.contextWindow ?? 0;
+ 		if (contextWindow <= 0) return;
++		const providerRequestLimit = Math.min(
++			contextWindow,
++			model?.cost.longContext?.inputThreshold ?? contextWindow,
++		);
+ 
+ 		const compactionSettings = this.#host.settings.getGroup("compaction");
+ 		if (
+@@ -1668,6 +1697,7 @@ export class SessionMaintenance {
+ 			!hasConfiguredCompactionMethod(compactionSettings) ||
+ 			compactionSettings.midTurnEnabled === false
+ 		) {
++			this.#assertProviderDispatchFitsContextWindow(providerRequestLimit, activeMessages);
+ 			return;
+ 		}
+ 
+@@ -1684,7 +1714,10 @@ export class SessionMaintenance {
+ 		const billedContextTokens = calculateContextTokens(lastAssistant.usage);
+ 		const storedContextTokens = this.#estimateStoredContextTokens();
+ 		const contextTokens = compactionContextTokens(billedContextTokens, storedContextTokens);
+-		if (!shouldCompact(contextTokens, contextWindow, compactionSettings)) {
++		if (
++			!shouldCompact(contextTokens, contextWindow, compactionSettings) &&
++			contextTokens <= providerRequestLimit
++		) {
+ 			this.maybeStartSpeculativeCompaction(contextTokens, contextWindow);
+ 			return;
+ 		}
+@@ -1715,6 +1748,7 @@ export class SessionMaintenance {
+ 				prepareCompaction(this.#host.sessionManager.getBranch(), compactionSettings, model, this.#tokenizer) ===
+ 					undefined
+ 			) {
++				this.#assertProviderDispatchFitsContextWindow(providerRequestLimit, activeMessages);
+ 				return;
+ 			}
+ 			this.#midTurnCompactionDeadEnds.delete(activeMessages);
+@@ -1754,6 +1788,7 @@ export class SessionMaintenance {
+ 		if (compactedMessages !== activeMessages) {
+ 			activeMessages.splice(0, activeMessages.length, ...compactedMessages);
+ 		}
++		this.#assertProviderDispatchFitsContextWindow(providerRequestLimit, activeMessages);
+ 		logger.debug("Mid-run compaction ran between provider calls", {
+ 			contextTokens,
+ 			contextWindow,
+diff --git a/packages/coding-agent/test/aos-economic-context-smoke.test.ts b/packages/coding-agent/test/aos-economic-context-smoke.test.ts
+new file mode 100644
+index 0000000000..89a1a1be51
+--- /dev/null
++++ b/packages/coding-agent/test/aos-economic-context-smoke.test.ts
+@@ -0,0 +1,153 @@
++import { afterEach, describe, expect, it, vi } from "bun:test";
++import * as path from "node:path";
++import { type } from "@oh-my-pi/omptype";
++import { Agent, type AgentTool, Tokenizer } from "@oh-my-pi/pi-agent-core";
++import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
++import { createMockModel, type MockModel } from "@oh-my-pi/pi-ai/providers/mock";
++import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
++import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { TempDir } from "@oh-my-pi/pi-utils";
++
++const ECONOMIC_CAP = 272_000;
++const oversizedResult = "context ".repeat(180_000);
++const schema = type({});
++const tool: AgentTool<typeof schema, undefined> = {
++  name: "oversized_result",
++  label: "Oversized result",
++  description: "Return one deliberately oversized deterministic result",
++  parameters: schema,
++  async execute() {
++    return { content: [{ type: "text", text: oversizedResult }], details: undefined };
++  },
++};
++
++describe("economic context outbound smoke", () => {
++  let tempDir: TempDir;
++  let authStorage: AuthStorage;
++  let session: AgentSession;
++
++  afterEach(async () => {
++    await session?.dispose();
++    authStorage?.close();
++    await tempDir?.remove();
++    vi.restoreAllMocks();
++  });
++
++  it("never dispatches a tool continuation above 272k when compaction makes no progress", async () => {
++    tempDir = TempDir.createSync("@omp-economic-context-");
++    authStorage = await AuthStorage.create(path.join(tempDir.path(), "auth.db"));
++    authStorage.setRuntimeApiKey("mock", "test-key");
++    const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
++    const mock: MockModel = createMockModel({
++      contextWindow: 1_000_000,
++      maxTokens: 1_024,
++      cost: {
++        input: 0,
++        output: 0,
++        cacheRead: 0,
++        cacheWrite: 0,
++        longContext: { inputThreshold: ECONOMIC_CAP, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++      },
++      responses: [
++        {
++          content: [{ type: "toolCall", id: "oversized-1", name: tool.name, arguments: {} }],
++          usage: { input: 210_000 },
++        },
++        { content: ["must not be requested"] },
++      ],
++    });
++    vi.spyOn(modelRegistry, "getAvailable").mockReturnValue([mock]);
++    vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
++
++    const agent = new Agent({
++      getApiKey: () => "test-key",
++      initialState: { model: mock, systemPrompt: ["Test"], tools: [tool], messages: [] },
++      convertToLlm,
++      streamFn: mock.stream,
++    });
++    const settings = Settings.isolated({
++      "compaction.enabled": true,
++      "compaction.methodOrder": ["soft"],
++      "compaction.thresholdTokens": 220_000,
++      "compaction.midTurnEnabled": true,
++      "compaction.asyncEnabled": false,
++      "compaction.autoContinue": false,
++      "retry.enabled": false,
++      "todo.enabled": false,
++    });
++    session = new AgentSession({
++      agent,
++      sessionManager: SessionManager.inMemory(tempDir.path()),
++      settings,
++      modelRegistry,
++      toolRegistry: new Map([[tool.name, tool]]),
++    });
++    vi.spyOn(session, "shake").mockResolvedValue({
++      mode: "elide",
++      toolResultsDropped: 0,
++      blocksDropped: 0,
++      tokensFreed: 0,
++    });
++
++    await session.prompt("Run the tool");
++
++    const tokenizer = new Tokenizer();
++    const outboundTokens = mock.calls.map(call =>
++      tokenizer.countTokens(call.context.systemPrompt.join("\n")) + tokenizer.countMessages(call.context.messages)
++    );
++    expect(outboundTokens[0]).toBeLessThanOrEqual(ECONOMIC_CAP);
++    expect(outboundTokens.every(tokens => tokens <= ECONOMIC_CAP)).toBe(true);
++    expect(mock.calls).toHaveLength(1);
++  });
++
++  it("never dispatches an oversized new prompt when compaction cannot create a cut point", async () => {
++    tempDir = TempDir.createSync("@omp-economic-prompt-");
++    authStorage = await AuthStorage.create(path.join(tempDir.path(), "auth.db"));
++    authStorage.setRuntimeApiKey("mock", "test-key");
++    const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
++    const mock: MockModel = createMockModel({
++      contextWindow: 1_000_000,
++      maxTokens: 1_024,
++      cost: {
++        input: 0,
++        output: 0,
++        cacheRead: 0,
++        cacheWrite: 0,
++        longContext: { inputThreshold: ECONOMIC_CAP, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++      },
++      responses: [{ content: ["must not be requested"] }],
++    });
++    vi.spyOn(modelRegistry, "getAvailable").mockReturnValue([mock]);
++    vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
++
++    const agent = new Agent({
++      getApiKey: () => "test-key",
++      initialState: { model: mock, systemPrompt: ["Test"], tools: [], messages: [] },
++      convertToLlm,
++      streamFn: mock.stream,
++    });
++    session = new AgentSession({
++      agent,
++      sessionManager: SessionManager.inMemory(tempDir.path()),
++      settings: Settings.isolated({
++        "compaction.enabled": true,
++        "compaction.methodOrder": ["soft"],
++        "compaction.thresholdTokens": 220_000,
++        "compaction.midTurnEnabled": true,
++        "compaction.asyncEnabled": false,
++        "compaction.autoContinue": false,
++        "retry.enabled": false,
++        "todo.enabled": false,
++      }),
++      modelRegistry,
++      toolRegistry: new Map(),
++    });
++
++    await expect(session.prompt(oversizedResult)).rejects.toThrow("Provider request blocked before dispatch");
++    expect(mock.calls).toHaveLength(0);
++  });
++});
 diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
-index f041efa..502acbc 100644
+index f041efac50..502acbcec6 100644
 --- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 +++ b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 @@ -65,4 +65,41 @@ describe("tool activity visibility", () => {
@@ -424,7 +700,7 @@ index f041efa..502acbc 100644
 +	});
  });
 diff --git a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
-index 70e8512..02f7b42 100644
+index 70e851270b..02f7b42553 100644
 --- a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
 +++ b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
 @@ -25,6 +25,14 @@ function makeHarness() {
@@ -506,7 +782,7 @@ index 70e8512..02f7b42 100644
  		const harness = makeHarness();
  		harness.editor.setText("finish this wor");
 diff --git a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
-index 1833799..92af5cf 100644
+index 18337996ad..92af5cfb64 100644
 --- a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
 +++ b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
 @@ -1,6 +1,9 @@

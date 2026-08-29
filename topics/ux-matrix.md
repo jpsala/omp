@@ -49,12 +49,17 @@ terminal anterior, no conservarla byte por byte en el scrollback.
 
 El patch downstream durable `patches/omp-18.0.10-workstation.patch` agrega
 `display.hiddenTools`, `display.hideAssistantToolPreambles`,
-`display.transcriptVisibilityProfiles` y la API opcional de visibilidad para
-extensiones. La política cubre thinking, preámbulos, métricas por turno, toggle
-global y tools individuales. El filtro por nombre compone con
-`display.hideToolActivity`; las respuestas finales sin tools siempre permanecen.
-Tres presets atómicos y perfiles nombrados globales permiten cambiar de contexto
-sin repetir toggles.
+`display.transcriptVisibilityProfiles`, la API opcional de visibilidad y el
+ceiling económico de provider dispatch. La política visual cubre thinking,
+preámbulos, métricas por turno, toggle global y tools individuales; el filtro
+por nombre compone con `display.hideToolActivity` y las respuestas finales sin
+tools permanecen.
+
+El guard de contexto toma el menor entre `model.contextWindow` y
+`cost.longContext.inputThreshold`. Si un tool result deja la continuación por
+encima de 272k, fuerza compactación sincrónica y aborta sin otra request cuando
+no hay progreso. El test incluido reproduce el caso con ventana de 1M y exige
+una única llamada outbound dentro del ceiling.
 
 Revisión contra el tag oficial `v18.0.10`: upstream conserva los toggles
 globales de thinking, actividad de tools y métricas, pero no expone filtros por

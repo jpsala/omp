@@ -67,12 +67,14 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   la sesión. No se operó VS Code u Obsidian; las lecturas por etapas del mismo
   archivo verificaron el contrato vivo.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.10`, con el
-  addon Win32 18.0.10 publicado embebido en el build. `bun run deploy:omp -- <artifact>`
-  exige el PE exacto, usa backups únicos para rotar aun cuando sesiones
-  anteriores mantienen artifacts mapeados, retira `omp.com` y deja fuera de
-  `PATHEXT` cualquier cleanup pendiente. El audit rechaza futuras colisiones. El update oficial reemplazó
-  el antiguo delta downstream de status/cuota; OMP 18 usa ahora su
-  implementación oficial y sólo se rebasaron los filtros granulares.
+  addon Win32 publicado embebido y el patch workstation vigente. Además de los
+  filtros granulares, el core usa 272k como límite económico de dispatch para
+  Sol/Luna: al recibir un tool result que cruza el límite compacta
+  sincrónicamente o aborta antes de otra request. El test determinístico del
+  patch reproduce una ventana efectiva de 1M, 210k previos y un resultado
+  oversize; sólo permite la primera llamada al provider. El deploy canónico
+  `bun run deploy:omp -- <artifact>` exige el PE exacto, usa backups únicos aun
+  con sesiones previas mapeadas y retira `omp.com`; el audit rechaza colisiones.
 - Propuesta upstream de granularidad publicada el 2026-08-25 en
   [Discord `#feature-requests`](https://discord.com/channels/1465833614603325562/1465867712000692459/1541865268798820362):
   settings y rendering general en core; shortcuts, presets y perfiles en la

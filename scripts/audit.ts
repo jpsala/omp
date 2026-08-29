@@ -356,6 +356,21 @@ const config = await readFile(
 ).catch(() => "");
 const normalizedConfig = config.replaceAll("\r\n", "\n").trim();
 const expectedConfig = [
+	"extendedContext: false",
+	"contextPromotion:",
+	"  enabled: false",
+	"compaction:",
+	"  enabled: true",
+	"  midTurnEnabled: true",
+	"  asyncEnabled: true",
+	"  thresholdTokens: 220000",
+	"  methodOrder:",
+	"    - remote",
+	"    - snapcompact",
+	"    - handoff",
+	"    - shake",
+	"    - soft",
+	"",
 	"extensions:",
 	"  - extensions/wezterm-attention.ts",
 	"  - extensions/agent-runtime-habitat.ts",

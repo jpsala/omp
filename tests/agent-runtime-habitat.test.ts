@@ -189,18 +189,35 @@ test("extension registers context and an explicit nested launch contract", async
       model: { provider: "openai-codex", id: "gpt-5.6-luna" },
     });
     expect(JSON.parse(backgroundLaunch.content[0].text)).toMatchObject({ status: "unsupported", reason: expect.stringContaining("background Task agents must return through Task") });
-    const rootStatus = await statusTool!.execute("id", {
-      state: "working",
-      detail: "Integrando resultados",
-    }, new AbortController().signal, () => {}, {
-      cwd: agentDir,
-      hasUI: true,
-      sessionManager: { getSessionId: () => "root-session" },
-    });
-    expect(JSON.parse(rootStatus.content[0].text)).toMatchObject({
-      status: "unsupported",
-      reason: expect.stringContaining("registered parent"),
-    });
+    const runtimeParentEnv = {
+      launchId: process.env.OMP_RUNTIME_LAUNCH_ID,
+      parentSession: process.env.OMP_RUNTIME_PARENT_SESSION,
+      paneId: process.env.OMP_RUNTIME_PANE_ID,
+    };
+    delete process.env.OMP_RUNTIME_LAUNCH_ID;
+    delete process.env.OMP_RUNTIME_PARENT_SESSION;
+    delete process.env.OMP_RUNTIME_PANE_ID;
+    try {
+      const rootStatus = await statusTool!.execute("id", {
+        state: "working",
+        detail: "Integrando resultados",
+      }, new AbortController().signal, () => {}, {
+        cwd: agentDir,
+        hasUI: true,
+        sessionManager: { getSessionId: () => "root-session" },
+      });
+      expect(JSON.parse(rootStatus.content[0].text)).toMatchObject({
+        status: "unsupported",
+        reason: expect.stringContaining("registered parent"),
+      });
+    } finally {
+      if (runtimeParentEnv.launchId === undefined) delete process.env.OMP_RUNTIME_LAUNCH_ID;
+      else process.env.OMP_RUNTIME_LAUNCH_ID = runtimeParentEnv.launchId;
+      if (runtimeParentEnv.parentSession === undefined) delete process.env.OMP_RUNTIME_PARENT_SESSION;
+      else process.env.OMP_RUNTIME_PARENT_SESSION = runtimeParentEnv.parentSession;
+      if (runtimeParentEnv.paneId === undefined) delete process.env.OMP_RUNTIME_PANE_ID;
+      else process.env.OMP_RUNTIME_PANE_ID = runtimeParentEnv.paneId;
+    }
 
     const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");

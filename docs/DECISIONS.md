@@ -616,3 +616,18 @@ El binario Windows embebe el addon Win32 18.0.10 publicado y se desplegó
 exclusivamente mediante `bun run deploy:omp`. El smoke compilado confirmó
 `omp/18.0.10`; el smoke TUI real abrió el selector granular con los tres
 presets, el perfil `zen` y 41 opciones.
+
+## 2026-08-29 — 272k como ceiling económico de provider dispatch
+
+Sol y Luna no deben cruzar el tier económico de 272k aunque el catálogo o un
+override expongan una ventana mayor. La configuración administrada fija 220k
+como margen de compactación y la extensión de AOS bloquea prompts nuevos cuando
+binario, catálogo o settings no garantizan esa protección.
+
+El límite definitivo vive también en core porque un solo tool result puede
+cruzarlo dentro de un turno ya iniciado. Antes de continuar, OMP calcula el
+menor entre la ventana efectiva y `cost.longContext.inputThreshold`, compacta
+sincrónicamente y aborta si no obtiene progreso. No trunca ni persiste el
+resultado y nunca envía la segunda request sobredimensionada. El patch
+workstation y su test determinístico constituyen el contrato durable hasta que
+upstream ofrezca la misma garantía.
