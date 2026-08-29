@@ -1,8 +1,8 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index d35aae8..5411f62 100644
+index d46af36..ec6b4d5 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
-@@ -1286,6 +1286,33 @@ export const SETTINGS_SCHEMA = {
+@@ -1291,6 +1291,33 @@ export const SETTINGS_SCHEMA = {
  		},
  	},
  
@@ -37,7 +37,7 @@ index d35aae8..5411f62 100644
  		type: "boolean",
  		default: false,
 diff --git a/packages/coding-agent/src/extensibility/extensions/types.ts b/packages/coding-agent/src/extensibility/extensions/types.ts
-index a476f25..ee63781 100644
+index d7a0e39..ff44417 100644
 --- a/packages/coding-agent/src/extensibility/extensions/types.ts
 +++ b/packages/coding-agent/src/extensibility/extensions/types.ts
 @@ -253,6 +253,14 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
@@ -75,10 +75,10 @@ index a476f25..ee63781 100644
  
  /** Visual composer style and selector copy registered by an extension. */
 diff --git a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
-index 326e481..e2e84d5 100644
+index 55265d5..ede7d4c 100644
 --- a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
 +++ b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
-@@ -99,6 +99,7 @@ export class ChatTranscriptBuilder {
+@@ -102,6 +102,7 @@ export class ChatTranscriptBuilder {
  
  	constructor(private readonly deps: ChatTranscriptBuilderDeps) {
  		this.container.setToolActivityVisible(!settings.get("display.hideToolActivity"));
@@ -86,7 +86,7 @@ index 326e481..e2e84d5 100644
  	}
  
  	/** Whether the transcript currently holds any rendered rows. */
-@@ -109,6 +110,7 @@ export class ChatTranscriptBuilder {
+@@ -112,6 +113,7 @@ export class ChatTranscriptBuilder {
  	/** Discard all components and rebuild the whole transcript from `entries`. */
  	rebuild(entries: SessionMessageEntry[]): void {
  		this.reset();
@@ -94,7 +94,7 @@ index 326e481..e2e84d5 100644
  		for (const entry of entries) this.#appendChatMessage(entry.message);
  		// Flush the trailing turn's usage row only once its tools are materialized
  		// (a read whose result has not arrived stays pending); otherwise the row
-@@ -317,7 +319,9 @@ export class ChatTranscriptBuilder {
+@@ -352,7 +354,9 @@ export class ChatTranscriptBuilder {
  	#appendAssistantMessage(message: Extract<AgentMessage, { role: "assistant" }>): void {
  		const hideThinkingBlock = this.deps.hideThinkingBlock?.() ?? false;
  		const proseOnlyThinking = this.deps.proseOnlyThinking ? this.deps.proseOnlyThinking() : true;
@@ -106,10 +106,10 @@ index 326e481..e2e84d5 100644
  			timeline.beforeTools,
  			hideThinkingBlock,
 diff --git a/packages/coding-agent/src/modes/components/read-tool-group.ts b/packages/coding-agent/src/modes/components/read-tool-group.ts
-index dd0ecd8..40136bb 100644
+index 8ff97e6..87f3d6d 100644
 --- a/packages/coding-agent/src/modes/components/read-tool-group.ts
 +++ b/packages/coding-agent/src/modes/components/read-tool-group.ts
-@@ -521,6 +521,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
+@@ -530,6 +530,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
  		super.invalidate();
  	}
  
@@ -197,10 +197,10 @@ index ef824dd..a26a146 100644
  	}
  
 diff --git a/packages/coding-agent/src/modes/controllers/event-controller.ts b/packages/coding-agent/src/modes/controllers/event-controller.ts
-index d40b017..40fefef 100644
+index a6e6f56..71816d5 100644
 --- a/packages/coding-agent/src/modes/controllers/event-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/event-controller.ts
-@@ -903,7 +903,9 @@ export class EventController {
+@@ -952,7 +952,9 @@ export class EventController {
  			this.ctx.chatContainer.addChild(this.ctx.streamingComponent);
  			this.#streamingReveal.begin(
  				this.ctx.streamingComponent,
@@ -211,7 +211,7 @@ index d40b017..40fefef 100644
  			);
  			this.ctx.ui.requestRender();
  		}
-@@ -1078,7 +1080,9 @@ export class EventController {
+@@ -1138,7 +1140,9 @@ export class EventController {
  				this.#streamingReveal.resyncVisibility();
  			}
  			this.ctx.streamingMessage = event.message;
@@ -222,7 +222,7 @@ index d40b017..40fefef 100644
  			this.#streamingReveal.setTarget(timeline.beforeTools);
  
  			const visibleBlockCount = this.ctx.streamingMessage.content.filter(
-@@ -1276,7 +1280,9 @@ export class EventController {
+@@ -1336,7 +1340,9 @@ export class EventController {
  						stopReason: "stop",
  					}
  				: this.ctx.streamingMessage;
@@ -234,7 +234,7 @@ index d40b017..40fefef 100644
  
  			if (this.ctx.streamingMessage.stopReason !== "aborted" && this.ctx.streamingMessage.stopReason !== "error") {
 diff --git a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
-index fa23f22..b601a96 100644
+index ea89d1a..5bb3e08 100644
 --- a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 @@ -20,6 +20,7 @@ import type {
@@ -245,7 +245,7 @@ index fa23f22..b601a96 100644
  } from "../../extensibility/extensions";
  import { getSessionSlashCommands } from "../../extensibility/extensions/get-commands-handler";
  import { AskDialogComponent, boundPromptTitle } from "../../modes/components/ask-dialog";
-@@ -63,6 +64,40 @@ function toWireSelectOptions(options: ExtensionUISelectItem[]): CollabUiSelectIt
+@@ -64,6 +65,40 @@ function toWireSelectOptions(options: ExtensionUISelectItem[]): CollabUiSelectIt
  	);
  }
  
@@ -286,7 +286,7 @@ index fa23f22..b601a96 100644
  export class ExtensionUiController {
  	#extensionTerminalInputUnsubscribers = new Set<() => void>();
  	#composerShapeDisposers: Array<() => void> = [];
-@@ -141,6 +176,38 @@ export class ExtensionUiController {
+@@ -142,6 +177,38 @@ export class ExtensionUiController {
  			setEditorComponent: factory => this.ctx.setEditorComponent(factory),
  			getToolsExpanded: () => this.ctx.toolOutputExpanded,
  			setToolsExpanded: expanded => this.ctx.setToolsExpanded(expanded),
@@ -326,10 +326,10 @@ index fa23f22..b601a96 100644
  		this.ctx.setToolUIContext(uiContext, true);
  		this.#toolUIContext = uiContext;
 diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
-index 9c2ee7f..53aa3a9 100644
+index f27b08e..f2183a0 100644
 --- a/packages/coding-agent/src/modes/interactive-mode.ts
 +++ b/packages/coding-agent/src/modes/interactive-mode.ts
-@@ -988,6 +988,7 @@ export class InteractiveMode implements InteractiveModeContext {
+@@ -995,6 +995,7 @@ export class InteractiveMode implements InteractiveModeContext {
  
  		this.hideToolActivity = settings.get("display.hideToolActivity");
  		this.chatContainer.setToolActivityVisible(!this.hideToolActivity);
@@ -366,10 +366,10 @@ index 1f4888d..803a8e6 100644
  
  /**
 diff --git a/packages/coding-agent/src/modes/utils/ui-helpers.ts b/packages/coding-agent/src/modes/utils/ui-helpers.ts
-index e1ac002..5bc6f6c 100644
+index 7309cc7..28c334a 100644
 --- a/packages/coding-agent/src/modes/utils/ui-helpers.ts
 +++ b/packages/coding-agent/src/modes/utils/ui-helpers.ts
-@@ -815,6 +815,7 @@ export class UiHelpers {
+@@ -853,6 +853,7 @@ export class UiHelpers {
  		const visibleChatContainer = this.ctx.chatContainer;
  		const stagedChatContainer = new TranscriptContainer();
  		stagedChatContainer.setToolActivityVisible(!this.ctx.hideToolActivity);

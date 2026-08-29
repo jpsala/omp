@@ -599,3 +599,20 @@ Se acepta que VS Code u Obsidian vuelvan a renderizar el archivo completo: este
 contrato busca lectura Markdown viva sin modificar OMP. Si el preview no
 preserva la posición al hacer scroll, el siguiente paso es un visor local sobre
 el mismo productor, no volver mutable el scrollback nativo.
+
+## 2026-08-29 — Rebase granular sobre OMP 18.0.10
+
+El tag oficial `v18.0.10` conserva los toggles globales de thinking, actividad
+de tools y métricas, pero todavía no ofrece filtros por nombre, ocultamiento de
+preámbulos, perfiles atómicos ni un hook genérico de transcript. El delta
+downstream sigue siendo necesario.
+
+El patch 18.0.6 aplicó limpio sobre el nuevo tag y quedó fijado como
+`patches/omp-18.0.10-workstation.patch`; el audit deja de aceptar la base
+anterior. Los 22 tests focales pasaron con 92 assertions y el check completo de
+`packages/coding-agent` quedó limpio.
+
+El binario Windows embebe el addon Win32 18.0.10 publicado y se desplegó
+exclusivamente mediante `bun run deploy:omp`. El smoke compilado confirmó
+`omp/18.0.10`; el smoke TUI real abrió el selector granular con los tres
+presets, el perfil `zen` y 41 opciones.
