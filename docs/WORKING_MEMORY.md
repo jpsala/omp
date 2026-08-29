@@ -164,13 +164,19 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `prepare` conserva `omp --config profiles/<overlay>.yml` para una sesión nueva.
 - El catálogo no promete cambios vivos de Task, `prewalk` o concurrencia si la
   API nativa no los expone; esos parámetros requieren el overlay completo.
-- Los siete overlays actuales (`deepseek-lab`, `study-deepseek`,
-  `study-luna-max`, `study-sol-luna`, `deepseek-pro-high`,
-  `deepseek-flash-high` y `glm-flash-qwen-coder-minimax`) están allowlisteados.
-  El preset mixto usa GLM 4.7 Flash `low` para lo cotidiano, Qwen3 Coder Next
-  `off` para Task y MiniMax M3 `high` para `slow/plan`; mantiene `prewalk` off y
-  `deepseek-pro-high` y `deepseek-flash-high` usan el provider directo `deepseek`
-  en `high`; agregar o retirar combinaciones sólo requiere overlay y registro.
+- Los ocho overlays actuales (`deepseek-lab`, `study-deepseek`,
+  `study-luna-max`, `study-sol-luna`, `codex-economic`,
+  `deepseek-pro-high`, `deepseek-flash-high` y
+  `glm-flash-qwen-coder-minimax`) están allowlisteados. `codex-economic` usa
+  Luna High como padre/Task y conserva Sol en `plan/slow`.
+- `/modo normal|economico|estado` cambia sólo el padre vivo y mantiene un status
+  visible; los roles globales Task/smol/cheap usan Luna High en ambos modos.
+  `/consumo` agrega stats locales por sesión o intervalo; su marcador persiste
+  sólo timestamp y nunca reemplaza la cuota real de `omp usage`.
+- El preset mixto usa GLM 4.7 Flash `low` para lo cotidiano, Qwen3 Coder Next
+  `off` para Task y MiniMax M3 `high` para `slow/plan`; mantiene `prewalk` off.
+  Los presets DeepSeek directos usan `high`; agregar o retirar combinaciones
+  sólo requiere overlay y registro.
 
 ## Próxima lectura
 

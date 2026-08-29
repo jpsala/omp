@@ -18,6 +18,7 @@ test("catalogs every maintained overlay without secrets", () => {
 		"study-deepseek",
 		"study-luna-max",
 		"study-sol-luna",
+		"codex-economic",
 		"deepseek-pro-high",
 		"deepseek-flash-high",
 		"glm-flash-qwen-coder-minimax",
@@ -44,6 +45,13 @@ test("maps daily, coding, and hard-problem roles to the requested models", () =>
 	expect(profile.description).toContain("MiniMax M3");
 });
 
+test("maps economic mode to Luna High while preserving explicit Sol roles", () => {
+	const profile = resolveProfile("codex-economic");
+	expect(profile.parent).toBe("openai-codex/gpt-5.6-luna:high");
+	expect(profile.task).toBe("openai-codex/gpt-5.6-luna:high");
+	expect(profile.prewalk).toBe(false);
+});
+
 test("rejects duplicate names, traversal, absolute paths, and model substitution", () => {
 	expect(() => validateProfileCatalog([{ ...PROFILE_CATALOG[0], name: "../escape" }])).toThrow("Invalid profile name");
 	expect(() => validateProfileCatalog([{ ...PROFILE_CATALOG[0], overlay: "profiles/../secret.yml" }])).toThrow("relative path");
@@ -64,6 +72,7 @@ test("completes subcommands and allowlisted profile names", () => {
 		"activate study-deepseek",
 		"activate study-luna-max",
 		"activate study-sol-luna",
+		"activate codex-economic",
 		"activate deepseek-pro-high",
 		"activate deepseek-flash-high",
 		"activate glm-flash-qwen-coder-minimax",

@@ -631,3 +631,19 @@ sincrónicamente y aborta si no obtiene progreso. No trunca ni persiste el
 resultado y nunca envía la segunda request sobredimensionada. El patch
 workstation y su test determinístico constituyen el contrato durable hasta que
 upstream ofrezca la misma garantía.
+
+## 2026-08-29 — Modos normal/económico y consumo por intervalo
+
+El modo de trabajo es estado explícito de sesión, no un downgrade implícito por
+cuota. `/modo normal` activa Sol Medium como padre; `/modo economico` activa
+Luna High; ambos muestran `modo normal|económico` en status. Task, `smol` y
+`cheap` quedan globalmente en Luna High, de modo que normal conserva Sol para
+dirección e integración sin pagar Sol en ejecución acotada. Plan y slow
+mantienen Sol Medium/High. El overlay `profiles/codex-economic.yml` permite
+arrancar directamente en Luna.
+
+`/consumo sesion|<intervalo>|desde|marcar` lee únicamente `~/.omp/stats.db`,
+calcula la rate card promocional vigente de Sol/Luna y separa modelo y tipo de
+agente. El marcador local guarda sólo timestamp. Es una estimación para comparar
+intensidad, mix y retrabajo; `omp usage` y `/aos-budget` siguen siendo autoridad
+de la cuota real compartida.

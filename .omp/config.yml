@@ -18,6 +18,8 @@ extensions:
   - extensions/agent-runtime-habitat.ts
   - extensions/omp-fleet.ts
   - extensions/omp-profiles.ts
+  - extensions/work-mode.ts
+  - extensions/codex-consumption.ts
   - extensions/live-markdown.ts
   - extensions/sync-close-prompt.ts
   - extensions/windows-input.ts

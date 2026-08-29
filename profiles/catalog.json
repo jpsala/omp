@@ -47,6 +47,17 @@
     "costWarning": "OpenAI Codex: Sol y Luna pueden consumir cuota o generar costo según tu cuenta."
   },
   {
+    "name": "codex-economic",
+    "overlay": "profiles/codex-economic.yml",
+    "description": "Modo económico: Luna High para padre y Task; Sol Medium/High queda en plan y slow.",
+    "parent": "openai-codex/gpt-5.6-luna:high",
+    "task": "openai-codex/gpt-5.6-luna:high",
+    "tags": ["codex", "economic", "luna", "daily"],
+    "status": "active",
+    "prewalk": false,
+    "costWarning": "OpenAI Codex: prioriza Luna, pero sigue consumiendo la cuota compartida del plan."
+  },
+  {
     "name": "deepseek-pro-high",
     "overlay": "profiles/deepseek-pro-high.yml",
     "description": "DeepSeek V4 Pro high directo en padre y Task.",
