@@ -118,14 +118,19 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   en memoria; nunca mata por pane id desnudo ni reclama tabs tras reload/resume.
   Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
   por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
-  hijas. El dispatcher conserva un widget persistente con la última transición
-  comprobada `working|waiting|blocked`; lanzamientos y retornos anidados se
-  propagan automáticamente y `agent_runtime_status` cubre estados conocidos
-  sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked` difieren
-  sólo ese turno para que una dependencia no se convierta en falso final; el
-  siguiente `agent_start` de un completion consume su token y publica upstream.
-  El smoke transitivo window → tab → parent pasó el 2026-08-25; el smoke de
-  estados, widget, integración y retorno upstream pasó el 2026-08-26.
+  hijas. `pending` es semántico: abarca `working|waiting|blocked`, completions aún
+  no encolados y el mensaje de integración del parent; nunca deriva de pane, tab,
+  shell o bootstrap vivo por `onExit:"keep-open"`. El completion durable no se
+  retira antes del enqueue y queda reentregable ante restart; `closeOnComplete`
+  cierra sólo después de ese enqueue. El dispatcher conserva un widget
+  persistente con la última transición comprobada; lanzamientos y retornos
+  anidados se propagan automáticamente y `agent_runtime_status` cubre estados
+  conocidos sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked`
+  difieren sólo ese turno. La integración se reconoce también por el follow-up
+  persistido, por lo que continuaciones `willContinue` de Advisor o mantenimiento
+  no pierden el retorno upstream. El smoke transitivo window → tab → parent pasó
+  el 2026-08-25; estados/widget pasaron el 2026-08-26; el repro de pending,
+  continuaciones y cierre transitivo pasó el 2026-08-31.
   `/orquestar` expone ese flow sin flags: confirma el owner y la observabilidad,
   delega sólo cuando aporta valor y devuelve el resultado consolidado a la
   sesión origen.

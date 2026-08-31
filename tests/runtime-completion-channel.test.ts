@@ -7,6 +7,7 @@ import {
   createCompletionStore,
   renderCompletionFollowUp,
   summarizeAgentCompletion,
+  isCompletionFollowUpTurn,
   shouldReportCompletionUpstream,
   type ChildSessionCompletion,
   type ChildSessionProgress,
@@ -48,11 +49,13 @@ const progress = (launchId: string, reportId: string, state: ChildSessionProgres
   updatedAt: Date.now(),
 });
 
-test("tracks queued integration turns across repeated agent-start hooks", () => {
+test("tracks integration across repeated starts and chained continuation turns", () => {
   const gate = new CompletionTurnGate();
   expect(gate.endAgentTurn()).toBeFalse();
   gate.queue();
   gate.agentStart();
+  gate.agentStart();
+  expect(gate.endAgentTurn(true)).toBeTrue();
   gate.agentStart();
   expect(gate.endAgentTurn()).toBeTrue();
   expect(gate.endAgentTurn()).toBeFalse();
@@ -67,24 +70,52 @@ test("tracks queued integration turns across repeated agent-start hooks", () => 
   gate.agentStart();
   expect(gate.endAgentTurn()).toBeFalse();
 });
+test("recognizes the persisted completion follow-up across chained continuation output", () => {
+  const followUp = renderCompletionFollowUp({
+    completions: [completion("launch-a")],
+    progress: [],
+    remaining: 0,
+  });
+  expect(isCompletionFollowUpTurn([
+    { role: "user", content: [{ type: "text", text: followUp }], timestamp: Date.now() },
+    { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "first integration answer" }] },
+    { role: "custom", customType: "advisor", content: "continue", display: true },
+    { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "final integration answer" }] },
+  ] as never)).toBeTrue();
+  expect(isCompletionFollowUpTurn([
+    { role: "user", content: [{ type: "text", text: "ordinary user prompt" }], timestamp: Date.now() },
+    { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "done" }] },
+  ] as never)).toBeFalse();
+});
 
-test("registers children and consumes completions exactly once", async () => {
+test("keeps semantic pending state until the parent acknowledges an enqueued return", async () => {
   const root = await mkdtemp(join(tmpdir(), "omp-completions-"));
   try {
     const store = createCompletionStore(root);
     await store.register(pending("launch-a"));
     await store.register(pending("launch-b"));
     expect(await store.hasActivity("parent-session")).toBeTrue();
+
     const completedA = completion("launch-a");
     await store.publish(completedA);
     const first = await store.consume("parent-session");
     expect(first.completions).toEqual([completedA]);
     expect(first.remaining).toBe(1);
+    expect(await store.hasPending("parent-session")).toBeTrue();
+    expect((await store.consume("parent-session")).completions).toEqual([completedA]);
+
+    await store.acknowledge(first.completions);
+    expect(await store.hasPending("parent-session")).toBeTrue();
+    expect(await store.consume("parent-session")).toEqual({ completions: [], progress: [], remaining: 1 });
+
     const completedB = completion("launch-b");
     await store.publish(completedB);
     const second = await store.consume("parent-session");
     expect(second.completions).toEqual([completedB]);
     expect(second.remaining).toBe(0);
+    expect(await store.hasPending("parent-session")).toBeTrue();
+
+    await store.acknowledge(second.completions);
     expect(await store.hasPending("parent-session")).toBeFalse();
     expect(await store.consume("parent-session")).toEqual({ completions: [], progress: [], remaining: 0 });
   } finally {
@@ -104,19 +135,22 @@ test("rejects unsafe completion identities", async () => {
   }
 });
 
-test("publishes bounded progress transitions and consumes them exactly once", async () => {
+test("keeps working, waiting, and blocked launches pending without a valid completion", async () => {
   const root = await mkdtemp(join(tmpdir(), "omp-completions-"));
   try {
     const store = createCompletionStore(root);
     await store.register(pending("launch-a"));
     const working = progress("launch-a", "progress-a");
-    const blocked = progress("launch-a", "progress-b", "blocked");
+    const waiting = progress("launch-a", "progress-b", "waiting");
+    const blocked = progress("launch-a", "progress-c", "blocked");
     await store.publishProgress(working);
+    await store.publishProgress(waiting);
     await store.publishProgress(blocked);
     const first = await store.consume("parent-session");
-    expect(first.progress).toEqual([working, blocked]);
+    expect(first.progress).toEqual([working, waiting, blocked]);
     expect(first.completions).toEqual([]);
     expect(first.remaining).toBe(1);
+    expect(await store.hasPending("parent-session")).toBeTrue();
     expect(await store.consume("parent-session")).toEqual({ completions: [], progress: [], remaining: 1 });
     await expect(store.publishProgress({ ...working, reportId: "../escape" })).rejects.toThrow("invalid child progress");
     await expect(store.publishProgress({ ...working, detail: "bad\ncontrol" })).rejects.toThrow("invalid child progress");

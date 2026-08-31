@@ -162,14 +162,17 @@ inicia un shell interactivo después de OMP, en el mismo `cwd`; Windows usa
 PowerShell 7 y otros hosts usan `$SHELL` o `/bin/sh`. El shell recibe un entorno
 limpio: no hereda metadata `OMP_RUNTIME_*`, el canal efímero del prompt ni
 marcadores de recursión. Cerrar explícitamente el pane en WezTerm siempre lo
-elimina.
+elimina. El pane, shell o proceso bootstrap que sobreviva por `keep-open` no es
+trabajo pendiente: Habitat no consulta procesos, panes ni tabs para decidirlo.
+
 `closeOnComplete:true` es un opt-in distinto de `onExit`: el parent conserva en
 memoria el handle exacto que creó y cierra sólo ese pane después de encolar con
-éxito el `followUp` de su resultado final. No cierra por transiciones
-`working|waiting|blocked`, no opera por pane id desnudo y no afecta handoffs o
-launches que omiten el flag. Si el parent se recarga o reabre, no intenta
-reclamar ownership histórico; deja el tab sobreviviente intacto antes que
-arriesgar cerrar un pane reutilizado.
+éxito el `followUp` de su resultado final. El mailbox se reconoce después del
+enqueue y antes del cierre. No cierra por transiciones `working|waiting|blocked`,
+no opera por pane id desnudo y no afecta handoffs o launches que omiten el flag.
+Si el enqueue falla, conserva mailbox y pane para reintentar. Si el parent se
+recarga o reabre, no intenta reclamar ownership histórico; deja el tab
+sobreviviente intacto antes que arriesgar cerrar un pane reutilizado.
 
 `persistence: "saved"|"ephemeral"` gobierna el almacenamiento de la sesión OMP;
 no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
@@ -185,42 +188,65 @@ ventanas visibles usando el pane del parent. El fragmento runtime expone
 ### Retorno automático y estado observable
 
 Cada launch exitoso registra transitoriamente la identidad de la hija bajo el
-directorio runtime privado del usuario. En el primer `agent_end` realmente
-terminal, la hija publica estado y texto final acotado; no persiste prompts ni
-transcripts. Un turno que haya publicado `waiting` o `blocked` no se considera
-final: el owner queda retomable en su sesión visible.
+directorio runtime privado del usuario. El estado semántico es:
 
-El mismo mailbox acepta transiciones acotadas `working|waiting|blocked`.
-El parent las consume, actualiza un widget persistente sobre el editor y las
+- `working`: la hija ejecuta o el parent integra un retorno; sigue pendiente.
+- `waiting`: la hija espera un retorno o condición externa; sigue pendiente y
+  difiere el cierre upstream de ese turno.
+- `blocked`: la hija requiere una acción externa concreta; sigue pendiente y
+  difiere el cierre upstream de ese turno.
+- `completed`: la hija publicó un resultado terminal. Ese resultado sigue siendo
+  trabajo pendiente del parent hasta que su `followUp` queda encolado; después,
+  la sesión del parent permanece `pending` por su mensaje de integración hasta
+  que produce la respuesta terminal correspondiente.
+
+La vida del pane, tab, shell o proceso no participa en esa clasificación.
+`onExit:"keep-open"` puede conservar el bootstrap y el pane después de
+`completed` sin reabrir trabajo. A la inversa, cerrar un pane no completa un
+mailbox ni integra un retorno.
+
+En el primer `agent_end` realmente terminal, la hija publica estado y texto
+final acotado; no persiste prompts ni transcripts. Un turno que haya publicado
+`waiting` o `blocked` no se considera final: el owner queda retomable en su
+sesión visible.
+
+El mismo mailbox acepta transiciones acotadas `working|waiting|blocked`. El
+parent las consume, actualiza un widget persistente sobre el editor y las
 propaga transitivamente si también es una hija. No consulta procesos, panes,
 scrollback ni sesiones OMP y no inventa liveness entre transiciones. Los
 lanzamientos anidados publican `waiting` y los retornos recibidos publican
 `working` de forma automática; `agent_runtime_status` cubre los cambios de
 estado que sólo el owner conoce.
 
-Al llegar un resultado final, el parent consume el reporte, retira el pending e
-inyecta un `followUp` que reanuda automáticamente su orquestación. Si la hija
-declaró `closeOnComplete:true`, después de encolar ese follow-up cierra el pane
-runtime-owned con el mismo adapter y handle del launch. Si la inyección
-sincrónica falla, restaura pending y completion para reintento y mantiene el
-pane abierto. Los reportes se escapan antes de entrar al prompt y el parent debe
-verificar cambios y afirmaciones contra las fuentes reales.
+Al llegar un resultado final, el parent lee el completion sin retirar todavía
+el registro pending e inyecta un `followUp` que reanuda automáticamente su
+orquestación. Sólo después de que `sendUserMessage` acepta ese follow-up reconoce
+el mailbox; entonces, si la hija declaró `closeOnComplete:true`, cierra el pane
+runtime-owned con el mismo adapter y handle del launch. Si la inyección falla,
+completion, pending y pane permanecen disponibles para reintento. Un restart
+anterior al reconocimiento vuelve a ofrecer el mismo completion: el contrato es
+at-least-once y prioriza no perder el mailbox. Un launch sin completion válido
+también permanece pendiente: ni un TTL ni la ausencia de proceso pueden
+convertir trabajo irresuelto en `completed`; sólo un retorno válido encolado
+habilita el reconocimiento.
+
 Cada follow-up de completion reserva un token in-memory antes de llamar
 `sendUserMessage`; el siguiente `agent_start` consume exactamente uno y marca
-ese loop como integración. `agent_start`, no `before_agent_start`, es la
-frontera fiable porque los follow-ups internos pueden continuar sin repetir el
-preflight de un prompt interactivo. El `agent_end` anterior no consume un token
-que llegó después de haber empezado; el loop de integración sí publica
-upstream.
-
+ese loop como integración. Si ese loop termina con `willContinue:true` —por
+ejemplo, porque Advisor o mantenimiento agenda una continuación— conserva la
+marca hasta el primer `agent_end` realmente terminal; no convierte la
+continuación en un falso final ni pierde el retorno upstream. `agent_start`, no
+`before_agent_start`, es la frontera fiable porque los follow-ups internos
+pueden continuar sin repetir el preflight de un prompt interactivo. El
+`agent_end` anterior no consume un token que llegó después de haber empezado.
 
 Si una hija actúa como orquestador y todavía conserva pending propios, no
 reporta upstream al cerrar su primer turno. Integra los retornos que recibe y
 sólo publica su resultado cuando ya no quedan hijas pendientes. El registro es
 atómico y forma parte del launch: si falla, el pane recién creado se revierte.
 El mailbox permite recuperar completions y estados pendientes cuando una sesión
-guardada se reabre; los archivos consumidos se eliminan.
-
+guardada se reabre; los archivos consumidos se eliminan sólo después del
+reconocimiento post-enqueue.
 
 ### Modelo: rol de agente vs spec real
 
@@ -372,6 +398,17 @@ El worker devolvió `WORKER_STATUS_6_OK`; el widget cambió a integración con c
 pendientes, el owner publicó `working`, respondió
 `ORCHESTRATION_STATUS_6_OK` y el widget se retiró al cerrar el loop. El retorno
 upstream eliminó el pending del owner; los artifacts de smoke se limpiaron.
+
+Smoke vivo del 2026-08-31: el repro produjo un owner con worker ya integrado y
+respuesta final persistida, pero una continuación automática consumió la marca
+in-memory y dejó el retorno upstream sin publicar mientras `keep-open` conservaba
+el pane. El smoke posterior atravesó owner → worker → follow-up con
+continuaciones de Advisor entre turnos; el worker devolvió
+`RUNTIME_SEMANTIC_CHILD_OK`, el owner respondió
+`RUNTIME_SEMANTIC_OWNER_OK`, ambos mailboxes quedaron sin pending y
+`closeOnComplete` retiró los dos panes. Los tests focales reproducen además
+reentrega previa al acknowledgment, enqueue fallido, cleanup fallido y el orden
+enqueue → acknowledgment → cierre.
 
 El smoke vivo requiere pedido explícito. Para splits debe demostrar mismo tab,
 nuevo pane, session id distinta, modelo esperado y acknowledgment exacto. Para

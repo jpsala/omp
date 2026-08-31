@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
-import { CompletionTurnGate, completionRoot, createCompletionStore, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion } from "../src/runtime-completion-channel.ts";
+import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter, type WezTermHostAdapter, type WezTermPaneHandle } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
@@ -200,6 +200,29 @@ export async function closeCompletedOwnedChildren(completions:readonly ChildSess
  }
  return failed;
 }
+export async function deliverCompletionFollowUp(
+  batch: CompletionBatch,
+  gate: CompletionTurnGate,
+  sendFollowUp: (message: string) => void,
+  acknowledge: (completions: readonly ChildSessionCompletion[]) => Promise<void>,
+  closeOwnedChildren: (completions: readonly ChildSessionCompletion[]) => Promise<string[]>,
+): Promise<{ acknowledged: boolean; closeFailures: string[] }> {
+  gate.queue();
+  try {
+    sendFollowUp(renderCompletionFollowUp(batch));
+  } catch (error) {
+    gate.rollbackQueue();
+    throw error;
+  }
+  let acknowledged = true;
+  try {
+    await acknowledge(batch.completions);
+  } catch {
+    acknowledged = false;
+  }
+  const closeFailures = await closeOwnedChildren(batch.completions);
+  return { acknowledged, closeFailures };
+}
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
 export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"], sessionName?:string):Promise<void> {
@@ -217,6 +240,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  const completionTurnGate=new CompletionTurnGate();
  const monitoredParents=new Set<string>(), drainingParents=new Set<string>();
  const ownedChildren=new Map<string,OwnedChildToClose>();
+ const enqueuedCompletions=new Map<string,ChildSessionCompletion>();
  let launchedChildren=false, upstreamCompletionReported=false, deferUpstreamCompletion=false;
  const publishProgressUpstream=async(ctx:Ctx,state:ChildProgressState,detail:string)=>{
    if(ctx.hasUI!==true) return false;
@@ -241,7 +265,15 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    if(drainingParents.has(parentSessionId)) return;
    drainingParents.add(parentSessionId);
    try{
-     const batch=await completionStore.consume(parentSessionId);
+     if(enqueuedCompletions.size>0){
+       try{
+         await completionStore.acknowledge([...enqueuedCompletions.values()]);
+         enqueuedCompletions.clear();
+       }catch{}
+     }
+     const consumed=await completionStore.consume(parentSessionId);
+     const completions=consumed.completions.filter(completion=>!enqueuedCompletions.has(completion.launchId));
+     const batch:CompletionBatch={...consumed,completions};
      const latest=batch.progress.at(-1);
      if(latest){
        setRuntimeStatus(ctx,latest.childName,latest.state,latest.detail,batch.remaining);
@@ -252,28 +284,19 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
        const detail=`Retorno recibido de ${names}; integrando y verificando.`;
        setRuntimeStatus(ctx,names,"working",detail,batch.remaining);
        await publishProgressUpstream(ctx,"working",detail).catch(()=>false);
-       completionTurnGate.queue();
-       try{
-         pi.sendUserMessage(renderCompletionFollowUp(batch),{deliverAs:"followUp"});
-         const closeFailures=await closeCompletedOwnedChildren(batch.completions,ownedChildren);
-         if(closeFailures.length>0)
-           setRuntimeStatus(ctx,names,"working",`${detail} No se pudieron cerrar automáticamente: ${closeFailures.join(", ")}.`,batch.remaining);
-       }catch(error){
-         completionTurnGate.rollbackQueue();
-         for(const completion of batch.completions){
-           await completionStore.register({
-             version:1,
-             launchId:completion.launchId,
-             parentSessionId:completion.parentSessionId,
-             childSessionId:completion.childSessionId,
-             childName:completion.childName,
-             paneId:completion.paneId,
-             startedAt:completion.completedAt,
-           });
-           await completionStore.publish(completion);
-         }
-         throw error;
+       const delivery=await deliverCompletionFollowUp(
+         batch,
+         completionTurnGate,
+         message=>pi.sendUserMessage(message,{deliverAs:"followUp"}),
+         completionsToAcknowledge=>completionStore.acknowledge(completionsToAcknowledge),
+         completionsToClose=>closeCompletedOwnedChildren(completionsToClose,ownedChildren),
+       );
+       if(!delivery.acknowledged){
+         for(const completion of batch.completions) enqueuedCompletions.set(completion.launchId,completion);
+         setRuntimeStatus(ctx,names,"working",`${detail} El retorno quedó encolado; el mailbox conserva el pendiente hasta confirmar su cleanup.`,batch.remaining);
        }
+       if(delivery.closeFailures.length>0)
+         setRuntimeStatus(ctx,names,"working",`${detail} No se pudieron cerrar automáticamente: ${delivery.closeFailures.join(", ")}.`,batch.remaining);
      }
    }finally{drainingParents.delete(parentSessionId);}
  };
@@ -330,7 +353,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  pi.on("agent_start",()=>{completionTurnGate.agentStart();});
  pi.on("agent_end",async(event,ctx)=>{
    if(ctx.hasUI!==true||upstreamCompletionReported) return;
-   const completionFollowUpTurn=completionTurnGate.endAgentTurn();
+   const completionFollowUpTurn=completionTurnGate.endAgentTurn(event.willContinue===true)||isCompletionFollowUpTurn(event.messages);
    const deferThisTurn=deferUpstreamCompletion;
    deferUpstreamCompletion=false;
    const childSessionId=ctx.sessionManager?.getSessionId?.();

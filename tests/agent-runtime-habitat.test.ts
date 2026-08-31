@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
 import { markerRoot } from "../src/runtime-handshake.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
+import { CompletionTurnGate } from "../src/runtime-completion-channel.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -297,6 +298,72 @@ test("closes only matching runtime-owned panes after receiving completions", asy
   expect(closed).toEqual(["pane-a"]);
   expect(failures).toEqual(["Wrong pane"]);
   expect(owned.size).toBe(0);
+});
+test("enqueues the return before acknowledging mailbox state and closing the owned pane", async () => {
+  const events: string[] = [];
+  const gate = new CompletionTurnGate();
+  const childCompletion = {
+    version: 1 as const,
+    launchId: "launch-a",
+    parentSessionId: "parent",
+    childSessionId: "child",
+    childName: "Worker A",
+    paneId: "pane-a",
+    status: "completed" as const,
+    summary: "done",
+    completedAt: Date.now(),
+  };
+  const result = await deliverCompletionFollowUp(
+    { completions: [childCompletion], progress: [], remaining: 0 },
+    gate,
+    () => { events.push("follow-up-enqueued"); },
+    async () => { events.push("mailbox-acknowledged"); },
+    async () => {
+      events.push("owned-pane-closed");
+      return [];
+    },
+  );
+  expect(events).toEqual(["follow-up-enqueued", "mailbox-acknowledged", "owned-pane-closed"]);
+  expect(result).toEqual({ acknowledged: true, closeFailures: [] });
+  gate.agentStart();
+  expect(gate.endAgentTurn()).toBeTrue();
+
+  events.length = 0;
+  const cleanupFailure = await deliverCompletionFollowUp(
+    { completions: [childCompletion], progress: [], remaining: 0 },
+    gate,
+    () => { events.push("follow-up-enqueued"); },
+    async () => {
+      events.push("mailbox-cleanup-failed");
+      throw new Error("locked mailbox");
+    },
+    async () => {
+      events.push("owned-pane-closed");
+      return [];
+    },
+  );
+  expect(events).toEqual(["follow-up-enqueued", "mailbox-cleanup-failed", "owned-pane-closed"]);
+  expect(cleanupFailure).toEqual({ acknowledged: false, closeFailures: [] });
+  gate.agentStart();
+  expect(gate.endAgentTurn()).toBeTrue();
+
+  events.length = 0;
+  await expect(deliverCompletionFollowUp(
+    { completions: [childCompletion], progress: [], remaining: 0 },
+    gate,
+    () => {
+      events.push("follow-up-failed");
+      throw new Error("enqueue failed");
+    },
+    async () => { events.push("must-not-acknowledge"); },
+    async () => {
+      events.push("must-not-close");
+      return [];
+    },
+  )).rejects.toThrow("enqueue failed");
+  expect(events).toEqual(["follow-up-failed"]);
+  gate.agentStart();
+  expect(gate.endAgentTurn()).toBeFalse();
 });
 test("builds a closed dedicated-window orchestration command", () => {
   const prompt = buildOrchestratePrompt('resolver "metadata"');

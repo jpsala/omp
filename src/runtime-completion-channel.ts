@@ -76,9 +76,9 @@ export class CompletionTurnGate {
     this.#queued--;
   }
 
-  endAgentTurn(): boolean {
+  endAgentTurn(willContinue = false): boolean {
     const integrationTurn = this.#integrationTurn;
-    this.#integrationTurn = false;
+    if (!willContinue) this.#integrationTurn = false;
     return integrationTurn;
   }
 }
@@ -87,6 +87,7 @@ export interface CompletionStore {
   register(pending: PendingChildSession): Promise<void>;
   publish(completion: ChildSessionCompletion): Promise<void>;
   publishProgress(progress: ChildSessionProgress): Promise<void>;
+  acknowledge(completions: readonly ChildSessionCompletion[]): Promise<void>;
   hasActivity(parentSessionId: string): Promise<boolean>;
   hasPending(parentSessionId: string): Promise<boolean>;
   consume(parentSessionId: string): Promise<CompletionBatch>;
@@ -193,6 +194,18 @@ export function renderCompletionFollowUp(batch: CompletionBatch): string {
   }).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e"));
   return `${COMPLETION_FOLLOW_UP_PREFIX}${batch.completions.length} sesión(es) hija(s):\n${reports.join("\n")}\n\nQuedan ${batch.remaining} sesión(es) hija(s) pendientes. Integrá estos resultados ahora, verificá directamente cualquier cambio o afirmación antes de aceptarla y continuá la orquestación sin esperar que el usuario te avise.`;
 }
+export function isCompletionFollowUpTurn(messages: readonly AgentMessage[]): boolean {
+  const userMessage = messages.findLast(message => message.role === "user");
+  if (!userMessage) return false;
+  const content = userMessage.content;
+  const text = typeof content === "string"
+    ? content
+    : content
+        .filter((block): block is Extract<(typeof content)[number], { type: "text" }> => block.type === "text")
+        .map(block => block.text)
+        .join("\n");
+  return text.startsWith(COMPLETION_FOLLOW_UP_PREFIX);
+}
 
 export function completionRoot(base = markerRoot()): string {
   return join(base, "completions");
@@ -215,6 +228,13 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
     await fs.writeFile(temporary, JSON.stringify(value), { encoding: "utf8", flag: "wx", mode: 0o600 });
     await secure(temporary, 0o600);
     await fs.rename(temporary, path);
+  };
+  const unlinkIfPresent = async (path: string) => {
+    try {
+      await fs.unlink(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   };
   const names = async (parentSessionId: string) => {
     try { return await fs.readdir(parentDirectory(parentSessionId)); }
@@ -240,6 +260,13 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
     async hasPending(parentSessionId) {
       return (await names(parentSessionId)).some(name => name.endsWith(".pending.json"));
     },
+    async acknowledge(completions) {
+      for (const completion of completions) {
+        if (!validCompletion(completion)) throw new Error("invalid child completion");
+        await unlinkIfPresent(pendingPath(completion));
+        await unlinkIfPresent(completionPath(completion));
+      }
+    },
     async consume(parentSessionId) {
       if (!safeId(parentSessionId)) return { completions: [], progress: [], remaining: 0 };
       const directory = parentDirectory(parentSessionId);
@@ -260,21 +287,15 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
       const completions: ChildSessionCompletion[] = [];
       for (const name of (await names(parentSessionId)).filter(value => value.endsWith(".completion.json")).sort()) {
         const source = join(directory, name);
-        const claimed = `${source}.${randomLaunchId().slice(0, 16)}.claimed`;
         try {
-          await fs.rename(source, claimed);
-          try {
-            const value = JSON.parse(await fs.readFile(claimed, "utf8"));
-            if (validCompletion(value, parentSessionId)) {
-              completions.push(value);
-              await fs.unlink(pendingPath(value)).catch(() => {});
-            }
-          } finally {
-            await fs.unlink(claimed).catch(() => {});
-          }
+          const value = JSON.parse(await fs.readFile(source, "utf8"));
+          if (validCompletion(value, parentSessionId)) completions.push(value);
+          else await fs.unlink(source).catch(() => {});
         } catch {}
       }
-      const remaining = (await names(parentSessionId)).filter(name => name.endsWith(".pending.json")).length;
+      const pendingCount = (await names(parentSessionId)).filter(name => name.endsWith(".pending.json")).length;
+      const deliveredLaunches = new Set(completions.map(completion => completion.launchId));
+      const remaining = Math.max(0, pendingCount - deliveredLaunches.size);
       return { completions, progress, remaining };
     },
   };
