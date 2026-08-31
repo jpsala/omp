@@ -1,7 +1,7 @@
 # UX surfaces: native, port or discard
 
 Status: active
-Summary: Matriz durable de Windows input, status/cuota, renderers y atención WezTerm revalidada sobre OMP 18.0.10.
+Summary: Matriz durable de Windows input, status/cuota, renderers y atención WezTerm revalidada sobre OMP 18.0.11.
 
 ## Criterio
 
@@ -13,11 +13,11 @@ Summary: Matriz durable de Windows input, status/cuota, renderers y atención We
 
 | Superficie | Clasificación | Evidencia verificada | Acción |
 | --- | --- | --- | --- |
-| Windows input y clipboard | **integración deliberada sobre editor nativo** | OMP 18.0.10 ya posee clipboard, paste, VT input y mitigaciones ConPTY. `windows-input-native.ts` conserva únicamente la selección editable por teclado, undo Windows y la semántica verificada de `Ctrl+C`; delega render y autocomplete al editor OMP. El build activo embebe el addon Win32 18.0.10 publicado. | Cargar `extensions/windows-input.ts` directamente. Mantener un único registro de `/windows-input` en la implementación nativa; no conservar wrappers, diagnóstico duplicado ni selección paralela de modelos. |
-| Status/footer | **native**; **descartar** un footer paralelo | OMP 18.0.10 documenta e implementa `statusLine.preset`, separators y custom segments. | Hablar de `statusLine`, el nombre real. Configurar presets/segments sólo cuando exista un objetivo medible. |
-| Quota/usage en status | **native** | OMP 18.0.10 registra el segmento `usage`, muestra ventanas y resets del provider, y expone `omp usage`. | Usar el segmento `usage` o `omp usage`; no consultar auth ni crear un poller propio. |
+| Windows input y clipboard | **integración deliberada sobre editor nativo** | OMP 18.0.11 ya posee clipboard, paste, VT input y mitigaciones ConPTY. `windows-input-native.ts` conserva únicamente la selección editable por teclado, undo Windows y la semántica verificada de `Ctrl+C`; delega render y autocomplete al editor OMP. El build activo embebe el addon Win32 18.0.11 publicado. | Cargar `extensions/windows-input.ts` directamente. Mantener un único registro de `/windows-input` en la implementación nativa; no conservar wrappers, diagnóstico duplicado ni selección paralela de modelos. |
+| Status/footer | **native**; **descartar** un footer paralelo | OMP 18.0.11 documenta e implementa `statusLine.preset`, separators y custom segments. | Hablar de `statusLine`, el nombre real. Configurar presets/segments sólo cuando exista un objetivo medible. |
+| Quota/usage en status | **native** | OMP 18.0.11 registra el segmento `usage`, muestra ventanas y resets del provider, y expone `omp usage`. | Usar el segmento `usage` o `omp usage`; no consultar auth ni crear un poller propio. |
 | Modelos y esfuerzos rápidos | **native** | `modelRoles` acepta selectores con sufijo de effort; `modelTags` nombra roles; `cycleOrder` es el ciclo nativo de `Ctrl+P`/`Ctrl+Shift+P`; `/models` permite editar Roles y `Alt+M` selecciona el modelo de la sesión. | Usar `Alt+M`/`/models` como única superficie local de selección; no agregar favoritos, renderers ni hotkeys paralelos. Reservar overlays/perfiles para Task, `prewalk` y concurrencia. |
-| Renderers | **native** | OMP 18.0.10 documenta `renderCall`/`renderResult`, message renderer y thinking renderer; `omp gallery` es el visor nativo de estados. | Mantener renderers dentro del contrato nativo sólo cuando una tool local los necesite. No portar un renderer general. |
+| Renderers | **native** | OMP 18.0.11 documenta `renderCall`/`renderResult`, message renderer y thinking renderer; `omp gallery` es el visor nativo de estados. | Mantener renderers dentro del contrato nativo sólo cuando una tool local los necesite. No portar un renderer general. |
 | WezTerm Attention | **integración deliberada** | El productor existente usa eventos OMP (`agent_start`, `tool_execution_start`, `session_stop`, `tool_call`, `tool_result`) y un marcador atómico consumible por WezTerm. [Extensions](https://github.com/can1357/oh-my-pi/blob/main/docs/extensions.md) documenta el factory y los eventos. | Fuente única en `extensions/wezterm-attention.ts`, cargada directamente por el perfil global y repetida en `.omp/config.yml`; no mantener wrapper. |
 
 ## Mouse en WinInput
@@ -42,12 +42,12 @@ rueda.
 
 ## Filtros nativos del transcript
 
-OMP 18.0.10 puede retirar snapshots comprometidos y reconstruir el transcript
+OMP 18.0.11 puede retirar snapshots comprometidos y reconstruir el transcript
 principal con `resetDisplay()`. Eso permite seguir trabajando con Markdown,
 renderers, streaming y editor normales; el costo es reemplazar la representación
 terminal anterior, no conservarla byte por byte en el scrollback.
 
-El patch downstream durable `patches/omp-18.0.10-workstation.patch` agrega
+El patch downstream durable `patches/omp-18.0.11-workstation.patch` agrega
 `display.hiddenTools`, `display.hideAssistantToolPreambles`,
 `display.transcriptVisibilityProfiles`, la API opcional de visibilidad y el
 ceiling económico de provider dispatch. La política visual cubre thinking,
@@ -61,15 +61,17 @@ encima de 272k, fuerza compactación sincrónica y aborta sin otra request cuand
 no hay progreso. El test incluido reproduce el caso con ventana de 1M y exige
 una única llamada outbound dentro del ceiling.
 
-Revisión contra el tag oficial `v18.0.10`: upstream conserva los toggles
+Revisión contra el tag oficial `v18.0.11`: upstream conserva los toggles
 globales de thinking, actividad de tools y métricas, pero no expone filtros por
-nombre, ocultamiento de preámbulos ni perfiles atómicos. El endurecimiento de
-filas estables introducido en 18.0.6 permanece y congela publicaciones que
-retraen bytes ya emitidos en vez de fallar el render; es complementario al
-selector granular. El patch 18.0.6 aplicó limpio sobre 18.0.10 y conserva la
-semántica upstream de `TranscriptContainer`. Por eso el delta sigue siendo
-necesario. Está fijado a `v18.0.10`; cada update posterior exige rebase y tests
-focales, nunca aplicación ciega.
+nombre, ocultamiento de preámbulos ni perfiles atómicos. El fix upstream de
+18.0.11 corrige el toggle global de thinking durante streaming, sin sustituir
+la granularidad downstream. El endurecimiento de filas estables introducido en
+18.0.6 permanece y congela publicaciones que retraen bytes ya emitidos en vez
+de fallar el render; es complementario al selector granular. El delta rebasó
+limpio sobre 18.0.11, pasó los 24 tests focales y el check tipado/formato del
+coding-agent. El smoke TUI real mostró el selector de 41 opciones y restauró
+`Windows input: on`. El patch queda fijado a `v18.0.11`; cada update posterior
+exige rebase y tests focales, nunca aplicación ciega.
 
 ### Promoción upstream
 

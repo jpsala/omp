@@ -647,3 +647,16 @@ calcula la rate card promocional vigente de Sol/Luna y separa modelo y tipo de
 agente. El marcador local guarda sólo timestamp. Es una estimación para comparar
 intensidad, mix y retrabajo; `omp usage` y `/aos-budget` siguen siendo autoridad
 de la cuota real compartida.
+
+## 2026-08-31 — Rebase granular sobre OMP 18.0.11
+
+OMP 18.0.11 corrige el toggle global de thinking durante streaming, pero no
+incorpora filtros por nombre de tool, ocultamiento de preámbulos, perfiles
+atómicos ni un hook genérico de transcript. El delta downstream sigue siendo
+necesario y queda fijado en `patches/omp-18.0.11-workstation.patch`.
+
+El rebase aplicó limpio. Los 24 tests focales pasaron con 97 assertions y el
+check de formato y tipos de `packages/coding-agent` quedó limpio. El binario
+Windows embebe el addon Win32 18.0.11 publicado, se desplegó sólo mediante
+`bun run deploy:omp` y el smoke TUI real verificó el selector granular de 41
+opciones y `Windows input: on`.
