@@ -84,8 +84,8 @@ lo permiten.
 duplica planificación: empaqueta objetivo, límites, evidencia y verificación en
 un prompt autocontenido y abre una única hija.
 
-La hija arranca en Sol heredado dentro de un split derecho al 50%, fresh saved,
-mismo cwd y foco conservado en el parent. El request cerrado declara
+La hija arranca con el modelo heredado dentro de un split derecho al 50%, fresh
+saved, mismo cwd y foco conservado en el parent. El request cerrado declara
 `workflow: { mode: "plan-yolo", target: "@smol", advisor: true }`: OMP 18
 planifica en el modelo fuerte, autoaprueba el plan y entrega la implementación
 al rol económico; Advisor revisa el corte de forma opt-in. El parent no
@@ -95,6 +95,29 @@ implementa ni monitorea el pane después del handshake.
 libre. El target es un selector de rol nativo OMP, no un `model.spec`; ausencia
 de workflow conserva exactamente el lanzamiento anterior. Esta integración usa
 el `plan-yolo` nativo de OMP 18 y debe revalidarse al actualizar OMP.
+
+## 2026-09-01 — Review Sol crítico es un gate final explícito
+
+`/plan-implement-short --critical [objetivo]` y
+`/orquestar --critical [objetivo]` conservan intactos los flows normales y
+agregan un único gate de aceptación después de integración y checks
+deterministas. La hija u owner construye un paquete compacto con objetivo,
+criterios, decisiones, archivos y diff focal, evidencia y riesgos, y lanza un
+reviewer read-only con `openai-codex/gpt-5.6-sol:xhigh` en un tab
+`closeOnComplete:true`.
+
+El reviewer reporta sólo errores materiales de corrección, seguridad, pérdida
+de datos, regresión o aceptación, con evidencia e impacto; no edita, delega,
+documenta ni publica. El owner verifica cada hallazgo contra la fuente real,
+corrige sólo lo confirmado y repite los checks afectados. No hay segunda
+revisión: el límite evita loops y costo impredecible. Si el reviewer no lanza o
+no retorna, el flow crítico debe declararse bloqueado, no aprobado.
+
+La selección es manual mediante un primer token exacto `--critical`. No se
+agrega heurística de riesgo ni Sol continuo: el costo fuerte aparece sólo donde
+JP solicita explícitamente este gate. En `/plan-implement-short`, el Advisor
+nativo del workflow sigue siendo independiente y usa el rol configurado por el
+perfil; el reviewer Sol es una sesión final separada.
 
 ## 2026-08-14 — Nombre y cierre del pane son contrato explícito
 

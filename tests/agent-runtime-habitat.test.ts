@@ -6,7 +6,7 @@ import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
 import { markerRoot } from "../src/runtime-handshake.ts";
 import { CompletionTurnGate, completionRoot } from "../src/runtime-completion-channel.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, RUNTIME_CANCEL_COMMAND, RUNTIME_CHILDREN_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { CRITICAL_REVIEWER_MODEL, DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, RUNTIME_CANCEL_COMMAND, RUNTIME_CHILDREN_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, buildPlanImplementShortPrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, parseCriticalFlowRequest, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -108,8 +108,10 @@ test("extension registers context and an explicit nested launch contract", async
     expect(sessionTool?.description).toContain("never model.spec");
     expect(sessionTool?.description).toContain("background Task agents must return through Task");
     expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-window orchestration owner");
+    expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("--critical");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
     expect(planCommand?.description).toContain("planning-and-implementation owner");
+    expect(planCommand?.description).toContain("--critical");
     expect(commands.get(RUNTIME_CHILDREN_COMMAND)?.description).toContain("still awaiting");
     expect(commands.get(RUNTIME_CANCEL_COMMAND)?.description).toContain("Cancel one pending");
     await planCommand!.handler('corregir "framing"', {});
@@ -528,9 +530,35 @@ test("enqueues the return before acknowledging mailbox state and closing the own
   gate.agentStart();
   expect(gate.endAgentTurn()).toBeFalse();
 });
+test("parses only an exact leading critical flag", () => {
+  expect(parseCriticalFlowRequest("  corregir framing  ")).toEqual({ critical: false, objective: "corregir framing" });
+  expect(parseCriticalFlowRequest("corregir --critical framing")).toEqual({ critical: false, objective: "corregir --critical framing" });
+  expect(parseCriticalFlowRequest("--criticality corregir framing")).toEqual({ critical: false, objective: "--criticality corregir framing" });
+  expect(parseCriticalFlowRequest("--critical\t corregir framing ")).toEqual({ critical: true, objective: "corregir framing" });
+  expect(parseCriticalFlowRequest("--critical")).toEqual({ critical: true, objective: "" });
+});
+test("adds one bounded Sol gate to the critical short implementation flow", () => {
+  const normal = buildPlanImplementShortPrompt("resolver metadata");
+  expect(normal).not.toContain(CRITICAL_REVIEWER_MODEL);
+  expect(normal).not.toContain("Modo crítico solicitado");
+  const critical = buildPlanImplementShortPrompt('--critical resolver "metadata"');
+  expect(critical).toContain(JSON.stringify('resolver "metadata"'));
+  expect(critical).not.toContain(JSON.stringify('--critical resolver "metadata"'));
+  expect(critical).toContain('workflow:{mode:"plan-yolo",target:"@smol",advisor:true}');
+  expect(critical).toContain('placement {kind:"tab"}');
+  expect(critical).toContain('pane {title:"Revisor Sol · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}');
+  expect(critical).toContain(`model:{mode:"explicit",spec:${JSON.stringify(CRITICAL_REVIEWER_MODEL)}}`);
+  expect(critical).toContain("trabajo read-only");
+  expect(critical).toContain("No debe abrir un segundo reviewer");
+  expect(critical).toContain("no puede declarar completado el gate crítico");
+  expect(critical.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
+  expect(buildPlanImplementShortPrompt("--critical")).toContain("solicitud de usuario accionable inmediatamente anterior");
+});
 test("builds a closed dedicated-window orchestration command", () => {
   const prompt = buildOrchestratePrompt('resolver "metadata"');
   expect(prompt).toContain(JSON.stringify('resolver "metadata"'));
+  expect(prompt).not.toContain(CRITICAL_REVIEWER_MODEL);
+  expect(prompt).not.toContain("Modo crítico solicitado");
   expect(prompt).toContain('placement {kind:"window"}');
   expect(prompt).toContain('pane {title:"Orquestador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}');
   expect(prompt).toContain('fresh:true, persistence:"saved", model:{mode:"inherit"} y focus:true');
@@ -546,6 +574,15 @@ test("builds a closed dedicated-window orchestration command", () => {
   expect(prompt).toContain("No respondas sólo con identificadores");
   expect(prompt).toContain("superficie persistente");
   expect(prompt.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
+  const critical = buildOrchestratePrompt("--critical resolver metadata");
+  expect(critical).toContain(JSON.stringify("resolver metadata"));
+  expect(critical).not.toContain(JSON.stringify("--critical resolver metadata"));
+  expect(critical).toContain('placement {kind:"tab"}');
+  expect(critical).toContain('pane {title:"Revisor Sol · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}');
+  expect(critical).toContain(`model:{mode:"explicit",spec:${JSON.stringify(CRITICAL_REVIEWER_MODEL)}}`);
+  expect(critical).toContain("El owner debe esperar el retorno automático");
+  expect(critical).toContain("No debe abrir un segundo reviewer");
+  expect(critical.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
   const implicit = buildOrchestratePrompt("   ");
   expect(implicit).toContain("solicitud de usuario accionable inmediatamente anterior");
   expect(implicit).toContain("pedí sólo el objetivo y no invoques agent_runtime_session");

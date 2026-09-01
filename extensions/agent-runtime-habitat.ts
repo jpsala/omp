@@ -18,32 +18,51 @@ export function compactRuntimeFragment(context: AgentRuntimeContextV1): string {
  return `Runtime context (read-only): harness=${context.harness.id} host=${context.host.kind}${where} ui=${context.harness.hasUI?"yes":"no"} trust=${context.host.trust}`.slice(0,MAX_RUNTIME_FRAGMENT_LENGTH);
 }
 export const PLAN_IMPLEMENT_SHORT_COMMAND = "plan-implement-short";
+export const ORCHESTRATE_COMMAND = "orquestar";
+export const CRITICAL_REVIEWER_MODEL = "openai-codex/gpt-5.6-sol:xhigh";
+export function parseCriticalFlowRequest(args: string): { critical: boolean; objective: string } {
+ const trimmed=args.trim();
+ const match=/^--critical(?:\s+([\s\S]*))?$/.exec(trimmed);
+ return match
+   ? {critical:true,objective:(match[1]??"").trim()}
+   : {critical:false,objective:trimmed};
+}
+function buildCriticalReviewGate(owner: "La hija" | "El owner"): string {
+ return `
+
+Modo crítico solicitado. ${owner} debe completar implementación, integración y checks deterministas antes de este gate. Luego debe construir un paquete de revisión compacto con objetivo y criterios de aceptación, decisiones relevantes, archivos cambiados y diff focal, evidencia de checks y riesgos conocidos. Con ese paquete debe lanzar un único reviewer final mediante agent_runtime_session con el cwd actual, placement {kind:"tab"}, pane {title:"Revisor Sol · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}, fresh:true, persistence:"saved", model:{mode:"explicit",spec:${JSON.stringify(CRITICAL_REVIEWER_MODEL)}} y focus:false; no debe agregar workflow ni argv libre.
+
+El prompt del reviewer debe exigir trabajo read-only: no editar, no lanzar subagentes, no crear documentación, no commitear ni publicar. Debe buscar exclusivamente errores materiales de corrección, seguridad, pérdida de datos, regresiones o incumplimientos de aceptación, con evidencia exacta e impacto; debe omitir estilo, ceremonia y mejoras opcionales. Su respuesta debe ser "sin hallazgos materiales" o una lista priorizada con la corrección mínima.
+
+${owner} debe esperar el retorno automático, verificar directamente cada hallazgo y corregir sólo los problemas materiales confirmados. Después debe repetir los checks afectados. No debe abrir un segundo reviewer ni entrar en un loop de revisión. Si el lanzamiento o el retorno falla, no puede declarar completado el gate crítico: debe informar el bloqueo exacto.`;
+}
 export function buildPlanImplementShortPrompt(objective: string): string {
- const explicitObjective=objective.trim();
- const target=explicitObjective
-   ? `Objetivo explícito para la hija (JSON string): ${JSON.stringify(explicitObjective)}`
+ const request=parseCriticalFlowRequest(objective);
+ const target=request.objective
+   ? `Objetivo explícito para la hija (JSON string): ${JSON.stringify(request.objective)}`
    : "Derivá el objetivo de la solicitud de usuario accionable inmediatamente anterior a este comando. Si no existe una, pedí sólo el objetivo y no invoques agent_runtime_session.";
+ const criticalGate=request.critical ? buildCriticalReviewGate("La hija") : "";
  return `Empaquetá un único objetivo y lanzá exactamente una sesión hija; no produzcas el plan ni implementes en esta sesión.
 
 ${target}
 
-Construí un prompt autocontenido y compacto para una hija sin acceso a esta conversación. Incluí el objetivo, el cwd actual, el contexto ya comprobado que sea indispensable, límites aplicables y verificación esperada. No cierres un plan de implementación: la hija es dueña de planning e implementación, y el workflow nativo plan-yolo debe planificar y aplicar el cambio patch-specific.
+Construí un prompt autocontenido y compacto para una hija sin acceso a esta conversación. Incluí el objetivo, el cwd actual, el contexto ya comprobado que sea indispensable, límites aplicables y verificación esperada. No cierres un plan de implementación: la hija es dueña de planning e implementación, y el workflow nativo plan-yolo debe planificar y aplicar el cambio patch-specific.${criticalGate}
 
 Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese paquete como prompt, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}, fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false y workflow:{mode:"plan-yolo",target:"@smol",advisor:true}. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras otras sesiones, no uses argv libre y no monitorees el pane.
 
 Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
-export const ORCHESTRATE_COMMAND = "orquestar";
 export function buildOrchestratePrompt(objective: string): string {
- const explicitObjective=objective.trim();
- const target=explicitObjective
-   ? `Objetivo explícito de la orquestación (JSON string): ${JSON.stringify(explicitObjective)}`
+ const request=parseCriticalFlowRequest(objective);
+ const target=request.objective
+   ? `Objetivo explícito de la orquestación (JSON string): ${JSON.stringify(request.objective)}`
    : "Derivá el objetivo de la solicitud de usuario accionable inmediatamente anterior a este comando. Si no existe una, pedí sólo el objetivo y no invoques agent_runtime_session.";
+ const criticalGate=request.critical ? buildCriticalReviewGate("El owner") : "";
  return `Actuá únicamente como dispatcher: empaquetá el objetivo y lanzá exactamente un owner de orquestación; no planifiques ni implementes en esta sesión.
 
 ${target}
 
-Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Todo tab de implementador o revisor debe lanzarse con pane.closeOnComplete:true para que el runtime lo cierre sólo después de recibir su retorno. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile o cierre tabs.
+Construí un kickoff autocontenido y compacto para un owner sin acceso a esta conversación. Incluí objetivo, cwd, contexto ya comprobado indispensable, límites, criterios de aceptación y verificación esperada. El owner debe evaluar si delegar aporta valor: si no, trabaja solo; si sí, fija contratos, dependencias y ownership antes de abrir implementadores o revisores en tabs, y paraleliza únicamente frentes independientes. Todo tab de implementador o revisor debe lanzarse con pane.closeOnComplete:true para que el runtime lo cierre sólo después de recibir su retorno. Debe integrar y verificar todos los retornos automáticos antes de entregar upstream, sin pedir al usuario que vigile o cierre tabs.${criticalGate}
 
 El owner debe usar agent_runtime_status para publicar cambios reales de estado, no heartbeats: working al cerrar alcance o comenzar integración; waiting cuando dependa de retornos o una condición externa; blocked antes de pedir una acción humana, con el bloqueo exacto. El runtime propaga además lanzamientos y retornos anidados. No inventes actividad entre transiciones.
 
@@ -441,11 +460,11 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    await publishTerminalUpstream(ctx,"cancelled",summary);
  });
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
-   description:"Start one planning-and-implementation owner with native plan-yolo in a right split",
+   description:"Start one planning-and-implementation owner with native plan-yolo in a right split; add a final Sol review with --critical",
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
  });
  pi.registerCommand(ORCHESTRATE_COMMAND,{
-   description:"Start a dedicated-window orchestration owner with automatic child returns",
+   description:"Start a dedicated-window orchestration owner with automatic child returns; add a final Sol review with --critical",
    handler:(args)=>{pi.sendUserMessage(buildOrchestratePrompt(String(args??"")));},
  });
  pi.on("input",(event)=>{

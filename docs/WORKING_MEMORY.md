@@ -93,15 +93,15 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
   enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra.
 - Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
-  lanzamiento OMP fresco sobre WezTerm, `/orquestar [objetivo]`,
-  `/plan-implement-short [objetivo]`, `/handoff [foco]` y promoción durable. La
-  tool acepta un workflow cerrado `prewalk|plan-yolo`, target de rol nativo y
-  Advisor opt-in; nunca argv libre.
-  `/plan-implement-short` abre una hija Sol en split derecho, plan-yolo entrega
-  la implementación a `@smol` y Advisor revisa el corte, sin duplicar plan en
-  el parent. El benchmark nativo corto pasó 8/8 turnos con Sol medium y Luna
-  medium falló en el turno 5, por lo que esta degradación queda limitada al
-  flow corto y `task.prewalk` global permanece apagado.
+  lanzamiento OMP fresco sobre WezTerm, `/orquestar [--critical] [objetivo]`,
+  `/plan-implement-short [--critical] [objetivo]`, `/handoff [foco]` y
+  promoción durable. La tool acepta un workflow cerrado `prewalk|plan-yolo`,
+  target de rol nativo y Advisor opt-in; nunca argv libre.
+  `/plan-implement-short` abre una hija con modelo heredado en split derecho,
+  plan-yolo entrega la implementación a `@smol` y Advisor revisa el corte, sin
+  duplicar plan en el parent. El benchmark nativo corto pasó 8/8 turnos con Sol
+  medium y Luna medium falló en el turno 5, por lo que esta degradación queda
+  limitada al flow corto y `task.prewalk` global permanece apagado.
   Como el TUI despacha el builtin `/handoff` antes que extensiones, Habitat
   intercepta sólo el input exacto. Handoff persiste el cierre y abre una hija
   fresh saved en tab adyacente enfocado, con nombre generacional compartido por
@@ -140,9 +140,13 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   2026-08-26; pending, continuaciones y cierre transitivo pasaron el 2026-08-31;
   provider Retry, shutdown, recuperación explícita y comando TUI real pasaron el
   2026-09-01.
-  `/orquestar` expone ese flow sin flags: confirma el owner y la observabilidad,
-  delega sólo cuando aporta valor y devuelve el resultado consolidado a la
-  sesión origen.
+  Los dos comandos conservan su comportamiento normal sin flags. Con
+  `--critical`, la hija u owner espera a integrar y ejecutar checks
+  deterministas, abre un único reviewer final read-only con
+  `openai-codex/gpt-5.6-sol:xhigh`, verifica sus hallazgos materiales y permite
+  como máximo una corrección con recheck, sin loop de reviewers. `/orquestar`
+  confirma además el owner y la observabilidad y devuelve el resultado
+  consolidado a la sesión origen.
   `agent_runtime_session` exige `hasUI:true`: subagentes Task background
   devuelven por Task y sus hooks ignoran metadata runtime heredada, evitando que
   secuestren el pane del owner o contaminen acks/completions.
