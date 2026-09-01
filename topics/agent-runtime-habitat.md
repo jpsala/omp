@@ -210,9 +210,11 @@ mailbox ni integra un retorno.
 En el primer `agent_end` realmente terminal, la hija publica estado y texto
 final acotado; no persiste prompts ni transcripts. `waiting` o `blocked`
 difieren una respuesta normal para que el owner quede retomable, pero nunca
-suprimen `error` o `aborted`. Un `session_shutdown` sin resultado publica
-`cancelled`, de modo que Retry, cierre o fallo no dejen al parent esperando sin
-un estado terminal.
+suprimen `error` o `aborted`. Un `session_shutdown` cancela primero cada pending
+propio, cierra los panes runtime-owned que todavía controla y conserva para
+reconciliación sólo las cancelaciones que no pudo cerrar. Después publica su
+propio `cancelled`, de modo que Retry, cierre o fallo no dejen al parent ni a un
+subárbol de workers esperando sin estado terminal.
 
 El mismo mailbox acepta transiciones acotadas
 `working|waiting|blocked|attention_required`. El parent las consume, actualiza

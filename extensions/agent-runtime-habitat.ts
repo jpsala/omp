@@ -192,16 +192,24 @@ export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: 
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
 export type OwnedChildToClose={adapter:Pick<WezTermHostAdapter,"killOwnedPane">;pane:WezTermPaneHandle};
-export async function closeCompletedOwnedChildren(completions:readonly ChildSessionCompletion[],ownedChildren:Map<string,OwnedChildToClose>):Promise<string[]>{
- const failed:string[]=[];
+export interface OwnedChildrenCloseResult {
+ closedLaunchIds:string[];
+ failedChildNames:string[];
+}
+export async function closeCompletedOwnedChildren(completions:readonly ChildSessionCompletion[],ownedChildren:Map<string,OwnedChildToClose>):Promise<OwnedChildrenCloseResult>{
+ const closedLaunchIds:string[]=[];
+ const failedChildNames:string[]=[];
  for(const completion of completions){
    const owned=ownedChildren.get(completion.launchId);
    if(!owned) continue;
    ownedChildren.delete(completion.launchId);
-   if(owned.pane.ownedPaneId!==completion.paneId){failed.push(completion.childName);continue;}
-   try{await owned.adapter.killOwnedPane(owned.pane);}catch{failed.push(completion.childName);}
+   if(owned.pane.ownedPaneId!==completion.paneId){failedChildNames.push(completion.childName);continue;}
+   try{
+     await owned.adapter.killOwnedPane(owned.pane);
+     closedLaunchIds.push(completion.launchId);
+   }catch{failedChildNames.push(completion.childName);}
  }
- return failed;
+ return {closedLaunchIds,failedChildNames};
 }
 export async function deliverCompletionFollowUp(
   batch: CompletionBatch,
@@ -327,7 +335,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
          completionTurnGate,
          message=>pi.sendUserMessage(message,{deliverAs:"followUp"}),
          completionsToAcknowledge=>completionStore.acknowledge(completionsToAcknowledge),
-         completionsToClose=>closeCompletedOwnedChildren(completionsToClose,ownedChildren),
+         completionsToClose=>closeCompletedOwnedChildren(completionsToClose,ownedChildren).then(result=>result.failedChildNames),
        );
        if(!delivery.acknowledged){
          for(const completion of batch.completions) enqueuedCompletions.set(completion.launchId,completion);
@@ -414,9 +422,21 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    if(upstreamCompletionReported) return;
    const childSessionId=ctx.sessionManager?.getSessionId?.();
    if(!childSessionId) return;
-   const unresolved=(await completionStore.listPending(childSessionId)).length;
-   const summary=unresolved>0
-     ? `Child session closed with ${unresolved} unresolved runtime child session(s).`
+   const pending=await completionStore.listPending(childSessionId);
+   const cancellations:ChildSessionCompletion[]=[];
+   for(const child of pending){
+     try{
+       const cancellation=await completionStore.cancel(childSessionId,child.launchId,"Cancelled because the owning runtime session shut down.");
+       if(cancellation) cancellations.push(cancellation);
+     }catch{}
+   }
+   const closed=await closeCompletedOwnedChildren(cancellations,ownedChildren);
+   const closedLaunchIds=new Set(closed.closedLaunchIds);
+   const safelyClosed=cancellations.filter(completion=>closedLaunchIds.has(completion.launchId));
+   if(safelyClosed.length>0) await completionStore.acknowledge(safelyClosed).catch(()=>{});
+   const retained=cancellations.length-safelyClosed.length;
+   const summary=cancellations.length>0
+     ? `Child session closed after cancelling ${cancellations.length} unresolved runtime child session(s); ${safelyClosed.length} owned pane(s) closed and ${retained} cancellation record(s) retained for reconciliation.`
      : "Child session closed before publishing a terminal result.";
    await publishTerminalUpstream(ctx,"cancelled",summary);
  });

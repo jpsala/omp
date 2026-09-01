@@ -665,9 +665,11 @@ opciones y `Windows input: on`.
 
 `waiting` y `blocked` difieren únicamente una finalización normal. Un
 `agent_end` con `error|aborted` debe retornar `failed|cancelled` aunque el mismo
-turno haya publicado espera; `session_shutdown` publica `cancelled` como
-fallback idempotente. Así un Retry del provider o el cierre de la hija no deja
-al parent con un pending permanente.
+turno haya publicado espera. `session_shutdown` cancela primero los pending
+propios, cierra los panes runtime-owned que todavía controla y retiene sólo las
+cancelaciones que no pudo cerrar; después publica su `cancelled` idempotente.
+Así un Retry, el cierre de una hija o la muerte de un orquestador no dejan al
+parent ni a su subárbol con trabajo invisible.
 
 La ausencia de actividad no fabrica un resultado terminal. A los 15 minutos el
 parent muestra `attention_required`; `/runtime-children` expone los pending

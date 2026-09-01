@@ -127,8 +127,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/plan-implement-short`.
   El dispatcher conserva un widget persistente con la última transición
   comprobada; lanzamientos y retornos anidados se propagan automáticamente.
-  `waiting` y `blocked` difieren sólo finales normales: errores, aborts y
-  shutdown publican `failed|cancelled`, evitando el hang observado en Retry.
+  `waiting` y `blocked` difieren sólo finales normales: errores y aborts retornan
+  `failed|cancelled`; shutdown cancela primero los descendientes, cierra sus
+  panes owned y luego retorna upstream, evitando el hang observado en Retry.
   Tras 15 minutos sin actividad aparece `attention_required`;
   `/runtime-children` inspecciona pending y `/runtime-cancel <launchId>` los
   reconcilia explícitamente. El janitor retira sólo progress expirado,

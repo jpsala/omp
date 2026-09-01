@@ -281,17 +281,29 @@ test("publishes provider failures even when the turn previously reported waiting
   }
 });
 
-test("publishes cancellation when a visible child session shuts down without a result", async () => {
+test("cancels unresolved descendants before a visible owner reports shutdown", async () => {
   const handlers: Record<string, Function> = {};
   const parentSessionId = "parent-shutdown-regression";
   const childSessionId = "child-shutdown-regression";
   const launchId = "launch-shutdown-regression";
+  const descendantLaunchId = "launch-shutdown-descendant";
   const runtimeEnvironment = {
     OMP_RUNTIME_LAUNCH_ID: launchId,
     OMP_RUNTIME_PARENT_SESSION: parentSessionId,
     OMP_RUNTIME_PANE_ID: "74",
   };
   const previous = Object.fromEntries(Object.keys(runtimeEnvironment).map(name => [name, process.env[name]]));
+  const childMailbox = join(completionRoot(), childSessionId);
+  await mkdir(childMailbox, { recursive: true });
+  await Bun.write(join(childMailbox, `${descendantLaunchId}.pending.json`), JSON.stringify({
+    version: 1,
+    launchId: descendantLaunchId,
+    parentSessionId: childSessionId,
+    childSessionId: "grandchild-shutdown-regression",
+    childName: "Shutdown grandchild",
+    paneId: "75",
+    startedAt: Date.now(),
+  }));
   Object.assign(process.env, runtimeEnvironment);
   try {
     const pi: PluginApi = {
@@ -314,12 +326,17 @@ test("publishes cancellation when a visible child session shuts down without a r
     await handlers.session_shutdown({}, ctx);
     const result = await Bun.file(join(completionRoot(), parentSessionId, `${launchId}.completion.json`)).json();
     expect(result).toMatchObject({ launchId, status: "cancelled" });
+    expect(result.summary).toContain("cancelling 1 unresolved");
+    const descendant = await Bun.file(join(childMailbox, `${descendantLaunchId}.completion.json`)).json();
+    expect(descendant).toMatchObject({ launchId: descendantLaunchId, status: "cancelled" });
+    expect(await Bun.file(join(childMailbox, `${descendantLaunchId}.pending.json`)).exists()).toBeTrue();
   } finally {
     for (const [name, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
     await rm(join(completionRoot(), parentSessionId), { recursive: true, force: true });
+    await rm(childMailbox, { recursive: true, force: true });
   }
 });
 test("lists and cancels stalled runtime children through explicit recovery commands", async () => {
@@ -436,13 +453,13 @@ test("closes only matching runtime-owned panes after receiving completions", asy
     summary: "done",
     completedAt: Date.now(),
   });
-  const failures = await closeCompletedOwnedChildren([
+  const result = await closeCompletedOwnedChildren([
     completion("launch-a", "Worker A", "pane-a"),
     completion("launch-unowned", "Manual tab", "pane-manual"),
     completion("launch-mismatch", "Wrong pane", "other-pane"),
   ], owned);
   expect(closed).toEqual(["pane-a"]);
-  expect(failures).toEqual(["Wrong pane"]);
+  expect(result).toEqual({ closedLaunchIds: ["launch-a"], failedChildNames: ["Wrong pane"] });
   expect(owned.size).toBe(0);
 });
 test("enqueues the return before acknowledging mailbox state and closing the owned pane", async () => {
