@@ -118,19 +118,27 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   en memoria; nunca mata por pane id desnudo ni reclama tabs tras reload/resume.
   Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
   por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
-  hijas. `pending` es semántico: abarca `working|waiting|blocked`, completions aún
-  no encolados y el mensaje de integración del parent; nunca deriva de pane, tab,
-  shell o bootstrap vivo por `onExit:"keep-open"`. El completion durable no se
-  retira antes del enqueue y queda reentregable ante restart; `closeOnComplete`
-  cierra sólo después de ese enqueue. El dispatcher conserva un widget
-  persistente con la última transición comprobada; lanzamientos y retornos
-  anidados se propagan automáticamente y `agent_runtime_status` cubre estados
-  conocidos sólo por el owner, sin heartbeats ni polling. `waiting` y `blocked`
-  difieren sólo ese turno. La integración se reconoce también por el follow-up
-  persistido, por lo que continuaciones `willContinue` de Advisor o mantenimiento
-  no pierden el retorno upstream. El smoke transitivo window → tab → parent pasó
-  el 2026-08-25; estados/widget pasaron el 2026-08-26; el repro de pending,
-  continuaciones y cierre transitivo pasó el 2026-08-31.
+  hijas. `pending` es semántico: abarca
+  `working|waiting|blocked|attention_required`, completions aún no encolados y
+  el mensaje de integración del parent; nunca deriva de pane, tab, shell o
+  bootstrap vivo por `onExit:"keep-open"`. El completion durable no se retira
+  antes del enqueue y queda reentregable ante restart; `closeOnComplete` cierra
+  sólo después de ese enqueue y también quedó activado para
+  `/plan-implement-short`.
+  El dispatcher conserva un widget persistente con la última transición
+  comprobada; lanzamientos y retornos anidados se propagan automáticamente.
+  `waiting` y `blocked` difieren sólo finales normales: errores, aborts y
+  shutdown publican `failed|cancelled`, evitando el hang observado en Retry.
+  Tras 15 minutos sin actividad aparece `attention_required`;
+  `/runtime-children` inspecciona pending y `/runtime-cancel <launchId>` los
+  reconcilia explícitamente. El janitor retira sólo progress expirado,
+  completions huérfanos fuera de retención y directorios vacíos; nunca borra un
+  pending sin completion. Continuaciones `willContinue` de Advisor o
+  mantenimiento conservan el retorno upstream. El smoke transitivo
+  window → tab → parent pasó el 2026-08-25; estados/widget pasaron el
+  2026-08-26; pending, continuaciones y cierre transitivo pasaron el 2026-08-31;
+  provider Retry, shutdown, recuperación explícita y comando TUI real pasaron el
+  2026-09-01.
   `/orquestar` expone ese flow sin flags: confirma el owner y la observabilidad,
   delega sólo cuando aporta valor y devuelve el resultado consolidado a la
   sesión origen.

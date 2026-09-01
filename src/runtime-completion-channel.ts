@@ -1,11 +1,11 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { chmod, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { markerRoot, randomLaunchId } from "./runtime-handshake.ts";
 
 export type ChildCompletionStatus = "completed" | "failed" | "cancelled";
-export type ChildProgressState = "working" | "waiting" | "blocked";
+export type ChildProgressState = "working" | "waiting" | "blocked" | "attention_required";
 
 export interface PendingChildSession {
   version: 1;
@@ -47,6 +47,10 @@ export interface CompletionBatch {
   progress: ChildSessionProgress[];
   remaining: number;
 }
+export interface MailboxCleanup {
+  files: number;
+  directories: number;
+}
 
 export interface CompletionFs {
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
@@ -55,6 +59,7 @@ export interface CompletionFs {
   readFile(path: string, encoding: "utf8"): Promise<string>;
   readdir(path: string): Promise<string[]>;
   unlink(path: string): Promise<void>;
+  rmdir(path: string): Promise<void>;
   chmod?: (path: string, mode: number) => Promise<void>;
 }
 
@@ -88,12 +93,15 @@ export interface CompletionStore {
   publish(completion: ChildSessionCompletion): Promise<void>;
   publishProgress(progress: ChildSessionProgress): Promise<void>;
   acknowledge(completions: readonly ChildSessionCompletion[]): Promise<void>;
+  listPending(parentSessionId: string): Promise<PendingChildSession[]>;
+  cancel(parentSessionId: string, launchId: string, summary: string): Promise<ChildSessionCompletion | undefined>;
+  pruneExpired(now?: number): Promise<MailboxCleanup>;
   hasActivity(parentSessionId: string): Promise<boolean>;
   hasPending(parentSessionId: string): Promise<boolean>;
   consume(parentSessionId: string): Promise<CompletionBatch>;
 }
 
-const nativeFs: CompletionFs = { chmod, mkdir, readdir, readFile, rename, unlink, writeFile };
+const nativeFs: CompletionFs = { chmod, mkdir, readdir, readFile, rename, rmdir, unlink, writeFile };
 const ID = /^[A-Za-z0-9._-]{1,160}$/;
 const MAX_TITLE = 500;
 const MAX_SUMMARY = 16_000;
@@ -104,9 +112,9 @@ const safeId = (value: unknown): value is string => typeof value === "string" &&
 const safeTitle = (value: unknown): value is string => typeof value === "string" && !!value.trim() && value.length <= MAX_TITLE && !/[\u0000-\u001f\u007f]/.test(value);
 const safeTimestamp = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) <= Date.now() + 5 * 60_000 && (value as number) >= Date.now() - COMPLETION_TTL_MS;
 const safeStatus = (value: unknown): value is ChildCompletionStatus => value === "completed" || value === "failed" || value === "cancelled";
-const safeProgressState = (value: unknown): value is ChildProgressState => value === "working" || value === "waiting" || value === "blocked";
+const safeProgressState = (value: unknown): value is ChildProgressState => value === "working" || value === "waiting" || value === "blocked" || value === "attention_required";
 
-function validPending(value: unknown, parentSessionId?: string): value is PendingChildSession {
+function validPending(value: unknown, parentSessionId?: string, requireFresh = true): value is PendingChildSession {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const pending = value as PendingChildSession;
   return pending.version === 1
@@ -116,7 +124,9 @@ function validPending(value: unknown, parentSessionId?: string): value is Pendin
     && safeId(pending.childSessionId)
     && safeTitle(pending.childName)
     && safeId(pending.paneId)
-    && safeTimestamp(pending.startedAt);
+    && Number.isSafeInteger(pending.startedAt)
+    && pending.startedAt <= Date.now() + 5 * 60_000
+    && (!requireFresh || pending.startedAt >= Date.now() - COMPLETION_TTL_MS);
 }
 
 function validCompletion(value: unknown, parentSessionId?: string): value is ChildSessionCompletion {
@@ -179,9 +189,16 @@ export function shouldReportCompletionUpstream(input: {
   hasPendingChildren: boolean;
   willContinue: boolean;
   completionFollowUp: boolean;
+  terminalStatus: ChildCompletionStatus;
 }): boolean {
-  if (input.willContinue || input.hasPendingChildren) return false;
+  if (input.willContinue) return false;
+  if (input.terminalStatus !== "completed") return true;
+  if (input.hasPendingChildren) return false;
   return !input.launchedChildren || input.completionFollowUp;
+}
+
+export function shouldDeferTerminalCompletion(requested: boolean, status: ChildCompletionStatus): boolean {
+  return requested && status === "completed";
 }
 
 export function renderCompletionFollowUp(batch: CompletionBatch): string {
@@ -240,6 +257,25 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
     try { return await fs.readdir(parentDirectory(parentSessionId)); }
     catch { return []; }
   };
+  const readPending = async (parentSessionId: string): Promise<PendingChildSession[]> => {
+    if (!safeId(parentSessionId)) return [];
+    const directory = parentDirectory(parentSessionId);
+    const pending: PendingChildSession[] = [];
+    for (const name of (await names(parentSessionId)).filter(value => value.endsWith(".pending.json")).sort()) {
+      try {
+        const value = JSON.parse(await fs.readFile(join(directory, name), "utf8"));
+        if (validPending(value, parentSessionId, false)) pending.push(value);
+      } catch {}
+    }
+    return pending;
+  };
+  const expiredTimestamp = (value: unknown, key: "startedAt" | "completedAt" | "updatedAt", now: number) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return true;
+    const timestamp = (value as Record<string, unknown>)[key];
+    return !Number.isSafeInteger(timestamp)
+      || (timestamp as number) < now - COMPLETION_TTL_MS
+      || (timestamp as number) > now + 5 * 60_000;
+  };
 
   return {
     async register(pending) {
@@ -266,6 +302,61 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
         await unlinkIfPresent(pendingPath(completion));
         await unlinkIfPresent(completionPath(completion));
       }
+    },
+    async listPending(parentSessionId) {
+      return readPending(parentSessionId);
+    },
+    async cancel(parentSessionId, launchId, summary) {
+      if (!safeId(parentSessionId) || !safeId(launchId)) throw new Error("invalid child identity");
+      const pending = (await readPending(parentSessionId)).find(value => value.launchId === launchId);
+      if (!pending) return undefined;
+      const text = summary.trim().slice(0, MAX_SUMMARY);
+      if (!text) throw new Error("cancellation summary must not be empty");
+      const completion: ChildSessionCompletion = {
+        version: 1,
+        launchId: pending.launchId,
+        parentSessionId: pending.parentSessionId,
+        childSessionId: pending.childSessionId,
+        childName: pending.childName,
+        paneId: pending.paneId,
+        status: "cancelled",
+        summary: text,
+        completedAt: Date.now(),
+      };
+      await atomicWrite(completionPath(completion), completion);
+      return completion;
+    },
+    async pruneExpired(now = Date.now()) {
+      let files = 0;
+      let directories = 0;
+      let parents: string[] = [];
+      try { parents = await fs.readdir(root); } catch {}
+      for (const parentSessionId of parents.filter(safeId)) {
+        const directory = parentDirectory(parentSessionId);
+        const entries = await names(parentSessionId);
+        const entrySet = new Set(entries);
+        for (const name of entries) {
+          const completionMatch = /^([A-Za-z0-9._-]{1,160})\.completion\.json$/.exec(name);
+          const progressMatch = /^([A-Za-z0-9._-]{1,160})\.([A-Za-z0-9._-]{1,160})\.progress\.json$/.exec(name);
+          if (!completionMatch && !progressMatch) continue;
+          if (completionMatch && entrySet.has(`${completionMatch[1]}.pending.json`)) continue;
+          const source = join(directory, name);
+          try {
+            const value = JSON.parse(await fs.readFile(source, "utf8"));
+            const key = completionMatch ? "completedAt" : "updatedAt";
+            if (!expiredTimestamp(value, key, now)) continue;
+          } catch {}
+          await unlinkIfPresent(source);
+          files++;
+        }
+        try {
+          if ((await fs.readdir(directory)).length === 0) {
+            await fs.rmdir(directory);
+            directories++;
+          }
+        } catch {}
+      }
+      return { files, directories };
     },
     async consume(parentSessionId) {
       if (!safeId(parentSessionId)) return { completions: [], progress: [], remaining: 0 };

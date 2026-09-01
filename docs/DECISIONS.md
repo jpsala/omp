@@ -660,3 +660,18 @@ check de formato y tipos de `packages/coding-agent` quedó limpio. El binario
 Windows embebe el addon Win32 18.0.11 publicado, se desplegó sólo mediante
 `bun run deploy:omp` y el smoke TUI real verificó el selector granular de 41
 opciones y `Windows input: on`.
+
+## 2026-09-01 — Los estados de espera nunca suprimen fallos terminales
+
+`waiting` y `blocked` difieren únicamente una finalización normal. Un
+`agent_end` con `error|aborted` debe retornar `failed|cancelled` aunque el mismo
+turno haya publicado espera; `session_shutdown` publica `cancelled` como
+fallback idempotente. Así un Retry del provider o el cierre de la hija no deja
+al parent con un pending permanente.
+
+La ausencia de actividad no fabrica un resultado terminal. A los 15 minutos el
+parent muestra `attention_required`; `/runtime-children` expone los pending
+propios y `/runtime-cancel <launchId>` permite reconciliarlos explícitamente por
+el canal normal. El janitor puede retirar progress expirado, completions
+huérfanos fuera de retención y directorios vacíos, pero nunca elimina un pending
+sin completion, aunque supere siete días.

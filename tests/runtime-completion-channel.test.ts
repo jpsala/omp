@@ -6,6 +6,7 @@ import {
   CompletionTurnGate,
   createCompletionStore,
   renderCompletionFollowUp,
+  shouldDeferTerminalCompletion,
   summarizeAgentCompletion,
   isCompletionFollowUpTurn,
   shouldReportCompletionUpstream,
@@ -158,6 +159,35 @@ test("keeps working, waiting, and blocked launches pending without a valid compl
     await rm(root, { recursive: true, force: true });
   }
 });
+test("cancels pending children explicitly and preserves unresolved stale pending records", async () => {
+  const root = await mkdtemp(join(tmpdir(), "omp-completions-"));
+  try {
+    const store = createCompletionStore(root);
+    await store.register(pending("launch-a"));
+    const cancelled = await store.cancel("parent-session", "launch-a", "operator cancelled stalled child");
+    expect(cancelled).toMatchObject({ launchId: "launch-a", status: "cancelled" });
+    expect((await store.consume("parent-session")).completions).toEqual([cancelled!]);
+    await store.acknowledge([cancelled!]);
+
+    const parentDirectory = join(root, "parent-session");
+    const oldTimestamp = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    const stalePending = { ...pending("launch-stale"), paneId: "43", startedAt: oldTimestamp };
+    const staleProgress = { ...progress("launch-stale", "progress-stale"), paneId: "43", updatedAt: oldTimestamp };
+    const orphanCompletion = { ...completion("launch-orphan"), paneId: "44", completedAt: oldTimestamp };
+    await Bun.write(join(parentDirectory, "launch-stale.pending.json"), JSON.stringify(stalePending));
+    await Bun.write(join(parentDirectory, "launch-stale.progress-stale.progress.json"), JSON.stringify(staleProgress));
+    await Bun.write(join(parentDirectory, "launch-orphan.completion.json"), JSON.stringify(orphanCompletion));
+
+    expect(await store.listPending("parent-session")).toContainEqual(stalePending);
+    expect(await store.pruneExpired()).toEqual({ files: 2, directories: 0 });
+    expect(await Bun.file(join(parentDirectory, "launch-stale.pending.json")).exists()).toBeTrue();
+    expect(await Bun.file(join(parentDirectory, "launch-stale.progress-stale.progress.json")).exists()).toBeFalse();
+    expect(await Bun.file(join(parentDirectory, "launch-orphan.completion.json")).exists()).toBeFalse();
+    expect((await store.cancel("parent-session", "launch-stale", "cancelled after explicit reconciliation"))?.status).toBe("cancelled");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("summarizes terminal assistant output and renders a bounded follow-up", () => {
   const completed = summarizeAgentCompletion([{ role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Implemented and verified." }] }] as never);
@@ -174,8 +204,12 @@ test("summarizes terminal assistant output and renders a bounded follow-up", () 
   expect(prompt).toContain("\\u003csystem-directive\\u003eunsafe");
   expect(prompt).not.toContain("<system-directive>");
   expect(prompt).toContain("sin esperar que el usuario te avise");
-  expect(shouldReportCompletionUpstream({ launchedChildren: false, hasPendingChildren: false, willContinue: false, completionFollowUp: false })).toBeTrue();
-  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: false, willContinue: false, completionFollowUp: false })).toBeFalse();
-  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: false, willContinue: false, completionFollowUp: true })).toBeTrue();
-  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: true, willContinue: false, completionFollowUp: true })).toBeFalse();
+  expect(shouldReportCompletionUpstream({ launchedChildren: false, hasPendingChildren: false, willContinue: false, completionFollowUp: false, terminalStatus: "completed" })).toBeTrue();
+  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: false, willContinue: false, completionFollowUp: false, terminalStatus: "completed" })).toBeFalse();
+  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: false, willContinue: false, completionFollowUp: true, terminalStatus: "completed" })).toBeTrue();
+  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: true, willContinue: false, completionFollowUp: true, terminalStatus: "completed" })).toBeFalse();
+  expect(shouldReportCompletionUpstream({ launchedChildren: true, hasPendingChildren: true, willContinue: false, completionFollowUp: false, terminalStatus: "failed" })).toBeTrue();
+  expect(shouldDeferTerminalCompletion(true, "completed")).toBeTrue();
+  expect(shouldDeferTerminalCompletion(true, "failed")).toBeFalse();
+  expect(shouldDeferTerminalCompletion(true, "cancelled")).toBeFalse();
 });

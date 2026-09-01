@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
-import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch } from "../src/runtime-completion-channel.ts";
+import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldDeferTerminalCompletion, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter, type WezTermHostAdapter, type WezTermPaneHandle } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
@@ -29,7 +29,7 @@ ${target}
 
 Construí un prompt autocontenido y compacto para una hija sin acceso a esta conversación. Incluí el objetivo, el cwd actual, el contexto ya comprobado que sea indispensable, límites aplicables y verificación esperada. No cierres un plan de implementación: la hija es dueña de planning e implementación, y el workflow nativo plan-yolo debe planificar y aplicar el cambio patch-specific.
 
-Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese paquete como prompt, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}, fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false y workflow:{mode:"plan-yolo",target:"@smol",advisor:true}. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras otras sesiones, no uses argv libre y no monitorees el pane.
+Con un objetivo resuelto, invocá agent_runtime_session exactamente una vez con el cwd actual, ese paquete como prompt, placement {kind:"split",direction:"right",percent:50}, pane {title:"Implementador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}, fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false y workflow:{mode:"plan-yolo",target:"@smol",advisor:true}. Reemplazá <objetivo corto> por un nombre concreto, breve y sin caracteres de control. Sin objetivo, limitate a pedirlo. No abras otras sesiones, no uses argv libre y no monitorees el pane.
 
 Si el lanzamiento funciona, respondé sólo con pane y session id; si falla, informá el error exacto.`;
 }
@@ -107,12 +107,15 @@ Actualizá fuentes existentes antes de crear otras. Preservá grado de certeza, 
 
 Después regenerá los índices y ejecutá el audit documental que el repo defina. Si no hay delta durable, no edites archivos. Respondé con qué promoviste y dónde, qué omitiste deliberadamente por temporal o derivable, y los checks ejecutados.`;
 }
-type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string};setInterval?:(callback:(...args:unknown[])=>void,ms?:number,...args:unknown[])=>unknown;ui?:{setWidget?:(key:string,content:string[]|undefined,options?:{placement?:"aboveEditor"|"belowEditor"})=>void}};
+type Ctx={cwd?:string;hasUI?:boolean;sessionManager?:{getSessionId?:()=>string};model?:{provider?:string;id?:string};setInterval?:(callback:(...args:unknown[])=>void,ms?:number,...args:unknown[])=>unknown;ui?:{setWidget?:(key:string,content:string[]|undefined,options?:{placement?:"aboveEditor"|"belowEditor"})=>void;notify?:(message:string,level?:"info"|"warning"|"error")=>void}};
 type Event={systemPrompt?:readonly string[];prompt?:string};
 export type SessionToolInput=Omit<SpawnAgentSessionRequestV1,"version"|"placement">&{placement?:SpawnAgentSessionRequestV1["placement"]};
 export const DEFAULT_SESSION_PLACEMENT={kind:"split",direction:"right",percent:50} as const;
 const MAX_SESSION_TITLE_LENGTH=500;
 const RUNTIME_STATUS_WIDGET_KEY="agent-runtime-orchestration";
+const STALLED_CHILD_MS=15*60_000;
+export const RUNTIME_CHILDREN_COMMAND="runtime-children";
+export const RUNTIME_CANCEL_COMMAND="runtime-cancel";
 type RuntimeStatusInput={state:ChildProgressState;detail:string};
 function isRuntimeStatusInput(value:unknown):value is RuntimeStatusInput {
  if(!value||typeof value!=="object"||Array.isArray(value)) return false;
@@ -241,7 +244,10 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  const monitoredParents=new Set<string>(), drainingParents=new Set<string>();
  const ownedChildren=new Map<string,OwnedChildToClose>();
  const enqueuedCompletions=new Map<string,ChildSessionCompletion>();
+ const lastActivityByLaunch=new Map<string,number>();
+ const reportedStalledLaunches=new Set<string>();
  let launchedChildren=false, upstreamCompletionReported=false, deferUpstreamCompletion=false;
+ let upstreamCompletionPublishing:Promise<boolean>|undefined;
  const publishProgressUpstream=async(ctx:Ctx,state:ChildProgressState,detail:string)=>{
    if(ctx.hasUI!==true) return false;
    const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
@@ -261,6 +267,20 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    });
    return true;
  };
+ const publishTerminalUpstream=async(ctx:Ctx,status:ChildSessionCompletion["status"],summary:string)=>{
+   if(upstreamCompletionReported) return true;
+   if(upstreamCompletionPublishing) return upstreamCompletionPublishing;
+   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
+   const childSessionId=ctx.sessionManager?.getSessionId?.(), childName=pi.getSessionName();
+   if(ctx.hasUI!==true||!launchId||!parentSessionId||!paneId||!childSessionId||!childName||childSessionId===parentSessionId) return false;
+   upstreamCompletionPublishing=(async()=>{
+     await completionStore.publish({version:1,launchId,parentSessionId,childSessionId,childName,paneId,status,summary:summary.slice(0,16_000),completedAt:Date.now()});
+     upstreamCompletionReported=true;
+     return true;
+   })();
+   try{return await upstreamCompletionPublishing;}
+   finally{if(!upstreamCompletionReported) upstreamCompletionPublishing=undefined;}
+ };
  const drainCompletions=async(parentSessionId:string,ctx:Ctx)=>{
    if(drainingParents.has(parentSessionId)) return;
    drainingParents.add(parentSessionId);
@@ -274,10 +294,28 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
      const consumed=await completionStore.consume(parentSessionId);
      const completions=consumed.completions.filter(completion=>!enqueuedCompletions.has(completion.launchId));
      const batch:CompletionBatch={...consumed,completions};
+     for(const progress of batch.progress){
+       lastActivityByLaunch.set(progress.launchId,progress.updatedAt);
+       reportedStalledLaunches.delete(progress.launchId);
+     }
+     for(const completion of batch.completions){
+       lastActivityByLaunch.delete(completion.launchId);
+       reportedStalledLaunches.delete(completion.launchId);
+     }
      const latest=batch.progress.at(-1);
      if(latest){
        setRuntimeStatus(ctx,latest.childName,latest.state,latest.detail,batch.remaining);
        await publishProgressUpstream(ctx,latest.state,`${latest.childName}: ${latest.detail}`).catch(()=>false);
+     }
+     if(batch.completions.length===0){
+       const pending=await completionStore.listPending(parentSessionId);
+       const stalled=pending.find(child=>Date.now()-(lastActivityByLaunch.get(child.launchId)??child.startedAt)>=STALLED_CHILD_MS&&!reportedStalledLaunches.has(child.launchId));
+       if(stalled){
+         reportedStalledLaunches.add(stalled.launchId);
+         const detail=`Sin resultado ni actividad reciente; revisá la sesión ${stalled.childName} o cancelá ${stalled.launchId} con /${RUNTIME_CANCEL_COMMAND}.`;
+         setRuntimeStatus(ctx,stalled.childName,"attention_required",detail,batch.remaining);
+         await publishProgressUpstream(ctx,"attention_required",detail).catch(()=>false);
+       }
      }
      if(batch.completions.length>0){
        const names=batch.completions.map(completion=>completion.childName).join(", ");
@@ -315,6 +353,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    return detectRuntimeContext({cwd:ctx.cwd,harness:{id:"omp",hasUI:ctx.hasUI??false,sessionId:ctx.sessionManager?.getSessionId?.(),agentDir:pi.pi.getAgentDir(),...(model?{model}:{})}});
  };
  pi.on("session_start",async(_event,ctx)=>{
+   await completionStore.pruneExpired().catch(()=>({files:0,directories:0}));
    const desiredTitle=process.env[RUNTIME_SESSION_TITLE_ENV];
    if(desiredTitle){
      try{
@@ -360,14 +399,26 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    if(!childSessionId) return;
    const hasPendingChildren=await completionStore.hasPending(childSessionId);
    if(!hasPendingChildren && completionFollowUpTurn) ctx.ui?.setWidget?.(RUNTIME_STATUS_WIDGET_KEY,undefined);
-   if(deferThisTurn) return;
-   const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION"), paneId=envString("OMP_RUNTIME_PANE_ID");
-   const childName=pi.getSessionName();
-   if(!launchId||!parentSessionId||!paneId||!childName||childSessionId===parentSessionId) return;
-   if(!shouldReportCompletionUpstream({launchedChildren,hasPendingChildren,willContinue:event.willContinue===true,completionFollowUp:completionFollowUpTurn})) return;
    const completion=summarizeAgentCompletion(event.messages);
-   await completionStore.publish({version:1,launchId,parentSessionId,childSessionId,childName,paneId,...completion,completedAt:Date.now()});
-   upstreamCompletionReported=true;
+   if(shouldDeferTerminalCompletion(deferThisTurn,completion.status)) return;
+   if(!shouldReportCompletionUpstream({
+     launchedChildren,
+     hasPendingChildren,
+     willContinue:event.willContinue===true,
+     completionFollowUp:completionFollowUpTurn,
+     terminalStatus:completion.status,
+   })) return;
+   await publishTerminalUpstream(ctx,completion.status,completion.summary);
+ });
+ pi.on("session_shutdown",async(_event,ctx)=>{
+   if(upstreamCompletionReported) return;
+   const childSessionId=ctx.sessionManager?.getSessionId?.();
+   if(!childSessionId) return;
+   const unresolved=(await completionStore.listPending(childSessionId)).length;
+   const summary=unresolved>0
+     ? `Child session closed with ${unresolved} unresolved runtime child session(s).`
+     : "Child session closed before publishing a terminal result.";
+   await publishTerminalUpstream(ctx,"cancelled",summary);
  });
  pi.registerCommand(PLAN_IMPLEMENT_SHORT_COMMAND,{
    description:"Start one planning-and-implementation owner with native plan-yolo in a right split",
@@ -382,6 +433,47 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    if(focus===undefined) return;
    pi.sendUserMessage(buildHandoffPrompt(focus,nextHandoffTitle(pi.getSessionName(),focus)));
    return {handled:true};
+ });
+ pi.registerCommand(RUNTIME_CHILDREN_COMMAND,{
+   description:"List runtime child sessions still awaiting a terminal return",
+   handler:async(_args,ctx)=>{
+     const parentSessionId=ctx.sessionManager?.getSessionId?.();
+     if(!parentSessionId){
+       ctx.ui?.notify?.("La sesión actual no tiene un id persistido.","warning");
+       return;
+     }
+     const pending=await completionStore.listPending(parentSessionId);
+     if(pending.length===0){
+       ctx.ui?.setWidget?.(RUNTIME_STATUS_WIDGET_KEY,undefined);
+       ctx.ui?.notify?.("No hay sesiones hijas pendientes.","info");
+       return;
+     }
+     const now=Date.now();
+     const lines=["Sesiones runtime pendientes",...pending.map(child=>{
+       const ageMinutes=Math.max(0,Math.floor((now-child.startedAt)/60_000));
+       return `${child.launchId} · ${child.childName} · ${ageMinutes} min`;
+     })];
+     ctx.ui?.setWidget?.(RUNTIME_STATUS_WIDGET_KEY,lines,{placement:"aboveEditor"});
+     ctx.ui?.notify?.(`${pending.length} sesión(es) hija(s) pendiente(s).`,"warning");
+   },
+ });
+ pi.registerCommand(RUNTIME_CANCEL_COMMAND,{
+   description:"Cancel one pending runtime child and resume integration",
+   handler:async(args,ctx)=>{
+     const launchId=String(args??"").trim();
+     const parentSessionId=ctx.sessionManager?.getSessionId?.();
+     if(!parentSessionId||!/^[A-Za-z0-9._-]{1,160}$/.test(launchId)){
+       ctx.ui?.notify?.(`Uso: /${RUNTIME_CANCEL_COMMAND} <launchId>`,"warning");
+       return;
+     }
+     const completion=await completionStore.cancel(parentSessionId,launchId,"Cancelled explicitly from the parent runtime session.");
+     if(!completion){
+       ctx.ui?.notify?.(`No existe un pending propio con launch id ${launchId}.`,"warning");
+       return;
+     }
+     await ensureCompletionMonitor(parentSessionId,ctx);
+     ctx.ui?.notify?.(`Cancelación encolada para ${completion.childName}.`,"info");
+   },
  });
  pi.registerCommand(PROMOTE_CONTEXT_COMMAND,{
    description:"Promote missing durable session context into canonical repository docs",

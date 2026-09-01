@@ -192,13 +192,15 @@ directorio runtime privado del usuario. El estado semántico es:
 
 - `working`: la hija ejecuta o el parent integra un retorno; sigue pendiente.
 - `waiting`: la hija espera un retorno o condición externa; sigue pendiente y
-  difiere el cierre upstream de ese turno.
+  difiere sólo una finalización normal de ese turno.
 - `blocked`: la hija requiere una acción externa concreta; sigue pendiente y
-  difiere el cierre upstream de ese turno.
-- `completed`: la hija publicó un resultado terminal. Ese resultado sigue siendo
-  trabajo pendiente del parent hasta que su `followUp` queda encolado; después,
-  la sesión del parent permanece `pending` por su mensaje de integración hasta
-  que produce la respuesta terminal correspondiente.
+  difiere sólo una finalización normal de ese turno.
+- `attention_required`: no hubo resultado ni actividad durante 15 minutos; el
+  pending se conserva para inspección, reanudación o cancelación explícita.
+- `completed|failed|cancelled`: la hija publicó un resultado terminal. Ese
+  resultado sigue siendo trabajo pendiente del parent hasta que su `followUp`
+  queda encolado; después, la sesión del parent permanece `pending` por su
+  mensaje de integración hasta que produce la respuesta terminal correspondiente.
 
 La vida del pane, tab, shell o proceso no participa en esa clasificación.
 `onExit:"keep-open"` puede conservar el bootstrap y el pane después de
@@ -206,17 +208,23 @@ La vida del pane, tab, shell o proceso no participa en esa clasificación.
 mailbox ni integra un retorno.
 
 En el primer `agent_end` realmente terminal, la hija publica estado y texto
-final acotado; no persiste prompts ni transcripts. Un turno que haya publicado
-`waiting` o `blocked` no se considera final: el owner queda retomable en su
-sesión visible.
+final acotado; no persiste prompts ni transcripts. `waiting` o `blocked`
+difieren una respuesta normal para que el owner quede retomable, pero nunca
+suprimen `error` o `aborted`. Un `session_shutdown` sin resultado publica
+`cancelled`, de modo que Retry, cierre o fallo no dejen al parent esperando sin
+un estado terminal.
 
-El mismo mailbox acepta transiciones acotadas `working|waiting|blocked`. El
-parent las consume, actualiza un widget persistente sobre el editor y las
-propaga transitivamente si también es una hija. No consulta procesos, panes,
-scrollback ni sesiones OMP y no inventa liveness entre transiciones. Los
-lanzamientos anidados publican `waiting` y los retornos recibidos publican
-`working` de forma automática; `agent_runtime_status` cubre los cambios de
-estado que sólo el owner conoce.
+El mismo mailbox acepta transiciones acotadas
+`working|waiting|blocked|attention_required`. El parent las consume, actualiza
+un widget persistente sobre el editor y las propaga transitivamente si también
+es una hija. No usa la ausencia de liveness como resultado terminal. Los
+lanzamientos anidados publican `waiting`, los retornos recibidos publican
+`working` y la falta de actividad publica una única atención por launch.
+`agent_runtime_status` cubre los cambios que sólo el owner conoce.
+
+`/runtime-children` lista launch id, nombre y antigüedad de los pending propios.
+`/runtime-cancel <launchId>` publica `cancelled` por el canal normal, reanuda la
+integración y conserva las validaciones de ownership.
 
 Al llegar un resultado final, el parent lee el completion sin retirar todavía
 el registro pending e inyecta un `followUp` que reanuda automáticamente su
@@ -246,7 +254,10 @@ sólo publica su resultado cuando ya no quedan hijas pendientes. El registro es
 atómico y forma parte del launch: si falla, el pane recién creado se revierte.
 El mailbox permite recuperar completions y estados pendientes cuando una sesión
 guardada se reabre; los archivos consumidos se eliminan sólo después del
-reconocimiento post-enqueue.
+reconocimiento post-enqueue. Al iniciar, el janitor retira progress expirado,
+completions huérfanos ya fuera de retención y directorios vacíos. Nunca borra un
+pending sin completion: incluso después de siete días sigue visible y cancelable
+por reconciliación explícita.
 
 ### Modelo: rol de agente vs spec real
 

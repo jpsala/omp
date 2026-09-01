@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-detect.ts";
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
 import { markerRoot } from "../src/runtime-handshake.ts";
-import { CompletionTurnGate } from "../src/runtime-completion-channel.ts";
-import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
+import { CompletionTurnGate, completionRoot } from "../src/runtime-completion-channel.ts";
+import habitat, { DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, RUNTIME_CANCEL_COMMAND, RUNTIME_CHILDREN_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -110,11 +110,13 @@ test("extension registers context and an explicit nested launch contract", async
     expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-window orchestration owner");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
     expect(planCommand?.description).toContain("planning-and-implementation owner");
+    expect(commands.get(RUNTIME_CHILDREN_COMMAND)?.description).toContain("still awaiting");
+    expect(commands.get(RUNTIME_CANCEL_COMMAND)?.description).toContain("Cancel one pending");
     await planCommand!.handler('corregir "framing"', {});
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]).toContain(JSON.stringify('corregir "framing"'));
     expect(sentMessages[0]).toContain('placement {kind:"split",direction:"right",percent:50}');
-    expect(sentMessages[0]).toContain('pane {title:"Implementador · <objetivo corto>",onExit:"keep-open"}');
+    expect(sentMessages[0]).toContain('pane {title:"Implementador · <objetivo corto>",onExit:"keep-open",closeOnComplete:true}');
     expect(sentMessages[0]).toContain('fresh:true, persistence:"saved", model:{mode:"inherit"}, focus:false');
     expect(sentMessages[0]).toContain('workflow:{mode:"plan-yolo",target:"@smol",advisor:true}');
     expect(sentMessages[0]).toContain("la hija es dueña de planning e implementación");
@@ -223,6 +225,150 @@ test("extension registers context and an explicit nested launch contract", async
     const missingCwd = await sessionTool!.execute("id", { cwd: `${agentDir}/missing`, prompt: "x", pane: { title: "Implementador", onExit: "keep-open" }, fresh: true, persistence: "saved", model: { mode: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
     expect(JSON.parse(missingCwd.content[0].text).reason).toContain("cwd must already exist as a directory");
   } finally { await rm(agentDir, { recursive: true, force: true }); }
+});
+test("publishes provider failures even when the turn previously reported waiting", async () => {
+  const handlers: Record<string, Function> = {};
+  const tools = new Map<string, ToolSpec>();
+  const parentSessionId = "parent-retry-regression";
+  const childSessionId = "child-retry-regression";
+  const launchId = "launch-retry-regression";
+  const runtimeEnvironment = {
+    OMP_RUNTIME_LAUNCH_ID: launchId,
+    OMP_RUNTIME_PARENT_SESSION: parentSessionId,
+    OMP_RUNTIME_PANE_ID: "73",
+  };
+  const previous = Object.fromEntries(Object.keys(runtimeEnvironment).map(name => [name, process.env[name]]));
+  Object.assign(process.env, runtimeEnvironment);
+  try {
+    const pi: PluginApi = {
+      on(event, handler) { handlers[event] = handler; },
+      registerTool(definition) { tools.set(definition.name, definition); },
+      registerCommand() {},
+      sendUserMessage() {},
+      getThinkingLevel: () => "medium",
+      getSessionName: () => "Retry child",
+      setSessionName: async () => {},
+      setInterval: () => 0,
+      pi: { getAgentDir: () => tmpdir() },
+    };
+    habitat(pi as unknown as Parameters<typeof habitat>[0]);
+    const ctx = {
+      cwd: tmpdir(),
+      hasUI: true,
+      sessionManager: { getSessionId: () => childSessionId },
+      ui: { setWidget() {} },
+    };
+    await tools.get("agent_runtime_status")!.execute("status", {
+      state: "waiting",
+      detail: "Esperando una condición antes de cerrar",
+    }, new AbortController().signal, () => {}, ctx);
+    await handlers.agent_end({
+      willContinue: false,
+      messages: [{ role: "assistant", stopReason: "error", errorMessage: "provider retry exhausted", content: [] }],
+    }, ctx);
+    const result = await Bun.file(join(completionRoot(), parentSessionId, `${launchId}.completion.json`)).json();
+    expect(result).toMatchObject({
+      launchId,
+      status: "failed",
+      summary: "provider retry exhausted",
+    });
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(join(completionRoot(), parentSessionId), { recursive: true, force: true });
+  }
+});
+
+test("publishes cancellation when a visible child session shuts down without a result", async () => {
+  const handlers: Record<string, Function> = {};
+  const parentSessionId = "parent-shutdown-regression";
+  const childSessionId = "child-shutdown-regression";
+  const launchId = "launch-shutdown-regression";
+  const runtimeEnvironment = {
+    OMP_RUNTIME_LAUNCH_ID: launchId,
+    OMP_RUNTIME_PARENT_SESSION: parentSessionId,
+    OMP_RUNTIME_PANE_ID: "74",
+  };
+  const previous = Object.fromEntries(Object.keys(runtimeEnvironment).map(name => [name, process.env[name]]));
+  Object.assign(process.env, runtimeEnvironment);
+  try {
+    const pi: PluginApi = {
+      on(event, handler) { handlers[event] = handler; },
+      registerTool() {},
+      registerCommand() {},
+      sendUserMessage() {},
+      getThinkingLevel: () => "medium",
+      getSessionName: () => "Shutdown child",
+      setSessionName: async () => {},
+      setInterval: () => 0,
+      pi: { getAgentDir: () => tmpdir() },
+    };
+    habitat(pi as unknown as Parameters<typeof habitat>[0]);
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => childSessionId },
+      ui: { setWidget() {} },
+    };
+    await handlers.session_shutdown({}, ctx);
+    const result = await Bun.file(join(completionRoot(), parentSessionId, `${launchId}.completion.json`)).json();
+    expect(result).toMatchObject({ launchId, status: "cancelled" });
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(join(completionRoot(), parentSessionId), { recursive: true, force: true });
+  }
+});
+test("lists and cancels stalled runtime children through explicit recovery commands", async () => {
+  const commands = new Map<string, CommandSpec>();
+  const messages: string[] = [];
+  const widgets: string[][] = [];
+  const parentSessionId = "parent-recovery-command";
+  const launchId = "launch-recovery-command";
+  const parentDirectory = join(completionRoot(), parentSessionId);
+  await mkdir(parentDirectory, { recursive: true });
+  await Bun.write(join(parentDirectory, `${launchId}.pending.json`), JSON.stringify({
+    version: 1,
+    launchId,
+    parentSessionId,
+    childSessionId: "child-recovery-command",
+    childName: "Stalled child",
+    paneId: "75",
+    startedAt: Date.now() - 8 * 60 * 60 * 1000,
+  }));
+  try {
+    const pi: PluginApi = {
+      on() {},
+      registerTool() {},
+      registerCommand(name, definition) { commands.set(name, definition); },
+      sendUserMessage(content) { messages.push(content); },
+      getThinkingLevel: () => "medium",
+      getSessionName: () => "Recovery parent",
+      setSessionName: async () => {},
+      setInterval: () => 0,
+      pi: { getAgentDir: () => tmpdir() },
+    };
+    habitat(pi as unknown as Parameters<typeof habitat>[0]);
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => parentSessionId },
+      setInterval: () => 0,
+      ui: {
+        setWidget(_key: string, lines: string[] | undefined) { if (lines) widgets.push(lines); },
+        notify() {},
+      },
+    };
+    await commands.get(RUNTIME_CHILDREN_COMMAND)!.handler("", ctx);
+    expect(widgets.flat().join("\n")).toContain(launchId);
+    await commands.get(RUNTIME_CANCEL_COMMAND)!.handler(launchId, ctx);
+    expect(messages.join("\n")).toContain('"status":"cancelled"');
+    expect(await Bun.file(join(parentDirectory, `${launchId}.pending.json`)).exists()).toBeFalse();
+  } finally {
+    await rm(parentDirectory, { recursive: true, force: true });
+  }
 });
 test("runtime fragment stays below fixed limit", () => {
   const context = { version: 1 as const, harness: { id: "omp", hasUI: false }, host: { kind: "terminal" as const, provider: "wezterm", trust: "validated-local-probe" as const }, location: { instanceRef: "x", cwd: "x" }, capabilities: {} };
