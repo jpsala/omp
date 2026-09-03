@@ -13,12 +13,17 @@ import {
 
 const WRITE_DELAY_MS = 60;
 
+export interface LiveMarkdownDependencies {
+	outputRoot?: string;
+	ensureDirectory?: (path: string) => Promise<void>;
+	writeSnapshot?: (path: string, content: string) => Promise<void>;
+}
+
 interface MirrorRuntime {
 	ctx: ExtensionContext;
 	document: LiveMarkdownDocument;
 	filePath: string;
 	sessionId: string;
-	hasTranscript: boolean;
 	generating: boolean;
 	directoryReady: boolean;
 	writeRunning: boolean;
@@ -41,10 +46,21 @@ function repositoryName(cwd: string): string {
 }
 
 
-export default function liveMarkdown(pi: ExtensionAPI): void {
+export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdownDependencies = {}): void {
 	let runtime: MirrorRuntime | undefined;
 
-	const outputRoot = process.env.OMP_LIVE_MARKDOWN_ROOT?.trim() || DEFAULT_LIVE_MARKDOWN_ROOT;
+	const outputRoot =
+		dependencies.outputRoot ?? process.env.OMP_LIVE_MARKDOWN_ROOT?.trim() ?? DEFAULT_LIVE_MARKDOWN_ROOT;
+	const ensureDirectory =
+		dependencies.ensureDirectory ??
+		(async (path: string): Promise<void> => {
+			await mkdir(path, { recursive: true });
+		});
+	const writeSnapshot =
+		dependencies.writeSnapshot ??
+		(async (path: string, content: string): Promise<void> => {
+			await writeFile(path, content, "utf8");
+		});
 
 	const drainWrites = async (current: MirrorRuntime): Promise<void> => {
 		current.writeRunning = true;
@@ -53,10 +69,10 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 			current.pendingContent = undefined;
 			try {
 				if (!current.directoryReady) {
-					await mkdir(dirname(current.filePath), { recursive: true });
+					await ensureDirectory(dirname(current.filePath));
 					current.directoryReady = true;
 				}
-				await writeFile(current.filePath, content, "utf8");
+				await writeSnapshot(current.filePath, content);
 			} catch (error) {
 				pi.logger.error("Live Markdown write failed", {
 					error: error instanceof Error ? error.message : String(error),
@@ -68,7 +84,6 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 	};
 
 	const enqueueWrite = (current: MirrorRuntime): void => {
-		if (!current.hasTranscript) return;
 		try {
 			current.pendingContent = current.document.render({
 				repository: repositoryName(current.ctx.cwd),
@@ -117,7 +132,9 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 			return;
 		}
 		try {
-			const startedAt = new Date();
+			const headerTimestamp = ctx.sessionManager?.getHeader?.()?.timestamp;
+			const headerDate = headerTimestamp ? new Date(headerTimestamp) : undefined;
+			const startedAt = headerDate && !Number.isNaN(headerDate.getTime()) ? headerDate : new Date();
 			const document = new LiveMarkdownDocument();
 			const messages = branchMessages(ctx);
 			document.reset(messages);
@@ -132,12 +149,11 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 					outputRoot,
 				}),
 				sessionId,
-				hasTranscript: document.hasContent(),
 				generating: false,
 				directoryReady: false,
 				writeRunning: false,
 			};
-			if (runtime.hasTranscript) flush(runtime);
+			flush(runtime);
 		} catch (error) {
 			runtime = undefined;
 			pi.logger.error("Live Markdown initialization failed", {
@@ -165,7 +181,6 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		const message = event.message as MirrorMessage;
 		if (message.role !== "assistant") return;
 		runtime.document.updateAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent();
 		scheduleWrite(runtime);
 	});
 
@@ -175,7 +190,6 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		if (message.role !== "assistant") return;
 		runtime.generating = true;
 		runtime.document.updateAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent();
 		scheduleWrite(runtime);
 	});
 
@@ -184,7 +198,6 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		const message = event.message as MirrorMessage;
 		if (message.role !== "assistant") return;
 		runtime.document.finishAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent();
 		flush(runtime);
 	});
 

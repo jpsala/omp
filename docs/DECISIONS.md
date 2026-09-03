@@ -713,3 +713,12 @@ call de cada mensaje. Thinking, preámbulos operativos, payloads y mensajes sin
 respuesta útil se omiten siempre, y las respuestas se separan sin encabezados
 repetidos. El streaming de la respuesta actual, el aislamiento por sesión y la
 exclusión de prompts no cambian.
+
+La existencia del archivo sí representa la existencia de la sesión TUI. Se
+retira el guard que demoraba la creación hasta la primera respuesta útil:
+`session_start` publica un documento metadata-only y el cuerpo permanece vacío
+hasta recibir texto publicable. La fecha y hora se toman de
+`SessionManager.getHeader().timestamp`, de modo que un switch no renombra
+artificialmente la sesión. Esto reemplaza el criterio de no dejar archivos
+vacíos registrado el 2026-08-28: ocultar actividad interna no debe volver
+invisible una sesión real.

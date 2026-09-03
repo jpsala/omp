@@ -1,4 +1,9 @@
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+} from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { expect, test } from "bun:test";
+import liveMarkdown from "../extensions/live-markdown.ts";
 import {
 	LiveMarkdownDocument,
 	renderMirrorMessage,
@@ -33,6 +38,51 @@ test("creates chronological paths with the complete session identity", () => {
 		startedAt: new Date(2026, 7, 28, 15, 7),
 	});
 	expect(concurrentPath).not.toBe(filePath);
+});
+
+test("creates a clean session file before the first useful answer", async () => {
+	type EventHandler = (event: unknown, ctx: ExtensionContext) => void;
+	const handlers = new Map<string, EventHandler>();
+	let writtenPath = "";
+	let writtenContent = "";
+	let resolveWrite: (() => void) | undefined;
+	const writeComplete = new Promise<void>(resolve => {
+		resolveWrite = resolve;
+	});
+	const testApi = {
+		on: (event: string, handler: EventHandler) => {
+			handlers.set(event, handler);
+		},
+		registerCommand: () => {},
+		logger: { error: () => {} },
+	};
+	liveMarkdown(testApi as unknown as ExtensionAPI, {
+		outputRoot: "C:\\mirror",
+		ensureDirectory: async () => {},
+		writeSnapshot: async (path, content) => {
+			writtenPath = path;
+			writtenContent = content;
+			resolveWrite?.();
+		},
+	});
+
+	const timestamp = "2026-09-03T08:40:11.934";
+	const ctx = {
+		cwd: "C:\\dev\\omp",
+		hasUI: true,
+		sessionManager: {
+			getSessionId: () => "session-empty",
+			getHeader: () => ({ timestamp }),
+			getBranch: () => [],
+		},
+	} as unknown as ExtensionContext;
+	handlers.get("session_start")?.({}, ctx);
+	await writeComplete;
+
+	expect(writtenPath).toContain("C:\\mirror\\omp\\2026-09-03\\08-40");
+	expect(writtenContent).toContain('session_id: "session-empty"');
+	expect(writtenContent).toContain("status: idle");
+	expect(writtenContent).not.toContain("## Agente");
 });
 
 test("defaults to assistant-only output without internal activity", () => {

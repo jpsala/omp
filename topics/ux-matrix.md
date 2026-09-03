@@ -107,13 +107,16 @@ crece. Para lectura paralela sin otro delta core, `extensions/live-markdown.ts`
 consume `message_update` y publica Markdown local por sesión en
 `C:/dev/omp-live/<repo>/<fecha>/`. Usa la rama persistida como base, reemplaza
 el snapshot vivo con debounce de 60 ms y conserva el session id completo en el
-nombre. Dos procesos concurrentes con ids distintos no comparten archivo.
+nombre. La fecha y hora salen del header de sesión, no del instante de una
+recarga o switch. Dos procesos concurrentes con ids distintos no comparten
+archivo.
 
 El mirror es una vista de lectura assistant-only, independiente de la
 visibilidad diagnóstica del transcript. Nunca copia prompts, nombres derivados
 del prompt, payloads de tools, thinking ni preámbulos operativos; tampoco agrega
-un encabezado `Agente` por cada mensaje interno. Sesiones background/headless y
-sesiones interactivas sin respuesta útil no generan archivos.
+un encabezado `Agente` por cada mensaje interno. Cada sesión TUI materializa
+desde `session_start` un archivo metadata-only, aun antes de producir respuesta
+útil; las sesiones background/headless no publican.
 
 La cola coalesce snapshots pendientes y ejecuta `mkdir`/`writeFile` sin hacer
 esperar eventos de agente, mensaje o sesión. Un error del destino se registra y

@@ -52,18 +52,19 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   El smoke real de 18.0.11 verificó el selector con sus tres presets, el perfil
   `zen` y 41 opciones; los 22 tests focales cubren filtrado y persistencia.
 - Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
-  oficiales `message_update` sólo en sesiones TUI y publica un archivo por
-  sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. El nombre usa pane y session id
-  completo. Es una vista de lectura, no un espejo del transcript: contiene sólo
-  respuestas útiles del agente en Markdown crudo y descarta siempre thinking,
-  preámbulos operativos, prompts, nombres derivados del prompt, payloads de
-  tools y encabezados repetidos por mensaje.
-  Las escrituras coalescen el último snapshot y todo I/O corre fuera del lifecycle de OMP:
-  fallar el destino sólo registra el error.
-  `/live-markdown` informa la ruta activa. El smoke concurrente conservó
-  archivos separados y completos para `omp` y `dictation-tauri`; una raíz
-  inválida no interrumpió la sesión. El smoke TUI real del 2026-09-03 ejecutó
-  thinking y un tool call, y el cuerpo final sólo conservó la respuesta útil.
+  oficiales `message_update` sólo en sesiones TUI y materializa inmediatamente
+  un archivo por sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. La fecha y hora
+  provienen del header persistido; el nombre usa pane y session id completo.
+  Es una vista de lectura, no un espejo del transcript: el archivo existe desde
+  `session_start`, pero su cuerpo contiene sólo respuestas útiles del agente en
+  Markdown crudo y descarta siempre thinking, preámbulos operativos, prompts,
+  nombres derivados del prompt, payloads de tools y encabezados repetidos.
+  Las escrituras coalescen el último snapshot y todo I/O corre fuera del
+  lifecycle de OMP: fallar el destino sólo registra el error.
+  `/live-markdown` informa la ruta activa. El test focal cubre una sesión todavía
+  sin respuesta útil; el smoke TUI concurrente del 2026-09-03 creó dos archivos
+  metadata-only separados antes del primer turno. El archivo histórico señalado
+  por el usuario se regeneró con el filtro limpio.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.11`, con el
   addon Win32 publicado embebido y el patch workstation vigente. Además de los
   filtros granulares, el core usa 272k como límite económico de dispatch para
