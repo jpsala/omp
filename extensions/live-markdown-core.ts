@@ -15,15 +15,6 @@ export interface MirrorMessage {
 	content?: string | readonly MirrorContentBlock[];
 }
 
-export interface MirrorVisibility {
-	includeThinking: boolean;
-	includeAssistantToolPreambles: boolean;
-}
-
-export const PRIVATE_MIRROR_VISIBILITY: MirrorVisibility = {
-	includeThinking: false,
-	includeAssistantToolPreambles: false,
-};
 
 export interface LiveMarkdownMetadata {
 	repository: string;
@@ -42,16 +33,8 @@ function cleanText(value: string): string {
 	return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").replaceAll("\r\n", "\n");
 }
 
-function quoteThinking(value: string): string {
-	const lines = cleanText(value).trim().split("\n");
-	if (lines.length === 0 || (lines.length === 1 && !lines[0])) return "";
-	return ["> **Pensando**", ">", ...lines.map(line => `> ${line}`)].join("\n");
-}
 
-export function renderMirrorMessage(
-	message: MirrorMessage,
-	visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY,
-): RenderedMessage | undefined {
+export function renderMirrorMessage(message: MirrorMessage): RenderedMessage | undefined {
 	if (message.role !== "assistant" || !Array.isArray(message.content)) return undefined;
 
 	let lastToolCall = -1;
@@ -62,21 +45,9 @@ export function renderMirrorMessage(
 	const blocks: string[] = [];
 	for (let index = 0; index < message.content.length; index += 1) {
 		const block = message.content[index];
-		if (
-			visibility.includeThinking &&
-			block?.type === "thinking" &&
-			typeof block.thinking === "string"
-		) {
-			const thinking = quoteThinking(block.thinking);
-			if (thinking) blocks.push(thinking);
-		} else if (
-			block?.type === "text" &&
-			typeof block.text === "string" &&
-			(visibility.includeAssistantToolPreambles || index > lastToolCall)
-		) {
-			const text = cleanText(block.text).trim();
-			if (text) blocks.push(text);
-		}
+		if (block?.type !== "text" || typeof block.text !== "string" || index <= lastToolCall) continue;
+		const text = cleanText(block.text).trim();
+		if (text) blocks.push(text);
 	}
 	const body = blocks.join("\n\n").trim();
 	return body ? { body } : undefined;
@@ -101,23 +72,20 @@ export class LiveMarkdownDocument {
 		this.#liveAssistant = undefined;
 	}
 
-	hasContent(visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY): boolean {
-		if (this.#messages.some(message => renderMirrorMessage(message, visibility))) return true;
-		return Boolean(this.#liveAssistant && renderMirrorMessage(this.#liveAssistant, visibility));
+	hasContent(): boolean {
+		if (this.#messages.some(message => renderMirrorMessage(message))) return true;
+		return Boolean(this.#liveAssistant && renderMirrorMessage(this.#liveAssistant));
 	}
 
-	render(
-		metadata: LiveMarkdownMetadata,
-		visibility: MirrorVisibility = PRIVATE_MIRROR_VISIBILITY,
-	): string {
+	render(metadata: LiveMarkdownMetadata): string {
 		const sections: string[] = [];
 		for (const message of this.#messages) {
-			const rendered = renderMirrorMessage(message, visibility);
-			if (rendered) sections.push(`## Agente\n\n${rendered.body}`);
+			const rendered = renderMirrorMessage(message);
+			if (rendered) sections.push(rendered.body);
 		}
 		if (this.#liveAssistant) {
-			const rendered = renderMirrorMessage(this.#liveAssistant, visibility);
-			if (rendered) sections.push(`## Agente\n\n${rendered.body}`);
+			const rendered = renderMirrorMessage(this.#liveAssistant);
+			if (rendered) sections.push(rendered.body);
 		}
 		const paneLine = metadata.pane ? `\n- **Pane:** ${metadata.pane}` : "";
 		return [

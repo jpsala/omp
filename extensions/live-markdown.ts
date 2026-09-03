@@ -7,12 +7,9 @@ import type {
 import {
 	DEFAULT_LIVE_MARKDOWN_ROOT,
 	LiveMarkdownDocument,
-	PRIVATE_MIRROR_VISIBILITY,
 	sessionMarkdownPath,
 	type MirrorMessage,
-	type MirrorVisibility,
 } from "./live-markdown-core.ts";
-import type { TranscriptVisibilityState } from "./tool-activity-view-core.ts";
 
 const WRITE_DELAY_MS = 60;
 
@@ -43,18 +40,6 @@ function repositoryName(cwd: string): string {
 	return basename(cwd.replace(/[\\/]+$/, "")) || cwd;
 }
 
-function mirrorVisibility(ctx: ExtensionContext): MirrorVisibility {
-	try {
-		const visibility = ctx.ui.getTranscriptVisibility?.() as TranscriptVisibilityState | undefined;
-		if (!visibility) return PRIVATE_MIRROR_VISIBILITY;
-		return {
-			includeThinking: visibility.hideThinking === false,
-			includeAssistantToolPreambles: visibility.hideAssistantToolPreambles === false,
-		};
-	} catch {
-		return PRIVATE_MIRROR_VISIBILITY;
-	}
-}
 
 export default function liveMarkdown(pi: ExtensionAPI): void {
 	let runtime: MirrorRuntime | undefined;
@@ -85,18 +70,14 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 	const enqueueWrite = (current: MirrorRuntime): void => {
 		if (!current.hasTranscript) return;
 		try {
-			const visibility = mirrorVisibility(current.ctx);
-			current.pendingContent = current.document.render(
-				{
-					repository: repositoryName(current.ctx.cwd),
-					cwd: current.ctx.cwd,
-					sessionId: current.sessionId,
-					pane: process.env.WEZTERM_PANE?.trim() || undefined,
-					generating: current.generating,
-					updatedAt: new Date(),
-				},
-				visibility,
-			);
+			current.pendingContent = current.document.render({
+				repository: repositoryName(current.ctx.cwd),
+				cwd: current.ctx.cwd,
+				sessionId: current.sessionId,
+				pane: process.env.WEZTERM_PANE?.trim() || undefined,
+				generating: current.generating,
+				updatedAt: new Date(),
+			});
 			if (!current.writeRunning) void drainWrites(current);
 		} catch (error) {
 			pi.logger.error("Live Markdown snapshot failed", {
@@ -139,7 +120,6 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 			const startedAt = new Date();
 			const document = new LiveMarkdownDocument();
 			const messages = branchMessages(ctx);
-			const visibility = mirrorVisibility(ctx);
 			document.reset(messages);
 			runtime = {
 				ctx,
@@ -152,7 +132,7 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 					outputRoot,
 				}),
 				sessionId,
-				hasTranscript: document.hasContent(visibility),
+				hasTranscript: document.hasContent(),
 				generating: false,
 				directoryReady: false,
 				writeRunning: false,
@@ -185,7 +165,7 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		const message = event.message as MirrorMessage;
 		if (message.role !== "assistant") return;
 		runtime.document.updateAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent(mirrorVisibility(ctx));
+		runtime.hasTranscript = runtime.document.hasContent();
 		scheduleWrite(runtime);
 	});
 
@@ -195,7 +175,7 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		if (message.role !== "assistant") return;
 		runtime.generating = true;
 		runtime.document.updateAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent(mirrorVisibility(ctx));
+		runtime.hasTranscript = runtime.document.hasContent();
 		scheduleWrite(runtime);
 	});
 
@@ -204,7 +184,7 @@ export default function liveMarkdown(pi: ExtensionAPI): void {
 		const message = event.message as MirrorMessage;
 		if (message.role !== "assistant") return;
 		runtime.document.finishAssistant(message);
-		runtime.hasTranscript = runtime.document.hasContent(mirrorVisibility(ctx));
+		runtime.hasTranscript = runtime.document.hasContent();
 		flush(runtime);
 	});
 

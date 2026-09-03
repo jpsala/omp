@@ -49,33 +49,56 @@ test("defaults to assistant-only output without internal activity", () => {
 	expect(rendered).toEqual({ body: "Final answer" });
 });
 
-test("includes thinking and preambles only when visibility allows them", () => {
-	const rendered = renderMirrorMessage(
+test("keeps the reading mirror clean regardless of transcript visibility", () => {
+	const rendered = renderMirrorMessage({
+		role: "assistant",
+		content: [
+			{ type: "thinking", thinking: "Checking the contract\nbefore editing" },
+			{ type: "text", text: "Internal preamble" },
+			{ type: "toolCall", text: "must not leak" },
+			{ type: "text", text: "## Resultado\n\nTexto **útil**." },
+		],
+	});
+	expect(rendered).toEqual({
+		body: "## Resultado\n\nTexto **útil**.",
+	});
+});
+
+test("drops operational-only messages and repeated agent wrappers", () => {
+	const document = new LiveMarkdownDocument();
+	document.reset([
 		{
 			role: "assistant",
 			content: [
-				{ type: "thinking", thinking: "Checking the contract\nbefore editing" },
-				{ type: "text", text: "Internal preamble" },
-				{ type: "toolCall", text: "must not leak" },
-				{ type: "text", text: "## Resultado\n\nTexto **útil**." },
+				{ type: "thinking", thinking: "Reviewing git status before commit" },
+				{ type: "text", text: "Preparing commit" },
+				{ type: "toolCall", text: "git status" },
 			],
 		},
-		{ includeThinking: true, includeAssistantToolPreambles: true },
-	);
-	expect(rendered).toEqual({
-		body: [
-			"> **Pensando**",
-			">",
-			"> Checking the contract",
-			"> before editing",
-			"",
-			"Internal preamble",
-			"",
-			"## Resultado",
-			"",
-			"Texto **útil**.",
-		].join("\n"),
+		{ role: "assistant", content: [{ type: "thinking", thinking: "Planning checks" }] },
+		{
+			role: "assistant",
+			content: [
+				{ type: "text", text: "Running checks" },
+				{ type: "toolCall", text: "bun test" },
+				{ type: "text", text: "Cambio listo y verificado." },
+			],
+		},
+	]);
+
+	const rendered = document.render({
+		repository: "omp",
+		cwd: "C:\\dev\\omp",
+		sessionId: "session-clean",
+		generating: false,
+		updatedAt: new Date("2026-09-03T12:00:00.000Z"),
 	});
+	expect(rendered).toContain("Cambio listo y verificado.");
+	expect(rendered).not.toContain("Reviewing git status");
+	expect(rendered).not.toContain("Preparing commit");
+	expect(rendered).not.toContain("Planning checks");
+	expect(rendered).not.toContain("Running checks");
+	expect(rendered).not.toContain("## Agente");
 });
 
 test("replaces the live assistant snapshot, excludes prompts, and finalizes once", () => {
@@ -95,8 +118,8 @@ test("replaces the live assistant snapshot, excludes prompts, and finalizes once
 	expect(live).toContain("status: generating");
 	expect(live).not.toContain("Probemos esto");
 	expect(live).not.toContain("## Vos");
-	expect(live).toContain("## Agente\n\nPrimera versión ampliada");
-	expect(live).not.toContain("## Agente\n\nPrimera\n");
+	expect(live).toContain("Primera versión ampliada");
+	expect(live).not.toContain("## Agente");
 
 	document.finishAssistant({
 		role: "assistant",
@@ -110,6 +133,6 @@ test("replaces the live assistant snapshot, excludes prompts, and finalizes once
 		updatedAt: new Date("2026-08-28T15:08:00.000Z"),
 	});
 	expect(final).toContain("status: idle");
-	expect(final.match(/## Agente/g)).toHaveLength(1);
+	expect(final).not.toContain("## Agente");
 	expect(final).toContain("Primera versión final");
 });

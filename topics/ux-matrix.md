@@ -109,11 +109,11 @@ consume `message_update` y publica Markdown local por sesión en
 el snapshot vivo con debounce de 60 ms y conserva el session id completo en el
 nombre. Dos procesos concurrentes con ids distintos no comparten archivo.
 
-El mirror es assistant-only: nunca copia prompts, nombres derivados del prompt
-ni payloads de tools. Thinking y preámbulos de mensajes que invocan tools siguen
-`ctx.ui.getTranscriptVisibility()`; ante un build sin esa API aplica el default
-privado y los omite. Sesiones background/headless y sesiones interactivas sin
-respuesta visible no generan archivos.
+El mirror es una vista de lectura assistant-only, independiente de la
+visibilidad diagnóstica del transcript. Nunca copia prompts, nombres derivados
+del prompt, payloads de tools, thinking ni preámbulos operativos; tampoco agrega
+un encabezado `Agente` por cada mensaje interno. Sesiones background/headless y
+sesiones interactivas sin respuesta útil no generan archivos.
 
 La cola coalesce snapshots pendientes y ejecuta `mkdir`/`writeFile` sin hacer
 esperar eventos de agente, mensaje o sesión. Un error del destino se registra y

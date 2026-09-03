@@ -54,11 +54,11 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
   oficiales `message_update` sólo en sesiones TUI y publica un archivo por
   sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. El nombre usa pane y session id
-  completo; el documento contiene sólo respuestas del agente, Markdown crudo y
-  estado `generating|idle`. Nunca copia prompts, nombres derivados del prompt ni
-  payloads de tools; thinking y preámbulos siguen la política viva del
-  transcript y quedan ocultos por defecto si esa API no existe. Las escrituras
-  coalescen el último snapshot y todo I/O corre fuera del lifecycle de OMP:
+  completo. Es una vista de lectura, no un espejo del transcript: contiene sólo
+  respuestas útiles del agente en Markdown crudo y descarta siempre thinking,
+  preámbulos operativos, prompts, nombres derivados del prompt, payloads de
+  tools y encabezados repetidos por mensaje.
+  Las escrituras coalescen el último snapshot y todo I/O corre fuera del lifecycle de OMP:
   fallar el destino sólo registra el error.
   `/live-markdown` informa la ruta activa. El smoke real concurrente creó
   archivos distintos para `omp` y `dictation-tauri`, capturó 50/160 y 76/80

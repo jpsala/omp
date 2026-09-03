@@ -700,3 +700,16 @@ propios y `/runtime-cancel <launchId>` permite reconciliarlos explícitamente po
 el canal normal. El janitor puede retirar progress expirado, completions
 huérfanos fuera de retención y directorios vacíos, pero nunca elimina un pending
 sin completion, aunque supere siete días.
+
+## 2026-09-03 — OMP Live es una vista de lectura, no un transcript alternativo
+
+La visibilidad diagnóstica del TUI no gobierna el archivo de lectura. Mostrar
+thinking o preámbulos en OMP no los vuelve útiles en `omp-live`: acumulaban
+mensajes operativos breves y encabezados `Agente`, ocultando las respuestas que
+el usuario abría el archivo para leer.
+
+El productor conserva únicamente texto del asistente posterior al último tool
+call de cada mensaje. Thinking, preámbulos operativos, payloads y mensajes sin
+respuesta útil se omiten siempre, y las respuestas se separan sin encabezados
+repetidos. El streaming de la respuesta actual, el aislamiento por sesión y la
+exclusión de prompts no cambian.
