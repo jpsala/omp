@@ -15,7 +15,6 @@ export interface MirrorMessage {
 	content?: string | readonly MirrorContentBlock[];
 }
 
-
 export interface LiveMarkdownMetadata {
 	repository: string;
 	cwd: string;
@@ -29,37 +28,106 @@ interface RenderedMessage {
 	body: string;
 }
 
+interface AssistantMessageParts {
+	answer?: RenderedMessage;
+	progress: string[];
+}
+
+interface LiveMarkdownTurn {
+	prompt?: MirrorMessage;
+	assistantMessages: MirrorMessage[];
+	progress: string[];
+}
+
 function cleanText(value: string): string {
 	return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").replaceAll("\r\n", "\n");
 }
 
+function messageText(message: MirrorMessage): string | undefined {
+	if (typeof message.content === "string") {
+		const text = cleanText(message.content).trim();
+		return text || undefined;
+	}
+	if (!Array.isArray(message.content)) return undefined;
+	const blocks = message.content
+		.filter(block => block?.type === "text" && typeof block.text === "string")
+		.map(block => cleanText(block.text ?? "").trim())
+		.filter(Boolean);
+	const body = blocks.join("\n\n").trim();
+	return body || undefined;
+}
 
-export function renderMirrorMessage(message: MirrorMessage): RenderedMessage | undefined {
-	if (message.role !== "assistant" || !Array.isArray(message.content)) return undefined;
+
+function pushUnique(values: string[], value: string): void {
+	const compact = cleanText(value).replace(/\s+/g, " ").trim();
+	if (compact && values.at(-1) !== compact) values.push(compact);
+}
+
+function splitAssistantMessage(message: MirrorMessage): AssistantMessageParts {
+	if (message.role !== "assistant") return { progress: [] };
+	if (typeof message.content === "string") {
+		const body = messageText(message);
+		return { answer: body ? { body } : undefined, progress: [] };
+	}
+	if (!Array.isArray(message.content)) return { progress: [] };
 
 	let lastToolCall = -1;
 	for (let index = 0; index < message.content.length; index += 1) {
 		if (message.content[index]?.type === "toolCall") lastToolCall = index;
 	}
 
-	const blocks: string[] = [];
+	const answerBlocks: string[] = [];
+	const progress: string[] = [];
 	for (let index = 0; index < message.content.length; index += 1) {
 		const block = message.content[index];
-		if (block?.type !== "text" || typeof block.text !== "string" || index <= lastToolCall) continue;
+		if (block?.type !== "text" || typeof block.text !== "string") continue;
 		const text = cleanText(block.text).trim();
-		if (text) blocks.push(text);
+		if (!text) continue;
+		if (lastToolCall >= 0 && index <= lastToolCall) pushUnique(progress, text);
+		else answerBlocks.push(text);
 	}
-	const body = blocks.join("\n\n").trim();
-	return body ? { body } : undefined;
+	const body = answerBlocks.join("\n\n").trim();
+	return { answer: body ? { body } : undefined, progress };
+}
+
+function renderPrompt(message: MirrorMessage | undefined): string | undefined {
+	if (message?.role !== "user") return undefined;
+	const body = messageText(message);
+	if (!body) return "> **Vos:** _(mensaje sin texto; adjuntos no incluidos)_";
+	const lines = body.split("\n");
+	return lines
+		.map((line, index) => {
+			if (index === 0) return `> **Vos:** ${line}`;
+			return line ? `> ${line}` : ">";
+		})
+		.join("\n");
+}
+
+export function renderMirrorMessage(message: MirrorMessage): RenderedMessage | undefined {
+	return splitAssistantMessage(message).answer;
 }
 
 export class LiveMarkdownDocument {
-	#messages: MirrorMessage[] = [];
+	#turns: LiveMarkdownTurn[] = [];
 	#liveAssistant: MirrorMessage | undefined;
 
 	reset(messages: readonly MirrorMessage[]): void {
-		this.#messages = messages.filter(message => message.role === "assistant");
+		this.#turns = [];
 		this.#liveAssistant = undefined;
+		for (const message of messages) {
+			if (message.role === "user") this.startUser(message);
+			else if (message.role === "assistant") this.#ensureTurn().assistantMessages.push(message);
+		}
+	}
+
+	startUser(message: MirrorMessage): void {
+		if (message.role !== "user") return;
+		this.#turns.push({ prompt: message, assistantMessages: [], progress: [] });
+		this.#liveAssistant = undefined;
+	}
+
+	addProgress(value: string): void {
+		pushUnique(this.#ensureTurn().progress, value);
 	}
 
 	updateAssistant(message: MirrorMessage): void {
@@ -68,25 +136,43 @@ export class LiveMarkdownDocument {
 
 	finishAssistant(message: MirrorMessage): void {
 		const finalMessage = message.role === "assistant" ? message : this.#liveAssistant;
-		if (finalMessage) this.#messages.push(finalMessage);
+		if (finalMessage) this.#ensureTurn().assistantMessages.push(finalMessage);
 		this.#liveAssistant = undefined;
 	}
 
 	hasContent(): boolean {
-		if (this.#messages.some(message => renderMirrorMessage(message))) return true;
+		if (this.#turns.some(turn => turn.prompt || turn.assistantMessages.some(renderMirrorMessage))) return true;
 		return Boolean(this.#liveAssistant && renderMirrorMessage(this.#liveAssistant));
 	}
 
 	render(metadata: LiveMarkdownMetadata): string {
 		const sections: string[] = [];
-		for (const message of this.#messages) {
-			const rendered = renderMirrorMessage(message);
-			if (rendered) sections.push(rendered.body);
+		for (let index = 0; index < this.#turns.length; index += 1) {
+			const turn = this.#turns[index];
+			if (!turn) continue;
+			const prompt = renderPrompt(turn.prompt);
+			const answers: string[] = [];
+			const progress: string[] = [...turn.progress];
+			for (const message of turn.assistantMessages) {
+				const parts = splitAssistantMessage(message);
+				for (const item of parts.progress) pushUnique(progress, item);
+				if (parts.answer) answers.push(parts.answer.body);
+			}
+			if (index === this.#turns.length - 1 && this.#liveAssistant) {
+				const parts = splitAssistantMessage(this.#liveAssistant);
+				for (const item of parts.progress) pushUnique(progress, item);
+				if (parts.answer) answers.push(parts.answer.body);
+			}
+
+			const content: string[] = [];
+			if (prompt) content.push(prompt);
+			if (metadata.generating && answers.length === 0) {
+				content.push(`> **En curso:** ${progress.length > 0 ? progress.join(" → ") : "Trabajando…"}`);
+			}
+			content.push(...answers);
+			if (content.length > 0) sections.push(content.join("\n\n"));
 		}
-		if (this.#liveAssistant) {
-			const rendered = renderMirrorMessage(this.#liveAssistant);
-			if (rendered) sections.push(rendered.body);
-		}
+
 		const paneLine = metadata.pane ? `\n- **Pane:** ${metadata.pane}` : "";
 		return [
 			"---",
@@ -108,6 +194,14 @@ export class LiveMarkdownDocument {
 			sections.join("\n\n---\n\n"),
 			"",
 		].join("\n");
+	}
+
+	#ensureTurn(): LiveMarkdownTurn {
+		const current = this.#turns.at(-1);
+		if (current) return current;
+		const turn: LiveMarkdownTurn = { assistantMessages: [], progress: [] };
+		this.#turns.push(turn);
+		return turn;
 	}
 }
 

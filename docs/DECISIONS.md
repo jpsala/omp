@@ -724,6 +724,25 @@ artificialmente la sesión. Esto reemplaza el criterio de no dejar archivos
 vacíos registrado el 2026-08-28: ocultar actividad interna no debe volver
 invisible una sesión real.
 
+## 2026-09-03 — OMP Live agrupa prompts y progreso efímero por turno
+
+La exclusión de prompts impedía distinguir respuestas de sesiones concurrentes
+y el filtro de texto posterior al último tool call dejaba un turno largo sin
+señales útiles hasta su respuesta final. El documento pasa de una lista plana
+de mensajes del asistente a turnos cronológicos: cita el mensaje `user` y
+conserva después el Markdown crudo de la respuesta.
+
+Durante la generación, un único bloque `En curso` acumula los preámbulos
+públicos anteriores a tool calls y el `intent` de `tool_execution_start`.
+Thinking, argumentos, resultados y payloads siguen excluidos. El bloque es
+transitorio: desaparece cuando comienza la respuesta terminal, por lo que el
+archivo en reposo conserva sólo prompt y respuesta.
+
+Persistir prompts revierte deliberadamente la exclusión decidida el 2026-08-28
+y ratificada el 2026-09-03. El alcance permanece limitado a sesiones TUI y a la
+raíz local fuera de Git; imágenes, adjuntos, mensajes `developer` y system
+prompts no se materializan.
+
 ## 2026-09-03 — Rebase granular sobre OMP 18.1.6 sin updater mutante
 
 `omp update --check` es la única operación admisible del updater sobre una

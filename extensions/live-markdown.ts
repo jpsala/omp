@@ -37,7 +37,7 @@ function branchMessages(ctx: ExtensionContext): MirrorMessage[] {
 	for (const entry of ctx.sessionManager?.getBranch?.() ?? []) {
 		if (entry.type !== "message") continue;
 		const message = entry.message as MirrorMessage;
-		if (message.role === "assistant") messages.push(message);
+		if (message.role === "user" || message.role === "assistant") messages.push(message);
 	}
 	return messages;
 }
@@ -181,6 +181,11 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 	pi.on("message_start", (event, ctx) => {
 		if (!runtime || !matchesRuntime(ctx)) return;
 		const message = event.message as MirrorMessage;
+		if (message.role === "user") {
+			runtime.document.startUser(message);
+			flush(runtime);
+			return;
+		}
 		if (message.role !== "assistant") return;
 		runtime.document.updateAssistant(message);
 		scheduleWrite(runtime);
@@ -192,6 +197,13 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 		if (message.role !== "assistant") return;
 		runtime.generating = true;
 		runtime.document.updateAssistant(message);
+		scheduleWrite(runtime);
+	});
+
+	pi.on("tool_execution_start", (event, ctx) => {
+		if (!runtime || !matchesRuntime(ctx)) return;
+		runtime.generating = true;
+		runtime.document.addProgress(event.intent?.trim() || "Trabajando…");
 		scheduleWrite(runtime);
 	});
 

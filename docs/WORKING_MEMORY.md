@@ -51,20 +51,22 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   con thinking, preámbulos, métricas y toda la actividad de tools ocultos.
   El smoke real de 18.1.6 verificó el selector con sus tres presets, los perfiles
   `main` y `zen`, y 42 opciones; los 22 tests focales cubren filtrado y persistencia.
-- Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
-  oficiales `message_update` sólo en sesiones TUI y materializa inmediatamente
-  un archivo por sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. La fecha y hora
-  provienen del header persistido; el nombre usa pane y session id completo.
-  Es una vista de lectura, no un espejo del transcript: el archivo existe desde
-  `session_start`, pero su cuerpo contiene sólo respuestas útiles del agente en
-  Markdown crudo y descarta siempre thinking, preámbulos operativos, prompts,
-  nombres derivados del prompt, payloads de tools y encabezados repetidos.
+- Espejo Markdown local: `extensions/live-markdown.ts` consume eventos oficiales
+  sólo en sesiones TUI y materializa inmediatamente un archivo por sesión bajo
+  `C:/dev/omp-live/<repo>/<fecha>/`. La fecha y hora provienen del header
+  persistido; el nombre usa pane y session id completo.
+  Es una vista de lectura organizada por turnos: conserva cada prompt `user`
+  como cita, mantiene intacta la respuesta final en Markdown crudo y, mientras
+  trabaja, concentra preámbulos públicos e intents de tools en un único bloque
+  `En curso` mutable. El bloque desaparece al comenzar la respuesta final;
+  thinking, argumentos, resultados y payloads de tools nunca se copian.
+  La inclusión de prompts es deliberada y queda limitada a estos archivos
+  locales fuera de Git; imágenes y adjuntos no se materializan.
   Las escrituras coalescen el último snapshot y todo I/O corre fuera del
   lifecycle de OMP: fallar el destino sólo registra el error.
-  `/live-markdown` informa la ruta activa. El test focal cubre una sesión todavía
-  sin respuesta útil; el smoke TUI concurrente del 2026-09-03 creó dos archivos
-  metadata-only separados antes del primer turno. El archivo histórico señalado
-  por el usuario se regeneró con el filtro limpio.
+  `/live-markdown` informa la ruta activa. Diez tests focales cubren sesiones
+  metadata-only, filtrado, prompts, progreso transitorio, reconstrucción
+  cronológica y finalización.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.1.6`, con el
   addon Win32 publicado embebido y el patch workstation vigente. Además de los
   filtros granulares, el core usa 272k como límite económico de dispatch para

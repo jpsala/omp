@@ -115,27 +115,34 @@ nombre. La fecha y hora salen del header de sesión, no del instante de una
 recarga o switch. Dos procesos concurrentes con ids distintos no comparten
 archivo.
 
-El mirror es una vista de lectura assistant-only, independiente de la
-visibilidad diagnóstica del transcript. Nunca copia prompts, nombres derivados
-del prompt, payloads de tools, thinking ni preámbulos operativos; tampoco agrega
-un encabezado `Agente` por cada mensaje interno. Cada sesión TUI materializa
-desde `session_start` un archivo metadata-only, aun antes de producir respuesta
-útil; las sesiones background/headless no publican.
+El mirror es una vista de lectura por turnos, independiente de la visibilidad
+diagnóstica del transcript. Cada turno cita el texto `user` antes de la
+respuesta útil del asistente, de modo que respuestas concurrentes conservan su
+contexto. Esto persiste deliberadamente prompts en la raíz local fuera de Git;
+no copia imágenes, mensajes `developer`, system prompts ni contenido de
+adjuntos.
 
-La cola coalesce snapshots pendientes y ejecuta `mkdir`/`writeFile` sin hacer
-esperar eventos de agente, mensaje o sesión. Un error del destino se registra y
-la sesión OMP continúa; cerrar o reiniciar no elimina salidas anteriores. La
-raíz central conserva la jerarquía relativa bajo `C:/dev` sin introducir
-transcripts privados en los checkouts. `/live-markdown` muestra el archivo
-actual y `OMP_LIVE_MARKDOWN_ROOT` permite cambiar sólo la raíz.
+Mientras un turno genera y todavía no existe respuesta terminal, un único
+bloque `En curso` acumula preámbulos públicos anteriores a tool calls y el
+`intent` corto de `tool_execution_start`. El snapshot acumulativo reemplaza ese
+bloque, nunca agrega una tarjeta por delta. Thinking, argumentos, resultados y
+payloads de tools permanecen excluidos. Al comenzar la respuesta final, el
+bloque transitorio desaparece y el Markdown crudo de la respuesta vuelve a ser
+el único cuerpo del agente.
 
-El smoke concurrente sobre `omp` y `dictation-tauri` observó ambos archivos
-mientras crecían y completos después de cerrar las sesiones; una raíz que
-resolvía dentro de un archivo existente falló sin interrumpir OMP. No se operó
-VS Code u Obsidian: se verificó la actualización por etapas leyendo el mismo
-path. Si esos previews no conservan el scroll del lector, la evolución correcta
-es un visor local que consuma el mismo productor, no publicar Markdown
-incompleto en el scrollback de OMP.
+Cada sesión TUI materializa desde `session_start` un archivo metadata-only, aun
+antes de producir un prompt o respuesta; las sesiones background/headless no
+publican. La cola coalesce snapshots pendientes y ejecuta
+`mkdir`/`writeFile` sin hacer esperar eventos de agente, mensaje o sesión. Un
+error del destino se registra y la sesión OMP continúa; cerrar o reiniciar no
+elimina salidas anteriores. La raíz central conserva la jerarquía relativa
+bajo `C:/dev` sin introducir estos documentos en los checkouts.
+`/live-markdown` muestra el archivo actual y `OMP_LIVE_MARKDOWN_ROOT` permite
+cambiar sólo la raíz.
+
+Si VS Code u Obsidian no preservan el scroll al reescribir el snapshot, la
+evolución correcta es un visor local sobre el mismo productor, no publicar
+Markdown incompleto en el scrollback de OMP.
 
 ## Mercado de renderers y clientes (2026-08-15)
 

@@ -183,7 +183,7 @@ test("drops operational-only messages and repeated agent wrappers", () => {
 	expect(rendered).not.toContain("## Agente");
 });
 
-test("replaces the live assistant snapshot, excludes prompts, and finalizes once", () => {
+test("replaces the live assistant snapshot, includes the prompt, and finalizes once", () => {
 	const document = new LiveMarkdownDocument();
 	document.reset([{ role: "user", content: [{ type: "text", text: "Probemos esto" }] }]);
 	document.updateAssistant({ role: "assistant", content: [{ type: "text", text: "Primera" }] });
@@ -198,8 +198,7 @@ test("replaces the live assistant snapshot, excludes prompts, and finalizes once
 		updatedAt: new Date("2026-08-28T15:07:00.000Z"),
 	});
 	expect(live).toContain("status: generating");
-	expect(live).not.toContain("Probemos esto");
-	expect(live).not.toContain("## Vos");
+	expect(live).toContain("> **Vos:** Probemos esto");
 	expect(live).toContain("Primera versión ampliada");
 	expect(live).not.toContain("## Agente");
 
@@ -215,6 +214,95 @@ test("replaces the live assistant snapshot, excludes prompts, and finalizes once
 		updatedAt: new Date("2026-08-28T15:08:00.000Z"),
 	});
 	expect(final).toContain("status: idle");
+	expect(final).toContain("> **Vos:** Probemos esto");
 	expect(final).not.toContain("## Agente");
 	expect(final).toContain("Primera versión final");
+});
+
+test("accumulates operational activity in one transient item", () => {
+	const document = new LiveMarkdownDocument();
+	document.reset([{ role: "user", content: [{ type: "text", text: "Revisá el contrato" }] }]);
+	document.addProgress("Localizando implementación");
+	document.updateAssistant({
+		role: "assistant",
+		content: [
+			{ type: "thinking", thinking: "private reasoning" },
+			{ type: "text", text: "Leyendo eventos oficiales" },
+			{ type: "toolCall", text: "private tool payload" },
+		],
+	});
+
+	const working = document.render({
+		repository: "omp",
+		cwd: "C:\\dev\\omp",
+		sessionId: "session-progress",
+		generating: true,
+		updatedAt: new Date("2026-09-03T12:00:00.000Z"),
+	});
+	expect(working.match(/\*\*En curso:\*\*/g)).toHaveLength(1);
+	expect(working).toContain("Localizando implementación → Leyendo eventos oficiales");
+	expect(working).not.toContain("private reasoning");
+	expect(working).not.toContain("private tool payload");
+
+	document.finishAssistant({
+		role: "assistant",
+		content: [
+			{ type: "text", text: "Leyendo eventos oficiales" },
+			{ type: "toolCall", text: "private tool payload" },
+		],
+	});
+	document.addProgress("Comparando alternativas");
+	document.updateAssistant({
+		role: "assistant",
+		content: [{ type: "text", text: "El contrato final conserva Markdown." }],
+	});
+	const answering = document.render({
+		repository: "omp",
+		cwd: "C:\\dev\\omp",
+		sessionId: "session-progress",
+		generating: true,
+		updatedAt: new Date("2026-09-03T12:01:00.000Z"),
+	});
+	expect(answering).not.toContain("**En curso:**");
+	expect(answering).toContain("El contrato final conserva Markdown.");
+
+	document.finishAssistant({
+		role: "assistant",
+		content: [{ type: "text", text: "El contrato final queda limpio." }],
+	});
+	const final = document.render({
+		repository: "omp",
+		cwd: "C:\\dev\\omp",
+		sessionId: "session-progress",
+		generating: false,
+		updatedAt: new Date("2026-09-03T12:02:00.000Z"),
+	});
+	expect(final).not.toContain("**En curso:**");
+	expect(final).not.toContain("Localizando implementación");
+	expect(final).toContain("El contrato final queda limpio.");
+});
+
+test("reconstructs prompts and answers as chronological turns", () => {
+	const document = new LiveMarkdownDocument();
+	document.reset([
+		{ role: "user", content: [{ type: "text", text: "Primera pregunta" }] },
+		{ role: "assistant", content: [{ type: "text", text: "Primera respuesta" }] },
+		{ role: "user", content: [{ type: "text", text: "Segunda pregunta" }] },
+		{ role: "assistant", content: [{ type: "text", text: "Segunda respuesta" }] },
+	]);
+	const rendered = document.render({
+		repository: "omp",
+		cwd: "C:\\dev\\omp",
+		sessionId: "session-history",
+		generating: false,
+		updatedAt: new Date("2026-09-03T12:03:00.000Z"),
+	});
+	const firstPrompt = rendered.indexOf("Primera pregunta");
+	const firstAnswer = rendered.indexOf("Primera respuesta");
+	const secondPrompt = rendered.indexOf("Segunda pregunta");
+	const secondAnswer = rendered.indexOf("Segunda respuesta");
+	expect(firstPrompt).toBeGreaterThan(-1);
+	expect(firstAnswer).toBeGreaterThan(firstPrompt);
+	expect(secondPrompt).toBeGreaterThan(firstAnswer);
+	expect(secondAnswer).toBeGreaterThan(secondPrompt);
 });
