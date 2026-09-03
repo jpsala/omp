@@ -6,7 +6,7 @@ import { detectRuntimeContext, type HostProbeRunner } from "../src/runtime-host-
 import { getRuntimeProvider, validateAgentRuntimeContext } from "../src/agent-runtime-context.ts";
 import { markerRoot } from "../src/runtime-handshake.ts";
 import { CompletionTurnGate, completionRoot } from "../src/runtime-completion-channel.ts";
-import habitat, { CRITICAL_REVIEWER_MODEL, DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, RUNTIME_CANCEL_COMMAND, RUNTIME_CHILDREN_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, buildPlanImplementShortPrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, parseCriticalFlowRequest, publishRuntimeAck } from "../extensions/agent-runtime-habitat.ts";
+import habitat, { CRITICAL_REVIEWER_MODEL, DEFAULT_SESSION_PLACEMENT, HANDOFF_COMMAND, MAX_RUNTIME_FRAGMENT_LENGTH, ORCHESTRATE_COMMAND, PLAN_IMPLEMENT_SHORT_COMMAND, PROMOTE_CONTEXT_COMMAND, RUNTIME_CANCEL_COMMAND, RUNTIME_CHILDREN_COMMAND, SAVE_SESSION_COMMAND, buildOrchestratePrompt, buildPlanImplementShortPrompt, childSessionTitle, closeCompletedOwnedChildren, compactRuntimeFragment, deliverCompletionFollowUp, nextHandoffTitle, normalizeSessionToolInput, parseAtomicHandoffInput, parseCriticalFlowRequest, publishRuntimeAck, reconcileMissingOwnedChildren } from "../extensions/agent-runtime-habitat.ts";
 interface ToolResult { content: Array<{ type: string; text: string }>; details: unknown }
 interface ToolSpec { name: string; label: string; description: string; approval: "read" | "write"; parameters: Record<string, unknown>; execute: (id: string, params: unknown, signal: AbortSignal, onUpdate: unknown, ctx: unknown) => Promise<ToolResult> }
 interface CommandSpec { description?: string; handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -439,7 +439,10 @@ test("closes only matching runtime-owned panes after receiving completions", asy
     ownedPaneId,
     location: { instanceRef: "wez-instance", windowId: "1", tabId: "1", paneId: ownedPaneId },
   });
-  const adapter = { killOwnedPane: async (handle: { ownedPaneId: string }) => { closed.push(handle.ownedPaneId); } };
+  const adapter = {
+    isOwnedPanePresent: async () => true,
+    killOwnedPane: async (handle: { ownedPaneId: string }) => { closed.push(handle.ownedPaneId); },
+  };
   const owned = new Map([
     ["launch-a", { adapter, pane: pane("pane-a") }],
     ["launch-mismatch", { adapter, pane: pane("pane-b") }],
@@ -463,6 +466,53 @@ test("closes only matching runtime-owned panes after receiving completions", asy
   expect(closed).toEqual(["pane-a"]);
   expect(result).toEqual({ closedLaunchIds: ["launch-a"], failedChildNames: ["Wrong pane"] });
   expect(owned.size).toBe(0);
+});
+test("reconciles a missing runtime-owned pane without cancelling live or mismatched children", async () => {
+  const cancelled: string[] = [];
+  const pane = (ownedPaneId: string) => ({
+    instanceRef: "wez-instance",
+    sourcePaneId: "source-pane",
+    ownedPaneId,
+    location: { instanceRef: "wez-instance", windowId: "1", tabId: "1", paneId: ownedPaneId },
+  });
+  const adapter = (present: boolean) => ({
+    isOwnedPanePresent: async () => present,
+    killOwnedPane: async () => {},
+  });
+  const owned = new Map([
+    ["launch-gone", { adapter: adapter(false), pane: pane("pane-gone") }],
+    ["launch-live", { adapter: adapter(true), pane: pane("pane-live") }],
+    ["launch-mismatch", { adapter: adapter(false), pane: pane("pane-other") }],
+  ]);
+  const pending = (launchId: string, paneId: string) => ({
+    version: 1 as const,
+    launchId,
+    parentSessionId: "parent",
+    childSessionId: `session-${launchId}`,
+    childName: launchId,
+    paneId,
+    startedAt: Date.now(),
+  });
+  const reconciled = await reconcileMissingOwnedChildren([
+    pending("launch-gone", "pane-gone"),
+    pending("launch-live", "pane-live"),
+    pending("launch-mismatch", "pane-mismatch"),
+  ], owned, async (launchId, summary) => {
+    cancelled.push(launchId);
+    return {
+      ...pending(launchId, `pane-${launchId.replace("launch-", "")}`),
+      status: "cancelled" as const,
+      summary,
+      completedAt: Date.now(),
+    };
+  });
+  expect(cancelled).toEqual(["launch-gone"]);
+  expect(reconciled).toHaveLength(1);
+  expect(reconciled[0]).toMatchObject({
+    launchId: "launch-gone",
+    status: "cancelled",
+    summary: "Cancelled because the runtime-owned pane exited before publishing a terminal result.",
+  });
 });
 test("enqueues the return before acknowledging mailbox state and closing the owned pane", async () => {
   const events: string[] = [];

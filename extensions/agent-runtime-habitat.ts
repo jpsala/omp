@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
-import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldDeferTerminalCompletion, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch } from "../src/runtime-completion-channel.ts";
+import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldDeferTerminalCompletion, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch, type PendingChildSession } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
 import { createWezTermAdapter, type WezTermHostAdapter, type WezTermPaneHandle } from "../src/runtime-host-wezterm.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
@@ -210,7 +210,7 @@ export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: 
  const title=placement.kind!=="split" ? childSessionTitle(sourceTabTitle??sourceName,input.pane.title) : input.pane.title;
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
-export type OwnedChildToClose={adapter:Pick<WezTermHostAdapter,"killOwnedPane">;pane:WezTermPaneHandle};
+export type OwnedChildToClose={adapter:Pick<WezTermHostAdapter,"isOwnedPanePresent"|"killOwnedPane">;pane:WezTermPaneHandle};
 export interface OwnedChildrenCloseResult {
  closedLaunchIds:string[];
  failedChildNames:string[];
@@ -229,6 +229,26 @@ export async function closeCompletedOwnedChildren(completions:readonly ChildSess
    }catch{failedChildNames.push(completion.childName);}
  }
  return {closedLaunchIds,failedChildNames};
+}
+export async function reconcileMissingOwnedChildren(
+  pending: readonly PendingChildSession[],
+  ownedChildren: Map<string, OwnedChildToClose>,
+  cancel: (launchId: string, summary: string) => Promise<ChildSessionCompletion | undefined>,
+): Promise<ChildSessionCompletion[]> {
+  const reconciled: ChildSessionCompletion[] = [];
+  for (const child of pending) {
+    const owned = ownedChildren.get(child.launchId);
+    if (!owned || owned.pane.ownedPaneId !== child.paneId) continue;
+    try {
+      if (await owned.adapter.isOwnedPanePresent(owned.pane)) continue;
+      const completion = await cancel(
+        child.launchId,
+        "Cancelled because the runtime-owned pane exited before publishing a terminal result.",
+      );
+      if (completion) reconciled.push(completion);
+    } catch {}
+  }
+  return reconciled;
 }
 export async function deliverCompletionFollowUp(
   batch: CompletionBatch,
@@ -255,6 +275,7 @@ export async function deliverCompletionFollowUp(
 }
 function envString(name:string):string|undefined { const value=process.env[name]; return value && value.length<200 ? value : undefined; }
 const HANDSHAKE_TIMEOUT_MS=45_000;
+const OWNED_PANE_PROBE_MS=3_000;
 export function publishRuntimeAck(stage:"session_start"|"before_agent_start", ctx:Ctx, prompt?:string, failureCode?:HandshakeAck["failureCode"], sessionName?:string):Promise<void> {
  if(ctx.hasUI!==true) return Promise.resolve();
  const launchId=envString("OMP_RUNTIME_LAUNCH_ID"), nonce=envString("OMP_RUNTIME_NONCE"), paneId=envString("OMP_RUNTIME_PANE_ID"), instanceRef=envString("OMP_RUNTIME_INSTANCE"), parentSessionId=envString("OMP_RUNTIME_PARENT_SESSION");
@@ -273,6 +294,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  const enqueuedCompletions=new Map<string,ChildSessionCompletion>();
  const lastActivityByLaunch=new Map<string,number>();
  const reportedStalledLaunches=new Set<string>();
+ const lastOwnedPaneProbeByLaunch=new Map<string,number>();
  let launchedChildren=false, upstreamCompletionReported=false, deferUpstreamCompletion=false;
  let upstreamCompletionPublishing:Promise<boolean>|undefined;
  const publishProgressUpstream=async(ctx:Ctx,state:ChildProgressState,detail:string)=>{
@@ -318,6 +340,18 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
          enqueuedCompletions.clear();
        }catch{}
      }
+     const probeNow=Date.now();
+     const pendingForProbe=(await completionStore.listPending(parentSessionId)).filter(child=>{
+       if(!ownedChildren.has(child.launchId)) return false;
+       if(probeNow-(lastOwnedPaneProbeByLaunch.get(child.launchId)??0)<OWNED_PANE_PROBE_MS) return false;
+       lastOwnedPaneProbeByLaunch.set(child.launchId,probeNow);
+       return true;
+     });
+     await reconcileMissingOwnedChildren(
+       pendingForProbe,
+       ownedChildren,
+       (launchId,summary)=>completionStore.cancel(parentSessionId,launchId,summary),
+     );
      const consumed=await completionStore.consume(parentSessionId);
      const completions=consumed.completions.filter(completion=>!enqueuedCompletions.has(completion.launchId));
      const batch:CompletionBatch={...consumed,completions};
@@ -328,6 +362,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
      for(const completion of batch.completions){
        lastActivityByLaunch.delete(completion.launchId);
        reportedStalledLaunches.delete(completion.launchId);
+       lastOwnedPaneProbeByLaunch.delete(completion.launchId);
      }
      const latest=batch.progress.at(-1);
      if(latest){

@@ -188,6 +188,16 @@ export class WezTermHostAdapter {
     throw new Error("created tab did not move immediately after its source tab");
   }
   async focus(h: WezTermPaneHandle) { this.assertOwned(h); const r = await this.run(this.executable, ["cli", "activate-pane", "--pane-id", h.ownedPaneId], this.opts(h.instanceRef)); if (r.exitCode) fail("wezterm activate-pane", r); }
+  async isOwnedPanePresent(h: WezTermPaneHandle): Promise<boolean> {
+    this.assertOwned(h);
+    try {
+      const current = await this.describe({ instanceRef: h.instanceRef, paneId: h.ownedPaneId });
+      return current.windowId === h.location.windowId && current.tabId === h.location.tabId;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("is not present in WezTerm instance")) return false;
+      throw error;
+    }
+  }
   async killOwnedPane(h: WezTermPaneHandle) { this.assertOwned(h); const r = await this.run(this.executable, ["cli", "kill-pane", "--pane-id", h.ownedPaneId], this.opts(h.instanceRef)); if (r.exitCode && !paneAlreadyGone(r)) fail("wezterm kill-pane", r); this.owned.delete(this.key(h)); }
 }
 export const createWezTermAdapter = (options?: WezTermAdapterOptions) => new WezTermHostAdapter(options);

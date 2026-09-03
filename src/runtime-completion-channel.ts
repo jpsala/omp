@@ -308,6 +308,10 @@ export function createCompletionStore(root: string, fs: CompletionFs = nativeFs)
     },
     async cancel(parentSessionId, launchId, summary) {
       if (!safeId(parentSessionId) || !safeId(launchId)) throw new Error("invalid child identity");
+      try {
+        const existing = JSON.parse(await fs.readFile(completionPath({ parentSessionId, launchId }), "utf8"));
+        if (validCompletion(existing, parentSessionId)) return existing;
+      } catch {}
       const pending = (await readPending(parentSessionId)).find(value => value.launchId === launchId);
       if (!pending) return undefined;
       const text = summary.trim().slice(0, MAX_SUMMARY);

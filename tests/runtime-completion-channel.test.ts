@@ -169,6 +169,13 @@ test("cancels pending children explicitly and preserves unresolved stale pending
     expect((await store.consume("parent-session")).completions).toEqual([cancelled!]);
     await store.acknowledge([cancelled!]);
 
+    await store.register(pending("launch-completed"));
+    const completed = completion("launch-completed");
+    await store.publish(completed);
+    expect(await store.cancel("parent-session", "launch-completed", "late cancellation")).toEqual(completed);
+    expect((await store.consume("parent-session")).completions).toEqual([completed]);
+    await store.acknowledge([completed]);
+
     const parentDirectory = join(root, "parent-session");
     const oldTimestamp = Date.now() - 8 * 24 * 60 * 60 * 1000;
     const stalePending = { ...pending("launch-stale"), paneId: "43", startedAt: oldTimestamp };

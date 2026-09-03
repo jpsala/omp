@@ -125,11 +125,15 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
   hijas. `pending` es semántico: abarca
   `working|waiting|blocked|attention_required`, completions aún no encolados y
-  el mensaje de integración del parent; nunca deriva de pane, tab, shell o
-  bootstrap vivo por `onExit:"keep-open"`. El completion durable no se retira
-  antes del enqueue y queda reentregable ante restart; `closeOnComplete` cierra
-  sólo después de ese enqueue y también quedó activado para
-  `/plan-implement-short`.
+  el mensaje de integración del parent; no deriva de shells o bootstrap vivos
+  por `onExit:"keep-open"`. Para launches `closeOnComplete`, el parent sondea
+  cada tres segundos el handle exacto que posee: si el pane desaparece antes de
+  publicar un resultado terminal, genera `cancelled` y reanuda la integración.
+  Un completion ya publicado prevalece sobre una cancelación tardía; fallas del
+  probe y panes no poseídos conservan el pending.
+  El completion durable no se retira antes del enqueue y queda reentregable ante
+  restart; `closeOnComplete` cierra sólo después de ese enqueue y también quedó
+  activado para `/plan-implement-short`.
   El dispatcher conserva un widget persistente con la última transición
   comprobada; lanzamientos y retornos anidados se propagan automáticamente.
   `waiting` y `blocked` difieren sólo finales normales: errores y aborts retornan
@@ -139,7 +143,8 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `/runtime-children` inspecciona pending y `/runtime-cancel <launchId>` los
   reconcilia explícitamente. El janitor retira sólo progress expirado,
   completions huérfanos fuera de retención y directorios vacíos; nunca borra un
-  pending sin completion. Continuaciones `willContinue` de Advisor o
+  pending sin completion.
+  Continuaciones `willContinue` de Advisor o
   mantenimiento conservan el retorno upstream. El smoke transitivo
   window → tab → parent pasó el 2026-08-25; estados/widget pasaron el
   2026-08-26; pending, continuaciones y cierre transitivo pasaron el 2026-08-31;

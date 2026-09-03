@@ -161,15 +161,20 @@ termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
 inicia un shell interactivo después de OMP, en el mismo `cwd`; Windows usa
 PowerShell 7 y otros hosts usan `$SHELL` o `/bin/sh`. El shell recibe un entorno
 limpio: no hereda metadata `OMP_RUNTIME_*`, el canal efímero del prompt ni
-marcadores de recursión. Cerrar explícitamente el pane en WezTerm siempre lo
-elimina. El pane, shell o proceso bootstrap que sobreviva por `keep-open` no es
-trabajo pendiente: Habitat no consulta procesos, panes ni tabs para decidirlo.
+marcadores de recursión. Cerrar explícitamente un pane normal en WezTerm siempre
+lo elimina. El pane, shell o proceso bootstrap que sobreviva por `keep-open` no
+es trabajo pendiente por sí mismo.
 
 `closeOnComplete:true` es un opt-in distinto de `onExit`: el parent conserva en
 memoria el handle exacto que creó y cierra sólo ese pane después de encolar con
 éxito el `followUp` de su resultado final. El mailbox se reconoce después del
 enqueue y antes del cierre. No cierra por transiciones `working|waiting|blocked`,
 no opera por pane id desnudo y no afecta handoffs o launches que omiten el flag.
+Para launches con `closeOnComplete:true`, el parent también sondea cada tres
+segundos el handle exacto que creó. Si ese pane poseído desaparece antes de un
+resultado terminal, publica `cancelled` por el mailbox normal y reanuda la
+integración. Fallas transitorias del probe conservan el pending; un pane no
+poseído nunca participa en esta reconciliación.
 Si el enqueue falla, conserva mailbox y pane para reintentar. Si el parent se
 recarga o reabre, no intenta reclamar ownership histórico; deja el tab
 sobreviviente intacto antes que arriesgar cerrar un pane reutilizado.
@@ -202,10 +207,12 @@ directorio runtime privado del usuario. El estado semántico es:
   queda encolado; después, la sesión del parent permanece `pending` por su
   mensaje de integración hasta que produce la respuesta terminal correspondiente.
 
-La vida del pane, tab, shell o proceso no participa en esa clasificación.
-`onExit:"keep-open"` puede conservar el bootstrap y el pane después de
-`completed` sin reabrir trabajo. A la inversa, cerrar un pane no completa un
-mailbox ni integra un retorno.
+La vida de panes no poseídos, tabs, shells o procesos no participa en esa
+clasificación. `onExit:"keep-open"` puede conservar el bootstrap y el pane
+después de `completed` sin reabrir trabajo. La única excepción es la
+desaparición comprobada del handle exacto de un launch
+`closeOnComplete:true`: representa la cancelación externa de esa sesión visible
+y genera un retorno `cancelled`, no un pending indefinido.
 
 En el primer `agent_end` realmente terminal, la hija publica estado y texto
 final acotado; no persiste prompts ni transcripts. `waiting` o `blocked`
@@ -219,9 +226,11 @@ subárbol de workers esperando sin estado terminal.
 El mismo mailbox acepta transiciones acotadas
 `working|waiting|blocked|attention_required`. El parent las consume, actualiza
 un widget persistente sobre el editor y las propaga transitivamente si también
-es una hija. No usa la ausencia de liveness como resultado terminal. Los
-lanzamientos anidados publican `waiting`, los retornos recibidos publican
-`working` y la falta de actividad publica una única atención por launch.
+es una hija. No convierte la ausencia genérica de liveness en resultado
+terminal; sólo reconcilia la desaparición comprobada de un pane
+`closeOnComplete` que todavía posee en memoria. Los lanzamientos anidados
+publican `waiting`, los retornos recibidos publican `working` y la falta de
+actividad publica una única atención por launch.
 `agent_runtime_status` cubre los cambios que sólo el owner conoce.
 
 `/runtime-children` lista launch id, nombre y antigüedad de los pending propios.
@@ -236,9 +245,9 @@ runtime-owned con el mismo adapter y handle del launch. Si la inyección falla,
 completion, pending y pane permanecen disponibles para reintento. Un restart
 anterior al reconocimiento vuelve a ofrecer el mismo completion: el contrato es
 at-least-once y prioriza no perder el mailbox. Un launch sin completion válido
-también permanece pendiente: ni un TTL ni la ausencia de proceso pueden
-convertir trabajo irresuelto en `completed`; sólo un retorno válido encolado
-habilita el reconocimiento.
+permanece pendiente salvo que el parent vivo compruebe que desapareció el pane
+`closeOnComplete` exacto que posee; en ese caso publica `cancelled`. Un
+completion ya publicado siempre prevalece sobre una cancelación tardía.
 
 Cada follow-up de completion reserva un token in-memory antes de llamar
 `sendUserMessage`; el siguiente `agent_start` consume exactamente uno y marca

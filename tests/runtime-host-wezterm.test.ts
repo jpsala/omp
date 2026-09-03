@@ -126,6 +126,31 @@ test("kill treats an already exited owned pane as successful cleanup", async () 
   await expect(adapter.killOwnedPane(handle)).resolves.toBeUndefined();
   await expect(adapter.killOwnedPane(handle)).rejects.toThrow("unowned");
 });
+test("reports whether the exact runtime-owned pane is still present", async () => {
+  const calls: Call[] = [];
+  let present = true;
+  const runner: ProcessRunner = async (executable, argv, options) => {
+    calls.push({ executable, argv: [...argv], options });
+    if (argv.includes("split-pane")) return { exitCode: 0, stdout: "9\n", stderr: "" };
+    if (argv.includes("list")) {
+      const rows = [{ pane_id: 7, window_id: 1, tab_id: 2 }];
+      if (present) rows.push({ pane_id: 9, window_id: 1, tab_id: 2 });
+      return { exitCode: 0, stdout: JSON.stringify(rows), stderr: "" };
+    }
+    throw new Error(`unexpected argv ${argv.join(" ")}`);
+  };
+  const adapter = new WezTermHostAdapter({ runner });
+  const handle = await adapter.split({
+    source: { instanceRef: "inst", paneId: "7" },
+    cwd: "x",
+    direction: "right",
+    percent: 40,
+    program: "p",
+  });
+  expect(await adapter.isOwnedPanePresent(handle)).toBeTrue();
+  present = false;
+  expect(await adapter.isOwnedPanePresent(handle)).toBeFalse();
+});
 
 test("rejects forged, wrong-source, and unowned handles", async () => {
   const calls: Call[] = [];
