@@ -60,12 +60,10 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   tools y encabezados repetidos por mensaje.
   Las escrituras coalescen el último snapshot y todo I/O corre fuera del lifecycle de OMP:
   fallar el destino sólo registra el error.
-  `/live-markdown` informa la ruta activa. El smoke real concurrente creó
-  archivos distintos para `omp` y `dictation-tauri`, capturó 50/160 y 76/80
-  líneas con `status: generating`, conservó 160/160 y 80/80 con `status: idle`
-  tras cerrar y reiniciar OMP, y una raíz deliberadamente inválida no interrumpió
-  la sesión. No se operó VS Code u Obsidian; las lecturas por etapas del mismo
-  archivo verificaron el contrato vivo.
+  `/live-markdown` informa la ruta activa. El smoke concurrente conservó
+  archivos separados y completos para `omp` y `dictation-tauri`; una raíz
+  inválida no interrumpió la sesión. El smoke TUI real del 2026-09-03 ejecutó
+  thinking y un tool call, y el cuerpo final sólo conservó la respuesta útil.
 - El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.11`, con el
   addon Win32 publicado embebido y el patch workstation vigente. Además de los
   filtros granulares, el core usa 272k como límite económico de dispatch para
