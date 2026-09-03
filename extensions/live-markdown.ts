@@ -14,6 +14,7 @@ import {
 const WRITE_DELAY_MS = 60;
 
 export interface LiveMarkdownDependencies {
+	interactive?: boolean;
 	outputRoot?: string;
 	ensureDirectory?: (path: string) => Promise<void>;
 	writeSnapshot?: (path: string, content: string) => Promise<void>;
@@ -51,6 +52,7 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 
 	const outputRoot =
 		dependencies.outputRoot ?? process.env.OMP_LIVE_MARKDOWN_ROOT?.trim() ?? DEFAULT_LIVE_MARKDOWN_ROOT;
+	const interactive = dependencies.interactive ?? process.stdout.isTTY === true;
 	const ensureDirectory =
 		dependencies.ensureDirectory ??
 		(async (path: string): Promise<void> => {
@@ -121,7 +123,7 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 	};
 
 	const initialize = (ctx: ExtensionContext): void => {
-		if (ctx.hasUI !== true) {
+		if (ctx.hasUI !== true || !interactive) {
 			runtime = undefined;
 			return;
 		}

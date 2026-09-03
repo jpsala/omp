@@ -57,6 +57,7 @@ test("creates a clean session file before the first useful answer", async () => 
 		logger: { error: () => {} },
 	};
 	liveMarkdown(testApi as unknown as ExtensionAPI, {
+		interactive: true,
 		outputRoot: "C:\\mirror",
 		ensureDirectory: async () => {},
 		writeSnapshot: async (path, content) => {
@@ -83,6 +84,37 @@ test("creates a clean session file before the first useful answer", async () => 
 	expect(writtenContent).toContain('session_id: "session-empty"');
 	expect(writtenContent).toContain("status: idle");
 	expect(writtenContent).not.toContain("## Agente");
+});
+
+test("does not publish RPC or headless sessions", () => {
+	type EventHandler = (event: unknown, ctx: ExtensionContext) => void;
+	const handlers = new Map<string, EventHandler>();
+	let writes = 0;
+	const testApi = {
+		on: (event: string, handler: EventHandler) => {
+			handlers.set(event, handler);
+		},
+		registerCommand: () => {},
+		logger: { error: () => {} },
+	};
+	liveMarkdown(testApi as unknown as ExtensionAPI, {
+		interactive: false,
+		ensureDirectory: async () => {},
+		writeSnapshot: async () => {
+			writes += 1;
+		},
+	});
+
+	const ctx = {
+		cwd: "C:\\dev\\omp",
+		hasUI: true,
+		sessionManager: {
+			getSessionId: () => "rpc-session",
+			getBranch: () => [],
+		},
+	} as unknown as ExtensionContext;
+	handlers.get("session_start")?.({}, ctx);
+	expect(writes).toBe(0);
 });
 
 test("defaults to assistant-only output without internal activity", () => {
