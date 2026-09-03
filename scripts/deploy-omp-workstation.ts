@@ -64,32 +64,41 @@ export async function deployOmpWorkstation(source: string, binDir = join(homedir
 	const expectedSize = await validateCompiledExecutable(sourcePath);
 	const pendingCleanup: string[] = [];
 	await cleanupRotatedArtifacts(binDir, pendingCleanup);
+
+	const replaceTarget = resolve(target) !== sourcePath;
+	if (replaceTarget) {
+		await rm(next, { force: true });
+		await copyFile(sourcePath, next);
+		const copiedSize = await validateCompiledExecutable(next);
+		if (copiedSize !== expectedSize) throw new Error(`Staged OMP artifact size mismatch: ${copiedSize} != ${expectedSize}`);
+	}
+
 	let collisionRetired = false;
 	if ((await lstat(collision).catch(() => undefined))?.isFile()) {
 		await rename(collision, retiredCollision);
 		collisionRetired = true;
 	}
 
-	if (resolve(target) !== sourcePath) {
-		await rm(next, { force: true });
-		await copyFile(sourcePath, next);
-		const copiedSize = await validateCompiledExecutable(next);
-		if (copiedSize !== expectedSize) throw new Error(`Staged OMP artifact size mismatch: ${copiedSize} != ${expectedSize}`);
-
-		const targetExists = (await lstat(target).catch(() => undefined))?.isFile() ?? false;
-		if (targetExists) await rename(target, previous);
-		try {
+	try {
+		if (replaceTarget) {
+			if ((await lstat(target).catch(() => undefined))?.isFile()) await rename(target, previous);
 			await rename(next, target);
-		} catch (error) {
-			if (targetExists) await rename(previous, target);
-			throw error;
 		}
+		await validateCompiledExecutable(target);
+		if ((await lstat(collision).catch(() => undefined))?.isFile()) {
+			throw new Error(`Launcher collision remains after deployment: ${collision}`);
+		}
+	} catch (error) {
+		if ((await lstat(previous).catch(() => undefined))?.isFile()) {
+			await rm(target, { force: true });
+			await rename(previous, target);
+		}
+		if (collisionRetired && (await lstat(retiredCollision).catch(() => undefined))?.isFile()) {
+			await rename(retiredCollision, collision);
+		}
+		throw error;
 	}
 
-	await validateCompiledExecutable(target);
-	if ((await lstat(collision).catch(() => undefined))?.isFile()) {
-		throw new Error(`Launcher collision remains after deployment: ${collision}`);
-	}
 	await removeWhenUnlocked(retiredCollision, pendingCleanup);
 	await removeWhenUnlocked(previous, pendingCleanup);
 	return { target, retiredCollision: collisionRetired, pendingCleanup };

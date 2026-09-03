@@ -58,3 +58,19 @@ test("rejects a non-PE artifact without disturbing the active launcher", async (
 	const active = await readFile(join(binDir, "omp.exe"));
 	expect(active[2]).toBe(0x32);
 });
+
+test("keeps the fallback launcher when staging fails", async () => {
+	const root = await mkdtemp(join(tmpdir(), "omp-deploy-staging-failure-"));
+	roots.push(root);
+	const source = join(root, "source.exe");
+	const binDir = join(root, "bin");
+	const collision = join(binDir, "omp.com");
+	await mkdir(binDir);
+	await fakeExecutable(source, 0x31);
+	await fakeExecutable(collision, 0x33);
+	await mkdir(join(binDir, "omp.exe.next"));
+
+	await expect(deployOmpWorkstation(source, binDir)).rejects.toThrow();
+	expect((await readFile(collision))[2]).toBe(0x33);
+	expect(await lstat(join(binDir, "omp.exe")).catch(() => undefined)).toBeUndefined();
+});

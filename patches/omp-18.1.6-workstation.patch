@@ -1,8 +1,8 @@
 diff --git a/packages/coding-agent/src/config/settings-schema.ts b/packages/coding-agent/src/config/settings-schema.ts
-index 5202909..8bcab3c 100644
+index af14770ab..e17cb8f11 100644
 --- a/packages/coding-agent/src/config/settings-schema.ts
 +++ b/packages/coding-agent/src/config/settings-schema.ts
-@@ -1291,6 +1291,33 @@ export const SETTINGS_SCHEMA = {
+@@ -1306,6 +1306,33 @@ export const SETTINGS_SCHEMA = {
  		},
  	},
  
@@ -37,7 +37,7 @@ index 5202909..8bcab3c 100644
  		type: "boolean",
  		default: false,
 diff --git a/packages/coding-agent/src/extensibility/extensions/types.ts b/packages/coding-agent/src/extensibility/extensions/types.ts
-index d7a0e39..ff44417 100644
+index e79897301..6c7aedc32 100644
 --- a/packages/coding-agent/src/extensibility/extensions/types.ts
 +++ b/packages/coding-agent/src/extensibility/extensions/types.ts
 @@ -253,6 +253,14 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
@@ -75,10 +75,10 @@ index d7a0e39..ff44417 100644
  
  /** Visual composer style and selector copy registered by an extension. */
 diff --git a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
-index 55265d5..ede7d4c 100644
+index 22c66208a..1aa41f9bc 100644
 --- a/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
 +++ b/packages/coding-agent/src/modes/components/chat-transcript-builder.ts
-@@ -102,6 +102,7 @@ export class ChatTranscriptBuilder {
+@@ -103,6 +103,7 @@ export class ChatTranscriptBuilder {
  
  	constructor(private readonly deps: ChatTranscriptBuilderDeps) {
  		this.container.setToolActivityVisible(!settings.get("display.hideToolActivity"));
@@ -86,15 +86,15 @@ index 55265d5..ede7d4c 100644
  	}
  
  	/** Whether the transcript currently holds any rendered rows. */
-@@ -112,6 +113,7 @@ export class ChatTranscriptBuilder {
+@@ -113,6 +114,7 @@ export class ChatTranscriptBuilder {
  	/** Discard all components and rebuild the whole transcript from `entries`. */
  	rebuild(entries: SessionMessageEntry[]): void {
  		this.reset();
 +		this.container.setHiddenToolActivityNames(settings.get("display.hiddenTools"));
- 		for (const entry of entries) this.#appendChatMessage(entry.message);
+ 		for (const entry of entries) this.#appendEntry(entry);
  		// Flush the trailing turn's usage row only once its tools are materialized
  		// (a read whose result has not arrived stays pending); otherwise the row
-@@ -352,7 +354,9 @@ export class ChatTranscriptBuilder {
+@@ -370,7 +372,9 @@ export class ChatTranscriptBuilder {
  	#appendAssistantMessage(message: Extract<AgentMessage, { role: "assistant" }>): void {
  		const hideThinkingBlock = this.deps.hideThinkingBlock?.() ?? false;
  		const proseOnlyThinking = this.deps.proseOnlyThinking ? this.deps.proseOnlyThinking() : true;
@@ -106,7 +106,7 @@ index 55265d5..ede7d4c 100644
  			timeline.beforeTools,
  			hideThinkingBlock,
 diff --git a/packages/coding-agent/src/modes/components/read-tool-group.ts b/packages/coding-agent/src/modes/components/read-tool-group.ts
-index 8ff97e6..87f3d6d 100644
+index 8ff97e63a..87f3d6da3 100644
 --- a/packages/coding-agent/src/modes/components/read-tool-group.ts
 +++ b/packages/coding-agent/src/modes/components/read-tool-group.ts
 @@ -530,6 +530,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
@@ -121,7 +121,7 @@ index 8ff97e6..87f3d6d 100644
  		return this;
  	}
 diff --git a/packages/coding-agent/src/modes/components/tool-activity.ts b/packages/coding-agent/src/modes/components/tool-activity.ts
-index 5772a9b..646661f 100644
+index 5772a9b7f..646661f7e 100644
 --- a/packages/coding-agent/src/modes/components/tool-activity.ts
 +++ b/packages/coding-agent/src/modes/components/tool-activity.ts
 @@ -2,6 +2,8 @@ import { type Component, Container } from "@oh-my-pi/pi-tui";
@@ -134,10 +134,10 @@ index 5772a9b..646661f 100644
  
  export function isToolActivityComponent(component: Component): component is Component & ToolActivityComponent {
 diff --git a/packages/coding-agent/src/modes/components/tool-execution.ts b/packages/coding-agent/src/modes/components/tool-execution.ts
-index 485ae94..5d5d989 100644
+index 910bbd377..eb8e3ebf6 100644
 --- a/packages/coding-agent/src/modes/components/tool-execution.ts
 +++ b/packages/coding-agent/src/modes/components/tool-execution.ts
-@@ -952,6 +952,10 @@ export class ToolExecutionComponent extends Container {
+@@ -787,6 +787,10 @@ export class ToolExecutionComponent extends Container {
  		super.invalidate();
  	}
  
@@ -149,15 +149,20 @@ index 485ae94..5d5d989 100644
  		this.#showImages = show;
  		this.#updateDisplay();
 diff --git a/packages/coding-agent/src/modes/components/transcript-container.ts b/packages/coding-agent/src/modes/components/transcript-container.ts
-index 669fa1a..d220cd7 100644
+index 0a718a18e..f42f316ef 100644
 --- a/packages/coding-agent/src/modes/components/transcript-container.ts
 +++ b/packages/coding-agent/src/modes/components/transcript-container.ts
-@@ -140,10 +140,19 @@ export class TranscriptContainer extends Container {
+@@ -142,6 +142,7 @@ export class TranscriptContainer extends Container {
  	#replayPending = false;
  	#replayRequested = false;
  	#toolActivityVisible = true;
 +	#hiddenToolActivityNames = new Set<string>();
  	#lastFrame: AnimationFrame = { tick: 0, now: 0 };
+ 	// Start rows from the last full render(), keyed by child component (transcript deep-links).
+ 	#childStartRows = new Map<Component, number>();
+@@ -150,8 +151,16 @@ export class TranscriptContainer extends Container {
+ 	// allocations. Logs once per pinned episode after a grace period.
+ 	#pinnedFrontier: { index: number; since: number; logged: boolean } | undefined;
  
 +	#applyToolActivityVisibility(component: Component): void {
 +		if (!isToolActivityComponent(component)) return;
@@ -173,7 +178,7 @@ index 669fa1a..d220cd7 100644
  		super.addChild(component);
  		this.#entries.push({
  			component,
-@@ -175,9 +184,20 @@ export class TranscriptContainer extends Container {
+@@ -186,9 +195,20 @@ export class TranscriptContainer extends Container {
  	setToolActivityVisible(visible: boolean): void {
  		if (this.#toolActivityVisible === visible) return;
  		this.#toolActivityVisible = visible;
@@ -197,21 +202,21 @@ index 669fa1a..d220cd7 100644
  	}
  
 diff --git a/packages/coding-agent/src/modes/controllers/event-controller.ts b/packages/coding-agent/src/modes/controllers/event-controller.ts
-index a526f0c..6ca4c95 100644
+index beaff1683..3a0d439b5 100644
 --- a/packages/coding-agent/src/modes/controllers/event-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/event-controller.ts
-@@ -955,7 +955,9 @@ export class EventController {
+@@ -991,7 +991,9 @@ export class EventController {
+ 			this.ctx.streamingMessage = event.message;
+ 			this.ctx.streamingComponent.pickReactionTarget(this.ctx.chatContainer.children);
  			this.ctx.chatContainer.addChild(this.ctx.streamingComponent);
- 			this.#streamingReveal.begin(
- 				this.ctx.streamingComponent,
--				splitAssistantMessageToolTimeline(this.ctx.streamingMessage).beforeTools,
-+				splitAssistantMessageToolTimeline(this.ctx.streamingMessage, {
-+					hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
-+				}).beforeTools,
- 			);
+-			const timeline = splitAssistantMessageToolTimeline(this.ctx.streamingMessage);
++			const timeline = splitAssistantMessageToolTimeline(this.ctx.streamingMessage, {
++				hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
++			});
+ 			this.#streamingReveal.begin(this.ctx.streamingComponent, timeline.beforeTools, timeline.hasToolCalls);
  			this.ctx.ui.requestRender();
  		}
-@@ -1141,7 +1143,9 @@ export class EventController {
+@@ -1190,7 +1192,9 @@ export class EventController {
  				this.#streamingReveal.resyncVisibility();
  			}
  			this.ctx.streamingMessage = event.message;
@@ -219,10 +224,10 @@ index a526f0c..6ca4c95 100644
 +			const timeline = splitAssistantMessageToolTimeline(this.ctx.streamingMessage, {
 +				hideToolPreamble: settings.get("display.hideAssistantToolPreambles"),
 +			});
- 			this.#streamingReveal.setTarget(timeline.beforeTools);
+ 			this.#streamingReveal.setTarget(timeline.beforeTools, timeline.hasToolCalls);
  
  			const visibleBlockCount = this.ctx.streamingMessage.content.filter(
-@@ -1339,7 +1343,9 @@ export class EventController {
+@@ -1390,7 +1394,9 @@ export class EventController {
  						stopReason: "stop",
  					}
  				: this.ctx.streamingMessage;
@@ -234,7 +239,7 @@ index a526f0c..6ca4c95 100644
  
  			if (this.ctx.streamingMessage.stopReason !== "aborted" && this.ctx.streamingMessage.stopReason !== "error") {
 diff --git a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
-index ea89d1a..5bb3e08 100644
+index 3111a0047..985c4442c 100644
 --- a/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 +++ b/packages/coding-agent/src/modes/controllers/extension-ui-controller.ts
 @@ -20,6 +20,7 @@ import type {
@@ -326,10 +331,10 @@ index ea89d1a..5bb3e08 100644
  		this.ctx.setToolUIContext(uiContext, true);
  		this.#toolUIContext = uiContext;
 diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
-index 95a0207..2e8c15c 100644
+index 4a997e655..df3bee8d7 100644
 --- a/packages/coding-agent/src/modes/interactive-mode.ts
 +++ b/packages/coding-agent/src/modes/interactive-mode.ts
-@@ -1003,6 +1003,7 @@ export class InteractiveMode implements InteractiveModeContext {
+@@ -1000,6 +1000,7 @@ export class InteractiveMode implements InteractiveModeContext {
  
  		this.hideToolActivity = settings.get("display.hideToolActivity");
  		this.chatContainer.setToolActivityVisible(!this.hideToolActivity);
@@ -338,7 +343,7 @@ index 95a0207..2e8c15c 100644
  		this.proseOnlyThinking = settings.get("proseOnlyThinking");
  
 diff --git a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
-index 1f4888d..803a8e6 100644
+index 1f4888db2..803a8e640 100644
 --- a/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
 +++ b/packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
 @@ -180,7 +180,10 @@ export function assistantHasVisibleContent(message: AssistantAgentMessage): bool
@@ -366,10 +371,10 @@ index 1f4888d..803a8e6 100644
  
  /**
 diff --git a/packages/coding-agent/src/modes/utils/ui-helpers.ts b/packages/coding-agent/src/modes/utils/ui-helpers.ts
-index 7309cc7..28c334a 100644
+index a6542dd33..c9fcbadd9 100644
 --- a/packages/coding-agent/src/modes/utils/ui-helpers.ts
 +++ b/packages/coding-agent/src/modes/utils/ui-helpers.ts
-@@ -853,6 +853,7 @@ export class UiHelpers {
+@@ -893,6 +893,7 @@ export class UiHelpers {
  		const visibleChatContainer = this.ctx.chatContainer;
  		const stagedChatContainer = new TranscriptContainer();
  		stagedChatContainer.setToolActivityVisible(!this.ctx.hideToolActivity);
@@ -378,10 +383,10 @@ index 7309cc7..28c334a 100644
  		const previousTranscriptMessageComponents = this.ctx.transcriptMessageComponents;
  		const previousPendingTools = this.ctx.pendingTools;
 diff --git a/packages/coding-agent/src/session/session-maintenance.ts b/packages/coding-agent/src/session/session-maintenance.ts
-index 9d8c171..e95daae 100644
+index dccc03bde..8559f5137 100644
 --- a/packages/coding-agent/src/session/session-maintenance.ts
 +++ b/packages/coding-agent/src/session/session-maintenance.ts
-@@ -1543,6 +1543,24 @@ export class SessionMaintenance {
+@@ -1570,6 +1570,24 @@ export class SessionMaintenance {
  		);
  	}
  
@@ -406,7 +411,7 @@ index 9d8c171..e95daae 100644
  	#estimatePrePromptContextTokens(messages: AgentMessage[], contextWindow: number): number {
  		const breakdown = this.#host.getContextBreakdown({ contextWindow, pendingMessages: messages });
  		const localEstimate = this.#estimateStoredContextTokens(messages);
-@@ -1579,11 +1597,12 @@ export class SessionMaintenance {
+@@ -1606,11 +1624,12 @@ export class SessionMaintenance {
  		if (!model) return;
  		const contextWindow = model.contextWindow ?? 0;
  		if (contextWindow <= 0) return;
@@ -420,7 +425,7 @@ index 9d8c171..e95daae 100644
  			this.maybeStartSpeculativeCompaction(contextTokens, contextWindow);
  			return;
  		}
-@@ -1595,12 +1614,16 @@ export class SessionMaintenance {
+@@ -1622,12 +1641,16 @@ export class SessionMaintenance {
  			// The prior tool loop already attempted the rescue and warned for this
  			// persisted oversized turn. Only a later persisted cut point makes a
  			// pre-prompt retry useful; the new agent loop may warn for its own turn.
@@ -438,7 +443,7 @@ index 9d8c171..e95daae 100644
  			logger.debug("Pre-prompt threshold deferred to speculative compaction", {
  				contextTokens,
  				contextWindow,
-@@ -1633,6 +1656,7 @@ export class SessionMaintenance {
+@@ -1660,6 +1683,7 @@ export class SessionMaintenance {
  			preparedContextTokens: this.#estimateStoredContextTokens(),
  			phase: "pre_turn",
  		});
@@ -446,7 +451,7 @@ index 9d8c171..e95daae 100644
  	}
  
  	/**
-@@ -1661,6 +1685,7 @@ export class SessionMaintenance {
+@@ -1688,6 +1712,7 @@ export class SessionMaintenance {
  		const model = this.#model;
  		const contextWindow = model?.contextWindow ?? 0;
  		if (contextWindow <= 0) return;
@@ -454,7 +459,7 @@ index 9d8c171..e95daae 100644
  
  		const compactionSettings = this.#host.settings.getGroup("compaction");
  		if (
-@@ -1668,6 +1693,7 @@ export class SessionMaintenance {
+@@ -1695,6 +1720,7 @@ export class SessionMaintenance {
  			!hasConfiguredCompactionMethod(compactionSettings) ||
  			compactionSettings.midTurnEnabled === false
  		) {
@@ -462,7 +467,7 @@ index 9d8c171..e95daae 100644
  			return;
  		}
  
-@@ -1684,7 +1710,7 @@ export class SessionMaintenance {
+@@ -1711,7 +1737,7 @@ export class SessionMaintenance {
  		const billedContextTokens = calculateContextTokens(lastAssistant.usage);
  		const storedContextTokens = this.#estimateStoredContextTokens();
  		const contextTokens = compactionContextTokens(billedContextTokens, storedContextTokens);
@@ -471,7 +476,7 @@ index 9d8c171..e95daae 100644
  			this.maybeStartSpeculativeCompaction(contextTokens, contextWindow);
  			return;
  		}
-@@ -1715,6 +1741,7 @@ export class SessionMaintenance {
+@@ -1742,6 +1768,7 @@ export class SessionMaintenance {
  				prepareCompaction(this.#host.sessionManager.getBranch(), compactionSettings, model, this.#tokenizer) ===
  					undefined
  			) {
@@ -479,7 +484,7 @@ index 9d8c171..e95daae 100644
  				return;
  			}
  			this.#midTurnCompactionDeadEnds.delete(activeMessages);
-@@ -1754,6 +1781,7 @@ export class SessionMaintenance {
+@@ -1781,6 +1808,7 @@ export class SessionMaintenance {
  		if (compactedMessages !== activeMessages) {
  			activeMessages.splice(0, activeMessages.length, ...compactedMessages);
  		}
@@ -488,7 +493,7 @@ index 9d8c171..e95daae 100644
  			contextTokens,
  			contextWindow,
 diff --git a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
-index f041efa..502acbc 100644
+index f041efac5..502acbcec 100644
 --- a/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 +++ b/packages/coding-agent/test/modes/components/tool-activity-visibility.test.ts
 @@ -65,4 +65,41 @@ describe("tool activity visibility", () => {
@@ -534,7 +539,7 @@ index f041efa..502acbc 100644
 +	});
  });
 diff --git a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
-index 70e8512..02f7b42 100644
+index 70e851270..02f7b4255 100644
 --- a/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
 +++ b/packages/coding-agent/test/modes/controllers/extension-ui-controller.test.ts
 @@ -25,6 +25,14 @@ function makeHarness() {
@@ -616,7 +621,7 @@ index 70e8512..02f7b42 100644
  		const harness = makeHarness();
  		harness.editor.setText("finish this wor");
 diff --git a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
-index 1833799..92af5cf 100644
+index 18337996a..92af5cfb6 100644
 --- a/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
 +++ b/packages/coding-agent/test/modes/utils/transcript-render-helpers.test.ts
 @@ -1,6 +1,9 @@

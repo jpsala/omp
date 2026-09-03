@@ -119,7 +119,7 @@ export function renderConsumption(report: ConsumptionReport): string {
 	];
 	for (const row of report.rows) lines.push(`${row.model} (${row.agentType}): ${row.requests} req · ${row.credits.toFixed(1)} créditos`);
 	if (report.rows.some(row => row.credits === 0 && row.requests > 0)) lines.push("Hay modelos sin rate card local; sus créditos no están incluidos.");
-	lines.push("Estimación local por tokens; /aos-budget conserva la autoridad sobre la cuota real del plan.");
+	lines.push("Estimación local por tokens; omp usage conserva la autoridad sobre la cuota real del plan.");
 	return lines.join("\n");
 }
 

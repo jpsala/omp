@@ -795,6 +795,31 @@ test("shares one pending abort acknowledgement and preserves aborted classificat
 	expect(fleet.getResults()).toEqual({});
 });
 
+test("closes a worker when the abort acknowledgement times out", async () => {
+	const client = new FakeClient("must not be collected");
+	client.abortCompletion = deferred<RpcResponseFrame>();
+	const fleet = new OmpFleetRun(
+		{ name: "abort timeout", goal: "Work", window: "none", repos: { api: { cwd: "C:/api" } } },
+		{
+			fileSystem: new MemoryFileSystem(),
+			runRoot: "C:/runs",
+			idSource: () => "run-abort-timeout",
+			clientFactory: () => client,
+			abortTimeoutMs: 5,
+		},
+	);
+	const finished = fleet.start();
+	await client.promptStarted.promise;
+
+	await fleet.abort("api");
+	const snapshot = await finished;
+
+	expect(client.abortCount).toBe(1);
+	expect(client.closeCount).toBe(1);
+	expect(snapshot.workers[0].state).toBe("aborted");
+	expect(fleet.getResults()).toEqual({});
+});
+
 test("abort during final result fetch wins over a successful result response", async () => {
 	const client = new FakeClient("must not be collected");
 	client.resultRequestCompletion = deferred<RpcResponseFrame>();

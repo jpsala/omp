@@ -652,8 +652,9 @@ cruzarlo dentro de un turno ya iniciado. Antes de continuar, OMP calcula el
 menor entre la ventana efectiva y `cost.longContext.inputThreshold`, compacta
 sincrónicamente y aborta si no obtiene progreso. No trunca ni persiste el
 resultado y nunca envía la segunda request sobredimensionada. El patch
-workstation y su test determinístico constituyen el contrato durable hasta que
-upstream ofrezca la misma garantía.
+workstation constituye el contrato durable hasta que upstream ofrezca la misma
+garantía; el rebase debe revisar explícitamente la estimación completa antes de
+cada despliegue.
 
 ## 2026-08-29 — Modos normal/económico y consumo por intervalo
 
@@ -668,8 +669,8 @@ arrancar directamente en Luna.
 `/consumo sesion|<intervalo>|desde|marcar` lee únicamente `~/.omp/stats.db`,
 calcula la rate card promocional vigente de Sol/Luna y separa modelo y tipo de
 agente. El marcador local guarda sólo timestamp. Es una estimación para comparar
-intensidad, mix y retrabajo; `omp usage` y `/aos-budget` siguen siendo autoridad
-de la cuota real compartida.
+intensidad, mix y retrabajo; `omp usage` conserva la autoridad sobre la cuota
+real compartida.
 
 ## 2026-08-31 — Rebase granular sobre OMP 18.0.11
 
@@ -722,3 +723,32 @@ hasta recibir texto publicable. La fecha y hora se toman de
 artificialmente la sesión. Esto reemplaza el criterio de no dejar archivos
 vacíos registrado el 2026-08-28: ocultar actividad interna no debe volver
 invisible una sesión real.
+
+## 2026-09-03 — Rebase granular sobre OMP 18.1.6 sin updater mutante
+
+`omp update --check` es la única operación admisible del updater sobre una
+workstation con build granular: confirma la release sin reemplazar el binario.
+La actualización clona el tag oficial exacto, rebasa el delta y publica sólo el
+artifact verificado mediante `bun run deploy:omp`.
+
+OMP 18.1.6 agrega reacciones, video, picker de modelos ampliado y nuevas
+superficies de extensiones, pero todavía no ofrece filtros por nombre de tool,
+ocultamiento de preámbulos ni perfiles atómicos de transcript. El patch queda
+fijado en `patches/omp-18.1.6-workstation.patch`. Los conflictos se resolvieron
+en `ChatTranscriptBuilder`, `TranscriptContainer` y `EventController`,
+preservando las firmas y timeline nuevos de upstream.
+
+El delta pasó 22 tests focales, 92 assertions y el check completo de
+`packages/coding-agent`. El binario embebe el addon Win32 18.1.6 publicado; el
+smoke TUI real verificó 42 opciones, los perfiles `main` y `zen`, y
+`Windows input: on`. El deploy valida el staging antes de retirar `omp.com` y
+restaura el launcher anterior si falla el staging o el cutover.
+
+## 2026-09-03 — La cancelación Fleet tiene fallback de transporte
+
+Un `abort` RPC sin ack no puede bloquear `/fleet cancel` indefinidamente. El
+worker marca la intención antes de esperar, comparte una sola solicitud entre
+callers y concede 5 segundos al ack. Al vencer el plazo cierra el transporte y
+finaliza como abortado; un rechazo explícito previo restaura la posibilidad de
+éxito. Así se preserva la semántica de rechazo existente sin depender de que un
+worker colgado coopere.

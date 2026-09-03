@@ -37,11 +37,12 @@ bun run deploy:omp -- C:\ruta\al\build\omp.exe
 
 El comando sin artifact falla: un nombre implícito puede apuntar a un build
 granular anterior y degradar silenciosamente el launcher. El deploy valida que
-el artifact explícito sea PE, copia a un staging en el mismo directorio, rota
-atómicamente `omp.exe` y retira cualquier `omp.com`; nunca escribe ambos
-launchers. Backups bloqueados por sesiones vivas quedan con sufijo no ejecutable
-y se limpian en la próxima corrida. `bun run audit` falla si reaparece
-`omp.com`, porque Windows lo resolvería antes que `.exe`.
+el artifact explícito sea PE, copia y valida un staging en el mismo directorio
+antes de retirar `omp.com`, y recién entonces rota atómicamente `omp.exe`. Si el
+staging o el cutover fallan, restaura el launcher anterior. Backups bloqueados
+por sesiones vivas quedan con sufijo no ejecutable y se limpian en la próxima
+corrida. `bun run audit` falla si reaparece `omp.com`, porque Windows lo
+resolvería antes que `.exe`.
 
 ## Extensión WezTerm Attention
 
@@ -86,8 +87,15 @@ El scheduler admite hasta 32 repos habilitados, concurrencia de 1 a 16 y default
 
 ## Actualización de OMP
 
-1. Registrar versión de `omp --help`.
-2. Releer las fuentes oficiales enlazadas en cada topic.
-3. Comparar el paquete instalado en `src/modes/rpc`, `src/utils/clipboard.ts` y `src/modes/components/status-line`.
-4. Ejecutar los comandos focales.
-5. Actualizar evidencia y decisión sólo si cambió el contrato observable.
+1. Consultar `omp update --check`; no ejecutar el updater mutante sobre el build
+   granular.
+2. Clonar el tag oficial exacto, releer `topics/ux-matrix.md` y comparar el
+   patch vigente contra settings, transcript, extensiones y session maintenance.
+3. Retirar únicamente del patch lo que upstream ya haya incorporado; resolver
+   los conflictos preservando la semántica nueva del tag.
+4. Ejecutar tests focales y el check completo de `packages/coding-agent`.
+5. Compilar el binario Windows con el addon Win32 publicado de la misma versión.
+6. Publicar exclusivamente con `bun run deploy:omp -- <artifact>` y hacer un
+   smoke TUI real del selector granular y `/windows-input`.
+7. Regenerar el patch fijado al tag, actualizar evidencia durable y ejecutar
+   `bun run index`, `bun run audit` y `bun test`.

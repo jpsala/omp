@@ -6,7 +6,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 
 ## Estado actual
 
-- Discovery efectivo sobre OMP 18.0.11: el perfil global carga por path directo
+- Discovery efectivo sobre OMP 18.1.6: el perfil global carga por path directo
   `wezterm-attention`, `agent-runtime-habitat`, `omp-fleet`,
   `sync-close-prompt`, `windows-input` y las cuatro integraciones runtime de OS.
   `.omp/config.yml` repite ese conjunto y suma `omp-profiles`, porque una lista
@@ -15,7 +15,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   retirados; `extensions/` es la única fuente durable.
 - Paridad workstation revalidada en PC `JP` y notebook `ASUS`: repo,
   configuración global y perfil administrado coinciden. El binario compilado de
-  esta PC quedó actualizado a OMP 18.0.11; la notebook conserva su despliegue
+  esta PC quedó actualizado a OMP 18.1.6; la notebook conserva su despliegue
   previo hasta la próxima sincronización explícita.
   El audit del laboratorio inyecta un provider sintético sin red para probar
   discovery sin depender del auth privado del host y normaliza CRLF al validar
@@ -25,7 +25,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   `advisor.syncBacklog=off`. Luna queda limitada a roles o flows cortos
   seleccionados explícitamente; no gobierna el runtime global.
 - `windows-input.ts` es el entrypoint estable: registra el selector granular y
-  carga el editor opcional 18.0.11. Sólo `windows-input-native.ts` posee
+  carga el editor opcional 18.1.6. Sólo `windows-input-native.ts` posee
   `/windows-input`; no hay comando diagnóstico duplicado ni hotkeys de modelos.
 - WinInput soporta selección editable por teclado y undo Windows sobre el
   prompt. No activa mouse reporting: la rueda normal recorre el scrollback de
@@ -39,7 +39,7 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; el par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia de esa corrida, no el costo actual de la cuenta DeepSeek.
 - Smoke comparativo 2026-08-18: Luna Max padre+hijo pasó 3 tests en 165.51 s; DeepSeek Pro `max` padre + Flash `low` hijo pasó los mismos 3 tests en 138.33 s (-16.4%). DeepSeek padre reportó `$0.08508346308`; Codex sólo expuso cuota gruesa 96%, sin costo unitario. Fixture temporal en `tmp/`, no durable.
 - Estado de costo DeepSeek 2026-08-18: el usuario confirmó una única API key y que el plan comenzó ese día; el panel del proveedor mostró `$4.31` y 1.180 requests. `omp stats` usa 24 horas por defecto y mostró 527 filas/$1.25; el panel DeepSeek es la autoridad de facturación y OMP puede subcontar requests no persistidas.
-- Perfil visual global sobre OMP 18.0.11: la extensión registra `Ctrl+Alt+O`; en
+- Perfil visual global sobre OMP 18.1.6: la extensión registra `Ctrl+Alt+O`; en
   esta workstation, WezTerm convierte el chord físico `Ctrl+Shift+M` en esa
   secuencia privada. El selector modal opera sobre el transcript nativo y
   controla thinking, preámbulos, métricas por turno, actividad global y tools
@@ -49,8 +49,8 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   aplicar y eliminar perfiles nombrados globales bajo
   `display.transcriptVisibilityProfiles`. Estado global actual: perfil `zen`,
   con thinking, preámbulos, métricas y toda la actividad de tools ocultos.
-  El smoke real de 18.0.11 verificó el selector con sus tres presets, el perfil
-  `zen` y 41 opciones; los 22 tests focales cubren filtrado y persistencia.
+  El smoke real de 18.1.6 verificó el selector con sus tres presets, los perfiles
+  `main` y `zen`, y 42 opciones; los 22 tests focales cubren filtrado y persistencia.
 - Espejo Markdown local: `extensions/live-markdown.ts` consume los eventos
   oficiales `message_update` sólo en sesiones TUI y materializa inmediatamente
   un archivo por sesión bajo `C:/dev/omp-live/<repo>/<fecha>/`. La fecha y hora
@@ -65,21 +65,23 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
   sin respuesta útil; el smoke TUI concurrente del 2026-09-03 creó dos archivos
   metadata-only separados antes del primer turno. El archivo histórico señalado
   por el usuario se regeneró con el filtro limpio.
-- El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.0.11`, con el
+- El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.1.6`, con el
   addon Win32 publicado embebido y el patch workstation vigente. Además de los
   filtros granulares, el core usa 272k como límite económico de dispatch para
   Sol/Luna: al recibir un tool result que cruza el límite compacta
-  sincrónicamente o aborta antes de otra request. El test determinístico del
-  patch reproduce una ventana efectiva de 1M, 210k previos y un resultado
-  oversize; sólo permite la primera llamada al provider. El deploy canónico
-  `bun run deploy:omp -- <artifact>` exige el PE exacto, usa backups únicos aun
-  con sesiones previas mapeadas y retira `omp.com`; el audit rechaza colisiones.
+  sincrónicamente o aborta antes de otra request. La revisión del rebase confirmó
+  que la estimación pre-dispatch incluye prompt y schemas no-message, mensajes
+  persistidos y mensajes pendientes; el señalamiento previo de subconteo era un
+  falso positivo. El deploy canónico `bun run deploy:omp -- <artifact>` exige el
+  PE exacto, valida el staging antes de retirar `omp.com`, usa backups únicos aun
+  con sesiones previas mapeadas y restaura el launcher anterior ante fallo; el
+  audit rechaza colisiones.
 - Propuesta upstream de granularidad publicada el 2026-08-25 en
   [Discord `#feature-requests`](https://discord.com/channels/1465833614603325562/1465867712000692459/1541865268798820362):
   settings y rendering general en core; shortcuts, presets y perfiles en la
   extensión. Se vinculó el issue `#2158`. La implementación/PR upstream espera
   dirección del maintainer, como exige `CONTRIBUTING.md` para cambios amplios de
-  UI; el build downstream 18.0.11 permanece estable mientras tanto.
+  UI; el build downstream 18.1.6 permanece estable mientras tanto.
 - Selección de modelos: el mecanismo elegido es el hub nativo de OMP
   (`Alt+M`/`/models`, Roles). Se retiraron los favoritos y el ciclo custom;
   `Ctrl+P` queda con el comportamiento nativo de OMP, salvo overrides de un
@@ -87,7 +89,9 @@ Mantener un laboratorio OMP pequeño, verificable e independiente del estado pri
 - Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
 - Fleet: `extensions/omp-fleet.ts` es la fuente directa de `/fleet`; un RPC por
   repo, concurrencia acotada, control por run id y artifacts sanitizados en
-  `artifacts/fleet/<run-id>/`.
+  `artifacts/fleet/<run-id>/`. La cancelación de un worker activo espera el ack
+  por hasta 5 segundos y luego cierra el transporte; un RPC colgado no bloquea
+  `/fleet cancel`.
 - Cierre multi-repo: `extensions/sync-close-prompt.ts` es la fuente directa de
   `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
   enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra.

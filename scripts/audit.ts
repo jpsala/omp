@@ -51,7 +51,7 @@ const requiredFiles = [
 	"runtime/omp-fresh-session.yml",
 	"profiles/catalog.json",
 	"profiles/codex-economic.yml",
-	"patches/omp-18.0.11-workstation.patch",
+	"patches/omp-18.1.6-workstation.patch",
 	"topics/rpc-client.md",
 	"topics/ux-matrix.md",
 	"topics/wezterm-attention.md",

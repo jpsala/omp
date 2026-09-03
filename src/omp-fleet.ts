@@ -157,6 +157,7 @@ export interface OmpFleetOptions {
 	clock?: () => Date | string;
 	idSource?: () => string;
 	envPolicy?: FleetWorkerEnvPolicy;
+	abortTimeoutMs?: number;
 }
 
 interface WorkerRuntime {
@@ -213,6 +214,7 @@ const INTERACTIVE_UI_METHODS: Record<string, true> = {
 	select: true,
 };
 const INTERACTIVE_UI_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const DEFAULT_ABORT_TIMEOUT_MS = 5_000;
 
 
 function errorMessage(error: unknown): string {
@@ -253,6 +255,7 @@ export class OmpFleetRun {
 	readonly #clock: () => Date | string;
 	readonly #workers = new Map<string, WorkerRuntime>();
 	readonly #envPolicy: FleetWorkerEnvPolicy;
+	readonly #abortTimeoutMs: number;
 	readonly #listeners = new Set<(event: FleetEvent) => void>();
 	readonly #createdAt: string;
 	#startedAt?: string;
@@ -278,6 +281,7 @@ export class OmpFleetRun {
 		this.runDirectory = resolve(options.runRoot ?? DEFAULT_RUN_ROOT, suppliedId);
 		this.#clientFactory = options.clientFactory ?? defaultClientFactory;
 		this.#envPolicy = options.envPolicy ?? (() => defaultFleetWorkerEnv());
+		this.#abortTimeoutMs = Math.max(0, options.abortTimeoutMs ?? DEFAULT_ABORT_TIMEOUT_MS);
 		this.#fileSystem = options.fileSystem ?? DEFAULT_FILE_SYSTEM;
 		this.#createdAt = this.#now();
 		for (const [repo, repoConfig] of Object.entries(this.config.repos)) {
@@ -369,16 +373,30 @@ export class OmpFleetRun {
 			return worker.abortOutcome;
 		}
 		const client = this.#activeClient(repo);
-		const shared = Promise.withResolvers<RpcResponseFrame>();
+		const shared = Promise.withResolvers<RpcResponseFrame | void>();
+		worker.abortRequested = true;
 		worker.abortOutcome = shared.promise;
 		void (async () => {
+			let timeout: NodeJS.Timeout | undefined;
 			try {
-				const response = await client.abort();
-				worker.abortRequested = true;
-				shared.resolve(response);
+				const outcome = await Promise.race([
+					client.abort().then(response => ({ kind: "acknowledged" as const, response })),
+					new Promise<{ kind: "timed-out" }>(resolve => {
+						timeout = setTimeout(() => resolve({ kind: "timed-out" }), this.#abortTimeoutMs);
+					}),
+				]);
+				if (outcome.kind === "timed-out") {
+					await this.#closeWorker(worker);
+					shared.resolve();
+				} else {
+					shared.resolve(outcome.response);
+				}
 			} catch (error) {
+				worker.abortRequested = false;
 				if (worker.abortOutcome === shared.promise) worker.abortOutcome = undefined;
 				shared.reject(error);
+			} finally {
+				clearTimeout(timeout);
 			}
 		})();
 		return shared.promise;

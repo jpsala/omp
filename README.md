@@ -150,6 +150,6 @@ El ejemplo RPC y `/fleet run` invocan modelos configurados y pueden tener coste.
 - [Settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md)
 - [Repositorio OMP](https://github.com/can1357/oh-my-pi)
 
-La clasificación vigente se revalidó contra OMP 18.0.5; las rutas y deltas
+La clasificación vigente se revalidó contra OMP 18.1.6; las rutas y deltas
 exactos se registran en los topics para que cada actualización pueda volver a
 contrastarlos.
