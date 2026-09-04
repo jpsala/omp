@@ -38,6 +38,12 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Habitat administra sesiones visibles y handoffs; Fleet, ejecuciones
   multi-repo; el cliente RPC, framing y finalización. Sus contratos detallados
   viven en los topics enlazados abajo, no en esta memoria.
+- Orca `1.4.197` quedó instalado como host visual piloto en `JP`, con OMP como
+  agente predeterminado, permisos manuales, PowerShell, pegado por clic derecho,
+  Chat UI para sesiones nuevas, CLI registrada y telemetría deshabilitada por
+  `ORCA_TELEMETRY_DISABLED=1`. El piloto activo usa un worktree aislado
+  `orca-pilot`; WezTerm y Habitat siguen siendo el runtime canónico mientras se
+  valida la experiencia real.
 
 ## Trabajo abierto
 
