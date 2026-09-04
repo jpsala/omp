@@ -38,19 +38,20 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Habitat administra sesiones visibles y handoffs mediante adapters nativos de
   Orca y WezTerm; Fleet, ejecuciones multi-repo; el cliente RPC, framing y
   finalización. Sus contratos detallados viven en los topics enlazados abajo.
-- Orca `1.4.197` es la interfaz visual principal reversible en `JP` y expone
-  dos superficies OMP distintas. El item nativo `+ → OMP` abre la Chat UI
-  estructurada de Orca; no es el TUI. El Quick Command global `OMP TUI`
-  ejecuta `omp` en un terminal nuevo y queda visible como botón directo junto
-  al `+`; éste es el ingreso diario al TUI sin PowerShell. Orca conserva
-  permisos manuales, `Agent Session History`, CLI registrada, telemetría
-  deshabilitada por `ORCA_TELEMETRY_DISABLED=1` y setup reproducible mediante
-  `orca.yaml`. Las skills oficiales `orca-cli` y `computer-use` viven bajo
-  `~/.agents/skills/` y OMP las descubre mediante junctions. Task/Hub sigue
-  siendo la orquestación normal; Orca orchestration queda disponible sólo ante
-  pedido explícito. `OMP Flow` es el workspace diario, limpio y publicado como
-  `jpsala/orca-flow`; `omp` y `os` están registrados como proyectos. Orca es el
-  host principal de Habitat; WezTerm se conserva intacto como rollback.
+- Orca `1.4.197` es la interfaz visual principal reversible en `JP`. Su Chat UI
+  experimental permanece habilitada, pero `Settings → Experimental → Chat UI →
+  Default view` está en `Terminal chat`; por eso el item nativo `+ → OMP` abre
+  el TUI real en un terminal nuevo. El valor sólo gobierna sesiones nuevas;
+  tabs creados antes del cambio conservan su vista. No hay Quick Command OMP
+  paralelo. Orca conserva permisos manuales, `Agent Session History`, CLI
+  registrada, telemetría deshabilitada por `ORCA_TELEMETRY_DISABLED=1` y setup
+  reproducible mediante `orca.yaml`. Las skills oficiales `orca-cli` y
+  `computer-use` viven bajo `~/.agents/skills/` y OMP las descubre mediante
+  junctions. Task/Hub sigue siendo la orquestación normal; Orca orchestration
+  queda disponible sólo ante pedido explícito. `OMP Flow` es el workspace
+  diario, limpio y publicado como `jpsala/orca-flow`; `omp` y `os` están
+  registrados como proyectos. Orca es el host principal de Habitat; WezTerm se
+  conserva intacto como rollback.
 - Orca `1.4.197` tiene aplicado en `JP` el workaround reproducible
   `bun run fix:orca-spinner`: el generador de `orca-titlebar-spinner.ts`
   detiene el título ante `agent_end.willContinue !== true`, sin esperar

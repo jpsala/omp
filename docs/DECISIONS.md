@@ -900,16 +900,18 @@ actualización de Orca reemplaza el bundle; se reejecuta el workaround sólo si 
 versión nueva conserva la rama vulnerable y se retira cuando upstream entregue
 el mismo comportamiento.
 
-## 2026-09-05 — `OMP` nativo y `OMP TUI` son superficies distintas
+## 2026-09-05 — `+ → OMP` abre el TUI mediante `Default view`
 
-El item integrado `+ → OMP` no abre un terminal: crea la Chat UI estructurada de
-Orca respaldada por OMP. Configurar OMP como `Default Agent` tampoco cambia esa
-frontera ni convierte `Ctrl+T` en un launcher del TUI. La afirmación anterior de
-que ese item abría directamente el TUI era incorrecta.
+El item integrado `+ → OMP` no tiene una superficie fija. La opción experimental
+`Settings → Experimental → Chat UI → Default view` decide cómo abren las
+sesiones compatibles nuevas. Con `Chat UI` muestra la conversación estructurada
+de Orca; con `Terminal chat` muestra el TUI terminal respaldado por el mismo
+proceso OMP. Las sesiones existentes conservan la vista con la que fueron
+creadas.
 
-Para el flujo diario se guarda un Quick Command global `OMP TUI`, de tipo
-`Terminal Command`, cuyo comando exacto es `omp`. Orca lo fija como botón visible
-junto al `+`; un clic crea un tab terminal y la evidencia runtime debe mostrar
-`agentIdentity: omp` y título idle `π > <repo>`. La Chat UI nativa queda
-disponible bajo `+ → OMP`, pero sólo se usa cuando se elige explícitamente esa
-superficie. La preferencia vive en Orca y no se copia al repositorio.
+La workstation fija `Default view` en `Terminal chat`. El flujo diario queda así:
+`+ → OMP` crea directamente un tab con el TUI real, sin PowerShell ni launcher
+paralelo. Se retiró el Quick Command `OMP TUI` porque duplicaba el launcher y
+ocultaba la configuración que realmente gobierna el item nativo. La verificación
+observó la ausencia del empty state `Start a chat with OMP`, `agentIdentity: omp`
+y el status bar renderizado de OMP en la pantalla terminal.
