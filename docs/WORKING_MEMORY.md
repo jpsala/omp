@@ -4,7 +4,7 @@
 
 Mantener sólo el estado vivo necesario para retomar trabajo en este laboratorio.
 Las razones históricas viven en `docs/DECISIONS.md`; los contratos reutilizables,
-en `topics/`; el código y la configuración siguen siendo la fuente de verdad.
+en `docs/topics/`; el código y la configuración siguen siendo la fuente de verdad.
 
 ## Estado vivo
 
@@ -70,10 +70,16 @@ en `topics/`; el código y la configuración siguen siendo la fuente de verdad.
   link local.
 - Regenerar el índice tras cambiar topics con `bun run index`.
 
+## Foco Único De Ejecución
+
+- **Estado:** `complete`.
+- **Referencia:** `docs/tracks/archive/aos-conformance-v2.md`.
+- **Siguiente acción:** priorizar explícitamente los 18 downstreams clasificados como `migration-required`.
+
 ## Próxima lectura
 
-- `topics/ux-matrix.md`: OMP/WinInput, filtros, links, modelos y OMP Live.
-- `topics/agent-runtime-habitat.md`: sesiones visibles, handoff y lifecycle.
-- `topics/omp-fleet.md`: workers multi-repo y cancelación.
-- `topics/rpc-client.md`: protocolo RPC y settle.
-- `topics/wezterm-attention.md`: atención del terminal.
+- `docs/topics/ux-matrix.md`: OMP/WinInput, filtros, links, modelos y OMP Live.
+- `docs/topics/agent-runtime-habitat.md`: sesiones visibles, handoff y lifecycle.
+- `docs/topics/omp-fleet.md`: workers multi-repo y cancelación.
+- `docs/topics/rpc-client.md`: protocolo RPC y settle.
+- `docs/topics/wezterm-attention.md`: atención del terminal.

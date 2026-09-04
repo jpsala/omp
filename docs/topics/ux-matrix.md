@@ -1,7 +1,20 @@
-# UX surfaces: native, port or discard
+---
+id: ux-matrix
+status: active
+kind: decision-map
+triggers:
+  - actualizar OMP
+  - windows input
+  - filtros de transcript
+  - links locales
+  - selección de modelos
+primary_refs:
+  - patches/omp-18.1.10-workstation.patch
+  - extensions/windows-input.ts
+  - extensions/tool-activity-view.ts
+---
 
-Status: active
-Summary: Matriz durable de Windows input, status/cuota, links locales, renderers y atención WezTerm revalidada sobre OMP 18.1.10.
+# UX surfaces: native, port or discard
 
 ## Criterio
 

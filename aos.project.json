@@ -3,8 +3,8 @@
   "capabilities": {
     "agent-bootstrap": 2,
     "context-index": 1,
-    "context-audit": 1,
+    "context-audit": 2,
     "omp-native": 1
   },
-  "appliedMigrations": ["stable-bootstrap-v1"]
+  "appliedMigrations": ["stable-bootstrap-v1", "context-governance-v2"]
 }

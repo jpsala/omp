@@ -1,7 +1,19 @@
-# OMP RPC client v2
+---
+id: rpc-client
+status: active
+kind: reference
+triggers:
+  - rpc
+  - jsonl
+  - rpc chunk
+  - correlación
+  - settle
+primary_refs:
+  - src/omp-rpc-client.ts
+  - tests/omp-rpc-client.test.ts
+---
 
-Status: active
-Summary: Contrato de referencia para stdio JSONL, correlación, reassembly v2 y settle correcto.
+# OMP RPC client v2
 
 ## Fuente normativa
 

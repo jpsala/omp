@@ -795,3 +795,21 @@ streaming. Pasó 22 tests focales con 92 assertions y el check completo de
 `--smoke-test` pasó antes y después del deploy canónico. El smoke TUI real
 verificó los presets, los perfiles `main` y `zen`, 41 opciones y
 `Windows input: on`.
+
+## 2026-09-04 — AOS es normativo para la capa documental downstream
+
+OMP upstream aporta el runtime; `C:/dev/os` define el contrato AOS de contexto
+durable. El laboratorio adopta `context-governance-v2`: topics de entrada bajo
+`docs/topics/`, índice generado en `docs/.generated/context-index.md`, Working
+Memory breve con foco único y audit AOS ejecutado antes de los checks específicos
+del producto.
+
+La ausencia de glossary y skills locales es una adaptación permitida porque el
+laboratorio no posee aliases ni operaciones Agent Skills propias. No cambia la
+semántica de autoridad, progressive disclosure, seguridad o publicación. Toda
+otra desviación futura requiere conversación con JP y una decisión durable antes
+de registrarse como compatible.
+
+El audit compartido pasó con un único warning informativo por la ausencia de
+glossary; el audit específico pasó y la suite completa quedó en 185 tests
+aprobados, 1 skip y 910 assertions.

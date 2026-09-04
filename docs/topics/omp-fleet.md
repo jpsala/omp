@@ -1,7 +1,19 @@
-# OMP Fleet
+---
+id: omp-fleet
+status: active
+kind: architecture
+triggers:
+  - fleet
+  - multi repo
+  - rpc workers
+  - cancelar fleet
+primary_refs:
+  - extensions/omp-fleet.ts
+  - src/omp-fleet.ts
+  - tests/omp-fleet.test.ts
+---
 
-Status: active
-Summary: Ejecución multi-repositorio por RPC con control explícito, aprobaciones en vivo y observadores WezTerm sin propiedad del ciclo de vida.
+# OMP Fleet
 
 ## Fuente y discovery
 
@@ -55,7 +67,7 @@ Ese ejemplo usa `C:/dev/omp` y `C:/dev/infra`; hay que cambiar los paths si esos
 
 ## Contrato RPC y aprobaciones
 
-Cada repo habilitado posee exactamente un `OmpRpcClient` con su propio `cwd`. El scheduler inicia como máximo `maxConcurrency` workers, mantiene los fallos aislados y siempre cierra cada transporte. El flujo de un worker es `start()` → `prompt()` → `get_last_assistant_text` → `close()`; el settle de prompt sigue el contrato de `topics/rpc-client.md`, no el mero ack.
+Cada repo habilitado posee exactamente un `OmpRpcClient` con su propio `cwd`. El scheduler inicia como máximo `maxConcurrency` workers, mantiene los fallos aislados y siempre cierra cada transporte. El flujo de un worker es `start()` → `prompt()` → `get_last_assistant_text` → `close()`; el settle de prompt sigue el contrato de `docs/topics/rpc-client.md`, no el mero ack.
 
 `send` usa `steer` y `follow-up` usa `follow_up`, siempre sobre el cliente del repo nombrado. `cancel` omite un worker `pending` sin crear su cliente, cierra el transporte de uno `starting` y envía `abort` RPC a uno `running`. El pedido queda marcado antes de esperar el ack; si el RPC no responde en 5 segundos, el fleet cierra el transporte y clasifica el worker como abortado en vez de colgar el comando. Un rechazo explícito dentro de ese plazo restaura la elegibilidad de éxito. Las solicitudes RPC `extension_ui_request` de tipo `confirm`, `select`, `input` o `editor` quedan pendientes. No hay aprobación automática: `/fleet approve` abre la UI administrada correspondiente para revisión/valor, `/fleet deny` responde negativamente, y la respuesta `extension_ui_response` conserva el id original.
 

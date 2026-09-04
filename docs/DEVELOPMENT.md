@@ -83,13 +83,13 @@ Una failure sin id rechaza todos los pending como error de correlación, nunca e
 
 El primer comando no inicia workers. El segundo crea un RPC por repo habilitado, invoca los modelos configurados y puede tener coste. Los comandos mutantes se enrutan con run id explícito: `/fleet send <run-id> <repo> <message>`, `/fleet follow-up <run-id> <repo> <message>`, `/fleet approve <run-id> <repo> <request-id>`, `/fleet deny <run-id> <repo> <request-id>` y `/fleet cancel <run-id> <repo|all>`.
 
-El scheduler admite hasta 32 repos habilitados, concurrencia de 1 a 16 y default 4. Sólo entrega a los workers el allowlist de entorno documentado en `topics/omp-fleet.md`. Los observers de `scripts/fleet-observer.ts` leen `artifacts/fleet/<run-id>/` y no poseen el ciclo de vida RPC. Estos artifacts excluyen texto crudo de resultados y errores.
+El scheduler admite hasta 32 repos habilitados, concurrencia de 1 a 16 y default 4. Sólo entrega a los workers el allowlist de entorno documentado en `docs/topics/omp-fleet.md`. Los observers de `scripts/fleet-observer.ts` leen `artifacts/fleet/<run-id>/` y no poseen el ciclo de vida RPC. Estos artifacts excluyen texto crudo de resultados y errores.
 
 ## Actualización de OMP
 
 1. Consultar `omp update --check`; no ejecutar el updater mutante sobre el build
    granular.
-2. Clonar el tag oficial exacto, releer `topics/ux-matrix.md` y comparar el
+2. Clonar el tag oficial exacto, releer `docs/topics/ux-matrix.md` y comparar el
    patch vigente contra settings, transcript, extensiones y session maintenance.
 3. Retirar únicamente del patch lo que upstream ya haya incorporado; resolver
    los conflictos preservando la semántica nueva del tag.

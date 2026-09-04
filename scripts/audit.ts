@@ -52,11 +52,14 @@ const requiredFiles = [
 	"profiles/catalog.json",
 	"profiles/codex-economic.yml",
 	"patches/omp-18.1.10-workstation.patch",
-	"topics/rpc-client.md",
-	"topics/ux-matrix.md",
-	"topics/wezterm-attention.md",
-	"topics/agent-runtime-habitat.md",
-	"scripts/update-index.ts",
+	"docs/.generated/context-index.md",
+	"docs/topics/rpc-client.md",
+	"docs/topics/ux-matrix.md",
+	"docs/topics/wezterm-attention.md",
+	"docs/topics/agent-runtime-habitat.md",
+	"docs/topics/omp-fleet.md",
+	"scripts/context-index.ts",
+	"scripts/agent-context-audit.ts",
 	"scripts/fleet-observer.ts",
 	"scripts/runtime-child-bootstrap.ts",
 	"scripts/deploy-omp-workstation.ts",
@@ -462,48 +465,11 @@ if (/from\s+["']@oh-my-pi\//.test(rpcClient)) {
 	);
 }
 
-const topicFiles = files
-	.filter(
-		(file) =>
-			file.relativePath.startsWith("topics/") &&
-			file.relativePath.endsWith(".md"),
-	)
-	.map((file) => {
-		const title = /^#\s+(.+)$/m.exec(file.content)?.[1]?.trim();
-		const status = /^Status:\s*(.+)$/m.exec(file.content)?.[1]?.trim();
-		const summary = /^Summary:\s*(.+)$/m.exec(file.content)?.[1]?.trim();
-		if (!title || !status || !summary) {
-			issues.push(
-				`${file.relativePath}: requires # title, Status: and Summary:`,
-			);
-		}
-		return {
-			path: file.relativePath,
-			title: title ?? "",
-			status: status ?? "",
-			summary: summary ?? "",
-		};
-	})
-	.sort((left, right) => left.title.localeCompare(right.title, "en"));
-const indexRows = topicFiles.map(
-	(topic) =>
-		`| [${topic.title}](../${topic.path}) | ${topic.status} | ${topic.summary} |`,
+const topicFiles = files.filter(
+	(file) =>
+		file.relativePath.startsWith("docs/topics/") &&
+		file.relativePath.endsWith(".md"),
 );
-const expectedIndex = [
-	"# Topics",
-	"",
-	"Índice generado por `bun run index`. Editar los archivos de `topics/`, no esta tabla.",
-	"",
-	"| Topic | Status | Summary |",
-	"| --- | --- | --- |",
-	...indexRows,
-	"",
-].join("\n");
-const actualIndex = (
-	await readFile(join(workspace, "docs", "TOPICS.md"), "utf8").catch(() => "")
-).replaceAll("\r\n", "\n");
-if (actualIndex !== expectedIndex)
-	issues.push("docs/TOPICS.md is stale; run bun run index");
 
 if (issues.length > 0) {
 	for (const issue of issues) console.error(`ERROR: ${issue}`);

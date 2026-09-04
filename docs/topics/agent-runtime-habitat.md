@@ -1,7 +1,20 @@
-# Agent Runtime Habitat
+---
+id: agent-runtime-habitat
+status: reference
+kind: architecture
+triggers:
+  - sesiones visibles
+  - handoff
+  - orquestar
+  - agent runtime
+  - lifecycle de panes
+primary_refs:
+  - extensions/agent-runtime-habitat.ts
+  - scripts/runtime-child-bootstrap.ts
+  - tests/agent-runtime-habitat.test.ts
+---
 
-Status: active
-Summary: Contexto runtime tipado y lanzamiento OMP fresco sobre un pane WezTerm poseído, con handshake y rollback.
+# Agent Runtime Habitat
 
 ## Contrato
 

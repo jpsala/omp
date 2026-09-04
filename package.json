@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "index": "bun scripts/update-index.ts",
-    "index:check": "bun scripts/update-index.ts --check",
-    "audit": "bun scripts/audit.ts",
+    "context:index": "bun scripts/context-index.ts",
+    "context:audit": "bun scripts/agent-context-audit.ts",
+    "index": "bun run context:index",
+    "audit": "bun run context:audit && bun scripts/audit.ts",
     "test": "bun test",
     "deploy:omp": "bun scripts/deploy-omp-workstation.ts"
   }

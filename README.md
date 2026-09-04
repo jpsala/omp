@@ -27,13 +27,14 @@ integraciones runtime de OS.
 - `docs/TOPICS.md`: índice generado de investigaciones focales.
 - `docs/DECISIONS.md`: decisiones durables.
 - `docs/DEVELOPMENT.md`: desarrollo y verificación.
-- `topics/`: evidencia y contratos focales, incluido `topics/omp-fleet.md`.
+- `docs/topics/`: evidencia y contratos focales, incluido `docs/topics/omp-fleet.md`.
 - `extensions/`: extensiones mantenidas por el laboratorio.
 - `src/omp-rpc-client.ts`: cliente RPC v2 reusable, sin dependencias.
 - `src/omp-fleet*.ts`: scheduler, configuración y observadores del fleet multi-repositorio.
 - `examples/rpc-once.ts`: invocación real de referencia.
-- `scripts/update-index.ts`: regeneración determinista del índice.
-- `scripts/audit.ts`: límites, higiene y contratos del workspace.
+- `scripts/context-index.ts`: índice AOS generado y determinista.
+- `scripts/agent-context-audit.ts`: garantías documentales AOS compartidas.
+- `scripts/audit.ts`: límites y contratos específicos del laboratorio.
 
 ## Perfil experimental DeepSeek
 

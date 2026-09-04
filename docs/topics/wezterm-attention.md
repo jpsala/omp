@@ -1,7 +1,16 @@
-# WezTerm Attention
+---
+id: wezterm-attention
+status: active
+kind: integration
+triggers:
+  - wezterm attention
+  - markers de pane
+  - estado thinking
+primary_refs:
+  - extensions/wezterm-attention.ts
+---
 
-Status: active
-Summary: Productor OMP global de marcadores atómicos de atención por pane, cargado desde una única fuente durable.
+# WezTerm Attention
 
 ## Alcance
 
