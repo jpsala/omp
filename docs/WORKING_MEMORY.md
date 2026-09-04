@@ -45,7 +45,7 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   agente. Las skills oficiales `orca-cli` y `computer-use` se mantienen bajo
   `~/.agents/skills/` y OMP las descubre mediante junctions en su home; no se
   enlaza `orchestration` porque Task/Hub, Habitat y Fleet conservan esa
-  autoridad. El piloto activo usa un worktree aislado `orca-pilot`.
+  autoridad. El workspace activo y limpio es `orca-flow` (`OMP Flow`).
 
 ## Trabajo abierto
 
@@ -56,9 +56,13 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Cada actualización futura de OMP exige `omp update --check`, clone del tag
   exacto, rebase y tests focales, build con addon coincidente y despliegue
   exclusivo mediante `bun run deploy:omp -- <artifact>`.
-- Completar el piloto Orca con una tarea real y validar transcript largo,
-  copy/paste, scroll, apertura de archivos, status y resume antes de decidir si
-  reemplaza alguna superficie de WezTerm/Habitat.
+- El piloto verificó setup previo al agente, Chat UI estructurada, input,
+  paste UTF-8, copy Markdown, scroll dirigido, apertura de archivos, status
+  `done` y resume de transcript por path absoluto. `Terminal attention` y
+  `Agent sleep` quedaron habilitados; falta observar el sleep automático tras
+  30 minutos y confirmar que su resume preserva Chat UI, porque el resume manual
+  con `omp --resume <transcript>` abrió correctamente el transcript en vista
+  terminal.
 
 ## Invariantes operativas
 

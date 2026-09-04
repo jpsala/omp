@@ -854,5 +854,6 @@ skills oficiales `orca-cli` y `computer-use` se instalan una vez bajo
 `~/.agents/skills/` y OMP las descubre mediante junctions, de modo que
 `orca skills update` sigue siendo la fuente. `orchestration` no se enlaza al
 home de OMP para evitar dos contratos automáticos; sólo se usa ante un pedido
-explícito de Orca orchestration. WezTerm/Habitat permanece canónico hasta que el
-piloto pruebe transcript largo, input, apertura de archivos, status y resume.
+explícito de Orca orchestration. El piloto verificó setup, Chat UI, input,
+clipboard, scroll, archivos, status y resume manual; WezTerm/Habitat permanece
+canónico hasta confirmar que `Agent sleep` reanuda automáticamente en Chat UI.
