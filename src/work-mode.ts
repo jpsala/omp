@@ -1,6 +1,7 @@
 export type WorkMode = "normal" | "economic";
 
 export const WORK_MODE_STATUS_KEY = "aos-work-mode";
+export const QUOTA_PACE_EVENT = "aos:quota-pace";
 export const NORMAL_MODEL = "openai-codex/gpt-5.6-sol";
 export const NORMAL_THINKING = "medium";
 export const ECONOMIC_MODEL = "openai-codex/gpt-5.6-luna";
@@ -22,8 +23,14 @@ export function workModeLabel(mode: WorkMode): string {
 	return mode === "economic" ? "económico" : "normal";
 }
 
-export function workModeStatus(mode: WorkMode): string {
-	return `modo ${workModeLabel(mode)}`;
+export function workModeStatus(mode: WorkMode, quotaPace?: number): string {
+	const label = workModeLabel(mode);
+	if (quotaPace === undefined) return label;
+	const pace = new Intl.NumberFormat("es-AR", {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 2,
+	}).format(quotaPace);
+	return `${pace}/${label}`;
 }
 
 export function workModeModel(mode: WorkMode): { model: string; thinking: "medium" | "high" } {

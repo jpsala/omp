@@ -23,15 +23,23 @@ test("parses and resolves normal and economic work modes", () => {
 	expect(inferWorkMode({ provider: "openai-codex", id: "gpt-5.6-luna" })).toBe("economic");
 	expect(inferWorkMode({ provider: "openai-codex", id: "gpt-5.6-sol" })).toBe("normal");
 	expect(workModeModel("economic")).toEqual({ model: "openai-codex/gpt-5.6-luna", thinking: "high" });
-	expect(workModeStatus("normal")).toBe("modo normal");
+	expect(workModeStatus("normal")).toBe("normal");
+	expect(workModeStatus("normal", 0.79)).toBe("0,79/normal");
+	expect(workModeStatus("economic", 0.79)).toBe("0,79/económico");
 });
 
 test("switches the live parent and keeps a visible mode status", async () => {
 	let startHandler: ((event: unknown, ctx: unknown) => void) | undefined;
 	let commandHandler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+	let paceHandler: ((value: unknown) => void) | undefined;
 	const selected: string[] = [];
 	const thinking: string[] = [];
 	workModeExtension({
+		events: {
+			on(channel: string, handler: (value: unknown) => void) {
+				if (channel === "aos:quota-pace") paceHandler = handler;
+			},
+		},
 		on(event: string, handler: (event: unknown, ctx: unknown) => void) {
 			if (event === "session_start") startHandler = handler;
 		},
@@ -58,10 +66,11 @@ test("switches the live parent and keeps a visible mode status", async () => {
 		},
 	};
 	startHandler?.({}, ctx);
+	paceHandler?.({ ctx, pace: 0.79 });
 	await commandHandler?.("economico", ctx);
 	expect(selected).toEqual(["openai-codex/gpt-5.6-luna"]);
 	expect(thinking).toEqual(["high"]);
-	expect(statuses).toEqual(["modo normal", "modo económico"]);
+	expect(statuses).toEqual(["normal", "0,79/normal", "0,79/económico"]);
 	expect(notices.at(-1)).toContain("Luna High");
 });
 
