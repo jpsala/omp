@@ -844,21 +844,25 @@ dentro del documento.
 ## 2026-09-05 — Orca es la interfaz visual principal reversible
 
 Orca `1.4.197` pasa de piloto a interfaz visual principal en `JP`. Es un host del
-proceso: inyecta `ORCA_OMP_STATUS_EXTENSION`, reconoce Chat UI, `ask`, session id
-y resume, pero ejecuta el mismo OMP con sus tools, perfil y gates. Task/Hub sigue
-siendo la orquestación normal; Habitat conserva sesiones visibles y handoff;
-Fleet conserva el trabajo multi-repo. Orca orchestration se usa sólo ante pedido
-explícito y no reemplaza esos contratos.
+proceso: inyecta `ORCA_OMP_STATUS_EXTENSION`, reconoce eventos de estado, `ask`,
+session id y resume, pero ejecuta el mismo OMP con sus tools, perfil y gates. La
+conversación viva permanece en el TUI de OMP; el sidebar `Agent Session History`
+aporta transcript estructurado, últimos turnos, log y acciones de resume, no una
+Chat UI que reemplace el terminal. Task/Hub sigue siendo la orquestación normal;
+Habitat conserva sesiones visibles y handoff; Fleet conserva el trabajo
+multi-repo. Orca orchestration se usa sólo ante pedido explícito y no reemplaza
+esos contratos.
 
 El repo declara únicamente el setup reproducible en `orca.yaml`. Las skills
 oficiales `orca-cli` y `computer-use` viven bajo `~/.agents/skills/` y OMP las
 descubre mediante junctions; `orca skills update` permanece como fuente. Los
 proyectos `omp` y `os` están registrados, `OMP Flow` es el workspace diario y su
 branch `jpsala/orca-flow` está publicado. Orca Mobile quedó emparejado por LAN
-sin Relay. El recorrido real verificó rich Markdown, tabs y splits, Source
-Control y Checks, Computer Use, Task/Hub con un subagente, reinicio completo con
-resume de contexto y `/handoff` desde Orca hacia una sesión fresh guardada en
-WezTerm.
+sin Relay. El recorrido real verificó rich Markdown en el TUI, tabs y splits,
+Source Control y Checks, Computer Use, Task/Hub con un subagente, reinicio
+completo con resume de contexto, reanudación de una sesión OMP existente con su
+transcript visible en `Agent Session History` y `/handoff` desde Orca hacia una
+sesión fresh guardada en WezTerm.
 
 La adopción conserva rollback sin migración destructiva: WezTerm y su perfil no
 se modifican y siguen disponibles para Habitat, diagnóstico y recuperación.

@@ -40,9 +40,11 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   viven en los topics enlazados abajo, no en esta memoria.
 - Orca `1.4.197` es la interfaz visual principal reversible en `JP`; ejecuta el
   mismo OMP como agente predeterminado y no sustituye su runtime, tools ni
-  perfil. Mantiene permisos manuales, PowerShell, Chat UI, CLI registrada,
-  telemetría deshabilitada por `ORCA_TELEMETRY_DISABLED=1` y setup reproducible
-  mediante `orca.yaml`. Las skills oficiales `orca-cli` y `computer-use` viven
+  perfil. Mantiene permisos manuales, PowerShell, el TUI de OMP y el sidebar
+  `Agent Session History` con transcript, log y resume; no reemplaza la
+  conversación central por una Chat UI. Conserva CLI registrada, telemetría
+  deshabilitada por `ORCA_TELEMETRY_DISABLED=1` y setup reproducible mediante
+  `orca.yaml`. Las skills oficiales `orca-cli` y `computer-use` viven
   bajo `~/.agents/skills/` y OMP las descubre mediante junctions. Task/Hub sigue
   siendo la orquestación normal; Orca orchestration queda disponible sólo ante
   pedido explícito. `OMP Flow` es el workspace diario, limpio y publicado como
