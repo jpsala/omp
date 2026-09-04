@@ -38,12 +38,14 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Habitat administra sesiones visibles y handoffs; Fleet, ejecuciones
   multi-repo; el cliente RPC, framing y finalización. Sus contratos detallados
   viven en los topics enlazados abajo, no en esta memoria.
-- Orca `1.4.197` quedó instalado como host visual piloto en `JP`, con OMP como
-  agente predeterminado, permisos manuales, PowerShell, pegado por clic derecho,
-  Chat UI para sesiones nuevas, CLI registrada y telemetría deshabilitada por
-  `ORCA_TELEMETRY_DISABLED=1`. El piloto activo usa un worktree aislado
-  `orca-pilot`; WezTerm y Habitat siguen siendo el runtime canónico mientras se
-  valida la experiencia real.
+- Orca `1.4.197` está instalado como host visual piloto en `JP`, con OMP como
+  agente predeterminado, permisos manuales, PowerShell, Chat UI, CLI registrada
+  y telemetría deshabilitada por `ORCA_TELEMETRY_DISABLED=1`. `orca.yaml` fija
+  setup reproducible con `bun install --frozen-lockfile` antes de iniciar el
+  agente. Las skills oficiales `orca-cli` y `computer-use` se mantienen bajo
+  `~/.agents/skills/` y OMP las descubre mediante junctions en su home; no se
+  enlaza `orchestration` porque Task/Hub, Habitat y Fleet conservan esa
+  autoridad. El piloto activo usa un worktree aislado `orca-pilot`.
 
 ## Trabajo abierto
 
@@ -54,6 +56,9 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Cada actualización futura de OMP exige `omp update --check`, clone del tag
   exacto, rebase y tests focales, build con addon coincidente y despliegue
   exclusivo mediante `bun run deploy:omp -- <artifact>`.
+- Completar el piloto Orca con una tarea real y validar transcript largo,
+  copy/paste, scroll, apertura de archivos, status y resume antes de decidir si
+  reemplaza alguna superficie de WezTerm/Habitat.
 
 ## Invariantes operativas
 

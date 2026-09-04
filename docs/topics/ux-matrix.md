@@ -173,6 +173,7 @@ Revalidado con `omp/17.3.0` local y las fuentes primarias enlazadas.
 | Export/share/collab | `/export --themes` genera HTML con renderers web por tool; `/share` publica un snapshot cifrado; `/collab` ofrece transcript web vivo con thinking, tool cards y subagentes. | **Nativa**. [Session operations](https://github.com/can1357/oh-my-pi/blob/main/docs/session-operations-export-share-fork-resume.md), [Collab](https://github.com/can1357/oh-my-pi/blob/main/docs/collab.md). | Usar para lectura rica fuera del TUI antes de adoptar un cliente alternativo. |
 | Paseo | Cliente desktop/web/mobile multiagente; OMP es provider directo mediante `omp --mode rpc-ui`, con approvals y tools host. | **Explícita**, aunque el provider OMP viene deshabilitado por defecto. [Repositorio](https://github.com/getpaseo/paseo), [provider contract](https://github.com/getpaseo/paseo/blob/main/docs/providers.md). | Mejor opción externa para evaluar una UI completa y mantenida. |
 | `omp-desktop` | Tauri/React enfocado en OMP: Bash/eval streaming, código resaltado, diff unificado scrubbable, tool cards y minimapa. | **Explícita** sobre `omp --mode rpc`; proyecto pequeño y contrato RPC sujeto a drift. [Repositorio](https://github.com/apoc/omp-desktop). | Prototipo Windows prometedor; probar aislado, no volverlo interfaz principal todavía. |
+| Orca `1.4.197` | Host visual con worktrees, editor, terminales, Chat UI nativa, browser, Computer Use y lifecycle/resume específico para OMP. | **Nativa como host del proceso OMP**: inyecta una extensión de status mediante `ORCA_OMP_STATUS_EXTENSION`, reconoce eventos, approvals, session id y resume por transcript absoluto. `orca.yaml` define el setup del checkout; las skills versionadas se sirven desde su propio CLI. | Piloto preferido para UX visual. Usar Orca para superficie, worktrees y terminales; conservar Task/Hub, Habitat y Fleet como autoridad de ejecución/orquestación salvo pedido explícito de Orca orchestration. |
 | Renderers del marketplace Pi (`pi-tool-display`, `pi-claude-style-tools`, `@vanillagreen/pi-tool-renderer`, `@heyhuynhgiabuu/pi-diff`) | UIs compactas, previews Bash y diffs Shiki split/unified. | **No directa**. Re-registran `read`/`bash`/`edit`/`write` con factories de Pi o parchean componentes internos. El loader OMP reescribe imports legacy, pero no adapta contratos de renderer ni schemas de tools. | No instalar globalmente en OMP: puede reemplazar Bash, artifacts y el editor hashline. Portar sólo ideas visuales sobre APIs OMP. |
 | `pi-thinking-box` | Caja configurable para thinking. | **Frágil**: monkey-patch de `AssistantMessageComponent.prototype`, no el API público OMP. [Package](https://pi.dev/packages/pi-thinking-box). | No portar el patch; usar `registerAssistantThinkingRenderer` para UI suplementaria. |
 | Bash live-view de Pi | Widget PTY y tail en vivo. | **Redundante**: OMP ya posee PTY overlay, updates parciales, truncación con artifacts y async jobs. [Bash runtime](https://github.com/can1357/oh-my-pi/blob/main/docs/bash-tool-runtime.md). | Descartar salvo una carencia reproducible del Bash nativo. |
@@ -185,11 +186,13 @@ opción correcta cuando se necesita navegación, paneles o layouts que exceden e
 
 ## Conclusión
 
-La base sigue siendo OMP nativo. Las excepciones justificadas son WezTerm
-Attention, conductas Windows acotadas y, si aparece una necesidad medible, un
-renderer OMP-native que delegue la ejecución sin sustituir tools. Paseo u
-`omp-desktop` son evaluaciones de interfaz completas, no extensiones del TUI;
-los paquetes de render Pi quedan como referencias visuales, no dependencias.
+La base de ejecución sigue siendo OMP nativo. WezTerm/Habitat permanece canónico
+mientras Orca se valida como host visual preferido; Orca aporta Chat UI,
+worktrees, editor, browser, Computer Use y resume sin sustituir tools ni
+orquestación AOS. Las excepciones restantes son WezTerm Attention, conductas
+Windows acotadas y, si aparece una necesidad medible, un renderer OMP-native que
+delegue la ejecución. Paseo y `omp-desktop` quedan como referencias; los paquetes
+de render Pi no son dependencias.
 
 ## Revalidación
 

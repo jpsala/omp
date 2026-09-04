@@ -15,6 +15,10 @@ Bootstrap estable: OMP gobierna la ejecución y el runtime de agentes; este labo
 - `extensions/` es la fuente durable; `.omp/config.yml` sólo conecta esas fuentes con el discovery project-local.
 - El cliente RPC es una referencia reusable y no una dependencia runtime de otros repositorios.
 - Los inicios de sesión nuevos y los efectos externos sensibles conservan sus gates.
+- Orca puede hospedar OMP como superficie visual opcional; `orca.yaml` gobierna
+  únicamente el setup de sus worktrees. OMP, Task/Hub, Habitat y Fleet conservan
+  la autoridad de ejecución y orquestación salvo pedido explícito de usar la
+  orquestación propia de Orca.
 
 ## Flujo documental
 

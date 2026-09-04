@@ -840,3 +840,19 @@ Una sesión inicialmente sin título usa `Sesión` y el productor renombra el
 archivo en una escritura posterior cuando OMP publica el título. Esto reemplaza
 la decisión de conservar el UUID completo en el filename, no su identidad
 dentro del documento.
+
+## 2026-09-05 — Orca es host visual, no autoridad paralela
+
+Orca `1.4.197` se adopta como piloto de UX para OMP porque ofrece Chat UI,
+worktrees, editor, browser, Computer Use y resume mediante un adaptador nativo
+que inyecta `ORCA_OMP_STATUS_EXTENSION`. No reemplaza el runtime ni los gates:
+OMP conserva ejecución y tools; Task/Hub, Habitat y Fleet conservan
+orquestación, sesiones visibles y trabajo multi-repo.
+
+El repo declara sólo el setup reproducible de worktrees en `orca.yaml`. Las
+skills oficiales `orca-cli` y `computer-use` se instalan una vez bajo
+`~/.agents/skills/` y OMP las descubre mediante junctions, de modo que
+`orca skills update` sigue siendo la fuente. `orchestration` no se enlaza al
+home de OMP para evitar dos contratos automáticos; sólo se usa ante un pedido
+explícito de Orca orchestration. WezTerm/Habitat permanece canónico hasta que el
+piloto pruebe transcript largo, input, apertura de archivos, status y resume.
