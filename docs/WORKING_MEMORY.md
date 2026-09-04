@@ -57,12 +57,17 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   exacto, rebase y tests focales, build con addon coincidente y despliegue
   exclusivo mediante `bun run deploy:omp -- <artifact>`.
 - El piloto verificó setup previo al agente, Chat UI estructurada, input,
-  paste UTF-8, copy Markdown, scroll dirigido, apertura de archivos, status
-  `done` y resume de transcript por path absoluto. `Terminal attention` y
-  `Agent sleep` quedaron habilitados; falta observar el sleep automático tras
-  30 minutos y confirmar que su resume preserva Chat UI, porque el resume manual
-  con `omp --resume <transcript>` abrió correctamente el transcript en vista
-  terminal.
+  paste UTF-8, copy Markdown, scroll dirigido, archivos, diff/source control,
+  estados de atención y `ask` con opciones. `Terminal attention` permanece
+  habilitado.
+- `Workspace Sleep` manual detiene el proceso y persiste el `session_id`; al
+  reabrir desde Jump, OMP conserva contexto y Chat UI vuelve a materializar el
+  transcript tras el primer turno nuevo. `Agent sleep` automático queda
+  deshabilitado: con una ventana de un minuto, transcripts finalizados quedaron
+  visualmente en `Working` y no fueron recolectados.
+- Automations acepta `provider=omp` y ejecuta el prompt, pero en `1.4.197` el run
+  termina sin `outputSnapshot`, usage figura `provider_unsupported` y la terminal
+  puede quedar visualmente `Working`; no hay automations OMP persistentes.
 
 ## Invariantes operativas
 
