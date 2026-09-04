@@ -841,24 +841,30 @@ archivo en una escritura posterior cuando OMP publica el título. Esto reemplaza
 la decisión de conservar el UUID completo en el filename, no su identidad
 dentro del documento.
 
-## 2026-09-05 — Orca es host visual, no autoridad paralela
+## 2026-09-05 — Orca es la interfaz visual principal reversible
 
-Orca `1.4.197` se adopta como piloto de UX para OMP porque ofrece Chat UI,
-worktrees, editor, browser, Computer Use y resume mediante un adaptador nativo
-que inyecta `ORCA_OMP_STATUS_EXTENSION`. No reemplaza el runtime ni los gates:
-OMP conserva ejecución y tools; Task/Hub, Habitat y Fleet conservan
-orquestación, sesiones visibles y trabajo multi-repo.
+Orca `1.4.197` pasa de piloto a interfaz visual principal en `JP`. Es un host del
+proceso: inyecta `ORCA_OMP_STATUS_EXTENSION`, reconoce Chat UI, `ask`, session id
+y resume, pero ejecuta el mismo OMP con sus tools, perfil y gates. Task/Hub sigue
+siendo la orquestación normal; Habitat conserva sesiones visibles y handoff;
+Fleet conserva el trabajo multi-repo. Orca orchestration se usa sólo ante pedido
+explícito y no reemplaza esos contratos.
 
-El repo declara sólo el setup reproducible de worktrees en `orca.yaml`. Las
-skills oficiales `orca-cli` y `computer-use` se instalan una vez bajo
-`~/.agents/skills/` y OMP las descubre mediante junctions, de modo que
-`orca skills update` sigue siendo la fuente. `orchestration` no se enlaza al
-home de OMP para evitar dos contratos automáticos; sólo se usa ante un pedido
-explícito de Orca orchestration. El piloto verificó setup, Chat UI, input,
-clipboard, scroll, archivos, diff/source control, atención, `ask` y resume con
-contexto. `Terminal attention` queda activo. `Agent sleep` permanece apagado:
-el sleep manual conserva sesión y contexto, pero el automático no recolecta
-agentes OMP cuyo transcript terminó mientras Orca aún los muestra `Working`.
-Automations OMP tampoco se adopta: ejecuta el prompt, pero `1.4.197` no conserva
-output/usage y puede dejar el estado visual obsoleto. WezTerm/Habitat permanece
-canónico hasta que Orca cierre esos contratos.
+El repo declara únicamente el setup reproducible en `orca.yaml`. Las skills
+oficiales `orca-cli` y `computer-use` viven bajo `~/.agents/skills/` y OMP las
+descubre mediante junctions; `orca skills update` permanece como fuente. Los
+proyectos `omp` y `os` están registrados, `OMP Flow` es el workspace diario y su
+branch `jpsala/orca-flow` está publicado. Orca Mobile quedó emparejado por LAN
+sin Relay. El recorrido real verificó rich Markdown, tabs y splits, Source
+Control y Checks, Computer Use, Task/Hub con un subagente, reinicio completo con
+resume de contexto y `/handoff` desde Orca hacia una sesión fresh guardada en
+WezTerm.
+
+La adopción conserva rollback sin migración destructiva: WezTerm y su perfil no
+se modifican y siguen disponibles para Habitat, diagnóstico y recuperación.
+`Agent sleep` permanece apagado porque un transcript finalizado puede quedar
+visualmente `Working`; el sleep manual sí conserva contexto. Automations OMP no
+se programan todavía porque ejecutan pero no capturan output/usage de forma
+confiable. AXI continúa como única superficie web interactiva autorizada en esta
+workstation. Mobile Relay, hosts remotos, cloud recipes, emuladores y cuentas
+adicionales requieren sus gates explícitos; no se habilitan por adoptar Orca.

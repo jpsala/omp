@@ -38,14 +38,16 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Habitat administra sesiones visibles y handoffs; Fleet, ejecuciones
   multi-repo; el cliente RPC, framing y finalización. Sus contratos detallados
   viven en los topics enlazados abajo, no en esta memoria.
-- Orca `1.4.197` está instalado como host visual piloto en `JP`, con OMP como
-  agente predeterminado, permisos manuales, PowerShell, Chat UI, CLI registrada
-  y telemetría deshabilitada por `ORCA_TELEMETRY_DISABLED=1`. `orca.yaml` fija
-  setup reproducible con `bun install --frozen-lockfile` antes de iniciar el
-  agente. Las skills oficiales `orca-cli` y `computer-use` se mantienen bajo
-  `~/.agents/skills/` y OMP las descubre mediante junctions en su home; no se
-  enlaza `orchestration` porque Task/Hub, Habitat y Fleet conservan esa
-  autoridad. El workspace activo y limpio es `orca-flow` (`OMP Flow`).
+- Orca `1.4.197` es la interfaz visual principal reversible en `JP`; ejecuta el
+  mismo OMP como agente predeterminado y no sustituye su runtime, tools ni
+  perfil. Mantiene permisos manuales, PowerShell, Chat UI, CLI registrada,
+  telemetría deshabilitada por `ORCA_TELEMETRY_DISABLED=1` y setup reproducible
+  mediante `orca.yaml`. Las skills oficiales `orca-cli` y `computer-use` viven
+  bajo `~/.agents/skills/` y OMP las descubre mediante junctions. Task/Hub sigue
+  siendo la orquestación normal; Orca orchestration queda disponible sólo ante
+  pedido explícito. `OMP Flow` es el workspace diario, limpio y publicado como
+  `jpsala/orca-flow`; `omp` y `os` están registrados como proyectos. WezTerm se
+  conserva intacto como rollback y host de Habitat.
 
 ## Trabajo abierto
 
@@ -56,18 +58,14 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - Cada actualización futura de OMP exige `omp update --check`, clone del tag
   exacto, rebase y tests focales, build con addon coincidente y despliegue
   exclusivo mediante `bun run deploy:omp -- <artifact>`.
-- El piloto verificó setup previo al agente, Chat UI estructurada, input,
-  paste UTF-8, copy Markdown, scroll dirigido, archivos, diff/source control,
-  estados de atención y `ask` con opciones. `Terminal attention` permanece
-  habilitado.
-- `Workspace Sleep` manual detiene el proceso y persiste el `session_id`; al
-  reabrir desde Jump, OMP conserva contexto y Chat UI vuelve a materializar el
-  transcript tras el primer turno nuevo. `Agent sleep` automático queda
-  deshabilitado: con una ventana de un minuto, transcripts finalizados quedaron
-  visualmente en `Working` y no fueron recolectados.
-- Automations acepta `provider=omp` y ejecuta el prompt, pero en `1.4.197` el run
-  termina sin `outputSnapshot`, usage figura `provider_unsupported` y la terminal
-  puede quedar visualmente `Working`; no hay automations OMP persistentes.
+- La adopción verificó el flujo diario completo, Task/Hub real, pairing móvil
+  LAN, reinicio con resume de contexto y `/handoff` a WezTerm. `Terminal
+  attention` sigue habilitado; la evidencia y sus límites viven en
+  `docs/topics/ux-matrix.md` y `docs/DECISIONS.md`.
+- Mantener `Agent sleep` apagado y no programar automations OMP: ambos dependen
+  de un estado final que puede permanecer visualmente `Working`, y automations
+  no captura output/usage confiable. AXI continúa como única superficie web
+  interactiva. No hay emulador, host remoto ni recipe cloud configurados.
 
 ## Invariantes operativas
 
