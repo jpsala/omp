@@ -2,223 +2,78 @@
 
 ## Propósito
 
-Mantener un laboratorio OMP pequeño, verificable e independiente del estado privado de usuario y de otros repositorios.
+Mantener sólo el estado vivo necesario para retomar trabajo en este laboratorio.
+Las razones históricas viven en `docs/DECISIONS.md`; los contratos reutilizables,
+en `topics/`; el código y la configuración siguen siendo la fuente de verdad.
 
-## Estado actual
+## Estado vivo
 
-- Discovery efectivo sobre OMP 18.1.10: el perfil global carga por path directo
-  `wezterm-attention`, `agent-runtime-habitat`, `omp-fleet`,
-  `sync-close-prompt`, `windows-input` y las cuatro integraciones runtime de OS.
-  `.omp/config.yml` repite ese conjunto y suma `omp-profiles`, porque una lista
-  project-local reemplaza, no fusiona, `extensions`. Los wrappers bajo
-  `~/.omp/agent/extensions/` eran inertes frente a la lista explícita y quedan
-  retirados; `extensions/` es la única fuente durable.
-- Paridad workstation revalidada en PC `JP` y notebook `ASUS`: repo,
-  configuración global y perfil administrado coinciden. El binario compilado de
-  esta PC quedó actualizado a OMP 18.1.10; la notebook conserva su despliegue
-  previo hasta la próxima sincronización explícita.
-  El audit del laboratorio inyecta un provider sintético sin red para probar
-  discovery sin depender del auth privado del host y normaliza CRLF al validar
-  el índice generado; por eso el mismo checkout audita en ambas workstations.
-- Defaults efectivos auditados con `omp config`: `edit.autoRepair.enabled=true`,
-  `task.prewalk=false`, `advisor.enabled=false` y
-  `advisor.syncBacklog=off`. Luna queda limitada a roles o flows cortos
-  seleccionados explícitamente; no gobierna el runtime global.
-- `windows-input.ts` es el entrypoint estable: registra el selector granular y
-  carga el editor opcional 18.1.10. Sólo `windows-input-native.ts` posee
-  `/windows-input`; no hay comando diagnóstico duplicado ni hotkeys de modelos.
-- WinInput soporta selección editable por teclado y undo Windows sobre el
-  prompt. No activa mouse reporting: la rueda normal recorre el scrollback de
-  WezTerm y el mouse selecciona texto del terminal; `Shift + flechas` crea la
-  selección editable. `Ctrl+Z` deshace texto y ediciones de rango. `Ctrl+C`
-  copia una selección, limpia un draft no vacío como edición reversible y es
-  inerte cuando el draft ya está vacío, por lo que un doble toque accidental no
-  cierra OMP. Smoke real sobre el binario activo restauró `recuperar esto` tras
-  `Ctrl+C`, `Ctrl+C`, `Ctrl+Z`.
-- Perfil experimental reversible en `profiles/deepseek-lab.yml`: Pro `high` como `default/slow/plan`, Flash `low` como `smol/task/tiny`, cycling `default -> smol` y prewalk activo. Se lanza con `omp --config profiles/deepseek-lab.yml`; el overlay no cambia auth, sesiones ni configuración global.
-- Baseline OpenRouter 2026-08-18: una corrida normal mostró Pro TTFT 1732 ms/duración 2297 ms y Flash 690/1557; el par cold/warm costó `$0.00262823616` Pro vs `$0.0004993065` Flash. Es sólo precio/latencia de esa corrida, no el costo actual de la cuenta DeepSeek.
-- Smoke comparativo 2026-08-18: Luna Max padre+hijo pasó 3 tests en 165.51 s; DeepSeek Pro `max` padre + Flash `low` hijo pasó los mismos 3 tests en 138.33 s (-16.4%). DeepSeek padre reportó `$0.08508346308`; Codex sólo expuso cuota gruesa 96%, sin costo unitario. Fixture temporal en `tmp/`, no durable.
-- Estado de costo DeepSeek 2026-08-18: el usuario confirmó una única API key y que el plan comenzó ese día; el panel del proveedor mostró `$4.31` y 1.180 requests. `omp stats` usa 24 horas por defecto y mostró 527 filas/$1.25; el panel DeepSeek es la autoridad de facturación y OMP puede subcontar requests no persistidas.
-- Perfil visual global sobre OMP 18.1.10: la extensión registra `Ctrl+Alt+O`; en
-  esta workstation, WezTerm convierte el chord físico `Ctrl+Shift+M` en esa
-  secuencia privada. El selector modal opera sobre el transcript nativo y
-  controla thinking, preámbulos, métricas por turno, actividad global y tools
-  individuales; todos los `TranscriptContainer`, incluido el staging de
-  startup/replay, reciben la misma política. Incluye presets atómicos
-  `Conversación limpia`, `Trabajo enfocado` y `Diagnóstico`; permite guardar,
-  aplicar y eliminar perfiles nombrados globales bajo
-  `display.transcriptVisibilityProfiles`. Estado global actual: perfil `zen`,
-  con thinking, preámbulos, métricas y toda la actividad de tools ocultos.
-  El smoke real de 18.1.10 verificó el selector con sus tres presets, los
-  perfiles `main` y `zen`, 41 opciones y `Windows input: on`; los 22 tests
-  focales cubren filtrado y persistencia.
-- Espejo Markdown local: `extensions/live-markdown.ts` consume eventos oficiales
-  sólo en sesiones TUI y materializa inmediatamente un archivo por sesión bajo
-  `C:/dev/omp-live/<repo>/<fecha>/`. La fecha y hora provienen del header
-  persistido; el nombre usa pane y session id completo.
-  Es una vista de lectura organizada por turnos: conserva cada prompt `user`
-  como cita, mantiene intacta la respuesta final en Markdown crudo y, mientras
-  trabaja, concentra preámbulos públicos e intents de tools en un único bloque
-  `En curso` mutable. El bloque desaparece al comenzar la respuesta final;
-  thinking, argumentos, resultados y payloads de tools nunca se copian.
-  La inclusión de prompts es deliberada y queda limitada a estos archivos
-  locales fuera de Git; imágenes y adjuntos no se materializan.
-  Las escrituras coalescen el último snapshot y todo I/O corre fuera del
-  lifecycle de OMP: fallar el destino sólo registra el error.
-  `/live-markdown` informa la ruta activa. Diez tests focales cubren sesiones
-  metadata-only, filtrado, prompts, progreso transitorio, reconstrucción
-  cronológica y finalización.
-- El launcher único es `~/.bun/bin/omp.exe`, actualmente `omp/18.1.10`, con el
-  addon Win32 publicado embebido y el patch workstation vigente. Además de los
-  filtros granulares, el core usa 272k como límite económico de dispatch para
-  Sol/Luna: al recibir un tool result que cruza el límite compacta
-  sincrónicamente o aborta antes de otra request. La revisión del rebase confirmó
-  que la estimación pre-dispatch incluye prompt y schemas no-message, mensajes
-  persistidos y mensajes pendientes; el señalamiento previo de subconteo era un
-  falso positivo. El deploy canónico `bun run deploy:omp -- <artifact>` exige el
-  PE exacto, valida el staging antes de retirar `omp.com`, usa backups únicos aun
-  con sesiones previas mapeadas y restaura el launcher anterior ante fallo; el
-  audit rechaza colisiones.
-- Propuesta upstream de granularidad publicada el 2026-08-25 en
-  [Discord `#feature-requests`](https://discord.com/channels/1465833614603325562/1465867712000692459/1541865268798820362):
-  settings y rendering general en core; shortcuts, presets y perfiles en la
-  extensión. Se vinculó el issue `#2158`. La implementación/PR upstream espera
-  dirección del maintainer, como exige `CONTRIBUTING.md` para cambios amplios de
-  UI; el build downstream 18.1.10 permanece estable mientras tanto.
-- OMP 18.1.10 aporta links Markdown locales mediante OSC 8, `/switch` para
-  cambios de modelo limitados a la sesión, resultados estructurados de Task y
-  correcciones de replay, retry, compactación y TUI. `tui.hyperlinks=auto`
-  detecta WezTerm; su handler `open-uri` abre únicamente `file://` en VS Code y
-  conserva HTTP(S) en el navegador. Las tools nativas `browser` y `computer`
-  quedan deshabilitadas globalmente y en este proyecto porque desde 18.1.9 se
-  inyectan como preludios de `eval`; AXI sigue siendo la única superficie web
-  interactiva autorizada.
-- Selección de modelos: el mecanismo elegido es el hub nativo de OMP
-  (`Alt+M`/`/models`, Roles) y `/switch` para cambios temporales. Se retiraron
-  los favoritos y el ciclo custom; `Ctrl+P` queda con el comportamiento nativo
-  de OMP, salvo overrides de un overlay. Los perfiles de modelos siguen
-  reservados para overlays completos de sesión; los perfiles de visibilidad son
-  preferencias UI independientes.
-- Cliente RPC: `src/omp-rpc-client.ts`, protocolo v2 con JSONL, ids, `rpc_chunk`, settle terminal y controles host correlacionados.
-- Fleet: `extensions/omp-fleet.ts` es la fuente directa de `/fleet`; un RPC por
-  repo, concurrencia acotada, control por run id y artifacts sanitizados en
-  `artifacts/fleet/<run-id>/`. La cancelación de un worker activo espera el ack
-  por hasta 5 segundos y luego cierra el transporte; un RPC colgado no bloquea
-  `/fleet cancel`.
-- Cierre multi-repo: `extensions/sync-close-prompt.ts` es la fuente directa de
-  `/cerrar-computadora [foco]`; usa `ctx.ui.setEditorText()` para precargar, sin
-  enviar ni ejecutar, el prompt gobernado por el runbook canónico de Infra.
-- Habitat: `extensions/agent-runtime-habitat.ts` expone contexto runtime,
-  lanzamiento OMP fresco sobre WezTerm, `/orquestar [--critical] [objetivo]`,
-  `/plan-implement-short [--critical] [objetivo]`, `/handoff [foco]` y
-  promoción durable. La tool acepta un workflow cerrado `prewalk|plan-yolo`,
-  target de rol nativo y Advisor opt-in; nunca argv libre.
-  `/plan-implement-short` abre una hija con modelo heredado en split derecho,
-  plan-yolo entrega la implementación a `@smol` y Advisor revisa el corte, sin
-  duplicar plan en el parent. El benchmark nativo corto pasó 8/8 turnos con Sol
-  medium y Luna medium falló en el turno 5, por lo que esta degradación queda
-  limitada al flow corto y `task.prewalk` global permanece apagado.
-  Como el TUI despacha el builtin `/handoff` antes que extensiones, Habitat
-  intercepta sólo el input exacto. Handoff persiste el cierre y abre una hija
-  fresh saved en tab adyacente enfocado, con nombre generacional compartido por
-  sesión y tab y origen intacto como rollback. El handshake conserva canal
-  efímero, dos acks, hash, ownership del pane y fast fail sin persistir prompt,
-  URL ni nonce.
-  Para orquestaciones visibles, `placement:{kind:"window"}` crea un owner en
-  ventana dedicada y sus tabs permanecen agrupados con títulos genealógicos
-  cuya raíz es el título real del tab dispatcher; el nombre de sesión queda como
-  fallback cuando WezTerm no expone ese título. Los launches de orquestación
-  declaran `closeOnComplete:true`: el owner cierra cada worker sólo después de
-  encolar su retorno y el dispatcher cierra el owner después de recibir el
-  resultado consolidado. El cierre usa el adapter y handle exactos conservados
-  en memoria; nunca mata por pane id desnudo ni reclama tabs tras reload/resume.
-  Cada hija registra un mailbox runtime transitorio: su settle reanuda al parent
-  por follow-up, y un orquestador no reporta upstream hasta integrar todas sus
-  hijas. `pending` es semántico: abarca
-  `working|waiting|blocked|attention_required`, completions aún no encolados y
-  el mensaje de integración del parent; no deriva de shells o bootstrap vivos
-  por `onExit:"keep-open"`. Para launches `closeOnComplete`, el parent sondea
-  cada tres segundos el handle exacto que posee: si el pane desaparece antes de
-  publicar un resultado terminal, genera `cancelled` y reanuda la integración.
-  Un completion ya publicado prevalece sobre una cancelación tardía; fallas del
-  probe y panes no poseídos conservan el pending.
-  El completion durable no se retira antes del enqueue y queda reentregable ante
-  restart; `closeOnComplete` cierra sólo después de ese enqueue y también quedó
-  activado para `/plan-implement-short`.
-  El dispatcher conserva un widget persistente con la última transición
-  comprobada; lanzamientos y retornos anidados se propagan automáticamente.
-  `waiting` y `blocked` difieren sólo finales normales: errores y aborts retornan
-  `failed|cancelled`; shutdown cancela primero los descendientes, cierra sus
-  panes owned y luego retorna upstream, evitando el hang observado en Retry.
-  Tras 15 minutos sin actividad aparece `attention_required`;
-  `/runtime-children` inspecciona pending y `/runtime-cancel <launchId>` los
-  reconcilia explícitamente. El janitor retira sólo progress expirado,
-  completions huérfanos fuera de retención y directorios vacíos; nunca borra un
-  pending sin completion.
-  Continuaciones `willContinue` de Advisor o
-  mantenimiento conservan el retorno upstream. El smoke transitivo
-  window → tab → parent pasó el 2026-08-25; estados/widget pasaron el
-  2026-08-26; pending, continuaciones y cierre transitivo pasaron el 2026-08-31;
-  provider Retry, shutdown, recuperación explícita y comando TUI real pasaron el
-  2026-09-01.
-  Los dos comandos conservan su comportamiento normal sin flags. Con
-  `--critical`, la hija u owner espera a integrar y ejecutar checks
-  deterministas, abre un único reviewer final read-only con
-  `openai-codex/gpt-5.6-sol:xhigh`, verifica sus hallazgos materiales y permite
-  como máximo una corrección con recheck, sin loop de reviewers. `/orquestar`
-  confirma además el owner y la observabilidad y devuelve el resultado
-  consolidado a la sesión origen.
-  `agent_runtime_session` exige `hasUI:true`: subagentes Task background
-  devuelven por Task y sus hooks ignoran metadata runtime heredada, evitando que
-  secuestren el pane del owner o contaminen acks/completions.
-  Acks y completions fijan permisos en el temp antes del rename atómico; el
-  publisher no toca el path final después de publicarlo porque el consumer puede
-  claimarlo inmediatamente.
-- Índice: `bun run index`.
-- Audit: `bun run audit`, incluyendo discovery/import real de la extensión con estado temporal y sin modelo.
-- Tests focales del contrato RPC: `bun test`.
+- La workstation `JP` ejecuta `omp/18.1.10` desde `~/.bun/bin/omp.exe`, compilado
+  con el addon Win32 publicado de la misma versión y el delta reproducible
+  `patches/omp-18.1.10-workstation.patch`.
+- La notebook `ASUS` conserva su despliegue anterior hasta una sincronización
+  explícita. Repositorio y perfil administrado ya tienen la configuración nueva.
+- `extensions/` es la fuente durable. `.omp/config.yml` repite el conjunto
+  global y agrega `omp-profiles`, porque OMP reemplaza —no fusiona— la lista
+  `extensions` project-local.
+- `browser.enabled=false` y `computer.enabled=false` mantienen AXI como única
+  superficie web interactiva autorizada. `tui.hyperlinks=auto` activa links
+  Markdown locales; WezTerm abre sólo `file://` en VS Code y conserva HTTP(S)
+  con su comportamiento normal.
+- El selector granular se abre con `Ctrl+Shift+M` en WezTerm
+  (`Ctrl+Alt+O` dentro de OMP). Controla thinking, preámbulos, métricas y
+  actividad por tool; ofrece los presets `Conversación limpia`,
+  `Trabajo enfocado` y `Diagnóstico`, además de perfiles nombrados.
+- WinInput mantiene selección editable por teclado, undo Windows y la semántica
+  segura de `Ctrl+C`. El mouse y la rueda quedan en manos de WezTerm;
+  `Shift + flechas` selecciona dentro del prompt.
+- `extensions/live-markdown.ts` publica una vista de lectura por turnos bajo
+  `C:/dev/omp-live/<repo>/<fecha>/`. Incluye prompts, progreso público
+  transitorio y respuesta final; excluye thinking, argumentos, resultados,
+  system prompts y adjuntos.
+- La selección persistente de modelos usa `Alt+M`/`/models`; `/switch` cambia
+  sólo la sesión viva. `/modo normal|economico|estado` conserva los perfiles
+  gestionados del laboratorio. Los overlays completos siguen en `profiles/`.
+- Habitat administra sesiones visibles y handoffs; Fleet, ejecuciones
+  multi-repo; el cliente RPC, framing y finalización. Sus contratos detallados
+  viven en los topics enlazados abajo, no en esta memoria.
 
-## Invariantes
+## Trabajo abierto
 
-- El workspace contiene fuentes, no auth, sesiones, stores ni caches.
-- `extensions/` es canónico; `.omp/` sólo contiene configuración project-local fina.
-- La extensión Windows delega el render completo a OMP y añade selección
-  visual mediante `decorateText`, sin reemplazar el popup de autocomplete ni
-  interceptar hotkeys de selección de modelos.
-- `/cerrar-computadora` sólo reemplaza el draft del editor. Ejecutar el comando
-  no inicia un turno, no invoca Git y no convierte merge/deploy en parte del
-  cierre cotidiano.
-- Una respuesta RPC acepta un comando; no necesariamente termina un turno.
-- Un `agent_end` sólo finaliza cuando `isTerminal !== false`.
-- Los prompts locales pueden finalizar sin `agent_end` mediante `agentInvoked: false`.
-- Una failure RPC sin id rechaza todos los pending; nunca se asigna por orden o conjetura.
-- Startup RPC tiene timeout finito y resetea/reapea el child ante fallo de ready o negociación.
-- Los observers WezTerm sólo leen artifacts: no poseen workers y cerrarlos no cancela un run.
-- Las solicitudes UI del fleet requieren approve/deny explícito con run id; no se persisten texto crudo de resultados o errores.
-- Habitat falla como `unsupported` cuando falta provider/capability; no investiga ni construye launchers ad hoc. Sólo opera panes creados por la operación y nunca el pane origen.
-- La persistencia de sesión OMP y la vida del pane son independientes: `pane.onExit` decide entre cerrar o volver a un shell limpio; `pane.title` es además el nombre persistido de la sesión y, en tab placement, el título explícito del tab.
-- Catálogo mantenible en `profiles/catalog.json`; `/profiles list|show|activate|prepare`
-  vive en `extensions/omp-profiles.ts`, se descubre desde `.omp/config.yml`.
-  `activate` cambia explícitamente el padre y thinking de la sesión actual;
-  `prepare` conserva `omp --config profiles/<overlay>.yml` para una sesión nueva.
-- El catálogo no promete cambios vivos de Task, `prewalk` o concurrencia si la
-  API nativa no los expone; esos parámetros requieren el overlay completo.
-- Los ocho overlays actuales (`deepseek-lab`, `study-deepseek`,
-  `study-luna-max`, `study-sol-luna`, `codex-economic`,
-  `deepseek-pro-high`, `deepseek-flash-high` y
-  `glm-flash-qwen-coder-minimax`) están allowlisteados. `codex-economic` usa
-  Luna High como padre/Task y conserva Sol en `plan/slow`.
-- `/modo normal|economico|estado` cambia sólo el padre vivo y mantiene un status
-  visible; los roles globales Task/smol/cheap usan Luna High en ambos modos.
-  `/consumo` agrega stats locales por sesión o intervalo; su marcador persiste
-  sólo timestamp y nunca reemplaza la cuota real de `omp usage`.
-- El preset mixto usa GLM 4.7 Flash `low` para lo cotidiano, Qwen3 Coder Next
-  `off` para Task y MiniMax M3 `high` para `slow/plan`; mantiene `prewalk` off.
-  Los presets DeepSeek directos usan `high`; agregar o retirar combinaciones
-  sólo requiere overlay y registro.
+- Sincronizar el binario 18.1.10 en `ASUS` sólo cuando se ejecute el flujo
+  explícito de esa workstation.
+- La propuesta upstream de filtros granulares espera dirección del maintainer;
+  no abrir branch ni PR hasta recibirla.
+- Cada actualización futura de OMP exige `omp update --check`, clone del tag
+  exacto, rebase y tests focales, build con addon coincidente y despliegue
+  exclusivo mediante `bun run deploy:omp -- <artifact>`.
+
+## Invariantes operativas
+
+- El workspace contiene fuentes; nunca auth, sesiones, stores, caches ni
+  artifacts privados.
+- No crear wrappers de extensiones ni implementaciones paralelas de capacidades
+  nativas.
+- El límite económico de dispatch para Sol/Luna es 272k. Si una continuación lo
+  supera, OMP compacta o aborta antes de enviar otra request.
+- Los procesos runtime sólo operan panes que poseen. La persistencia de sesión,
+  el retorno al parent y la vida del pane son contratos separados.
+- `/cerrar-computadora` sólo prepara el draft: no ejecuta Git, deploy ni cierre.
+
+## Verificación vigente
+
+- Rebase 18.1.10: 22 tests focales, 92 assertions y check completo de
+  `packages/coding-agent`.
+- Laboratorio: `bun run audit` y `bun test`.
+- Último smoke: PE e instalación aprobaron `--smoke-test`; el TUI mostró los
+  tres presets, perfiles `main` y `zen`, 41 opciones, `Windows input: on` y un
+  link local.
+- Regenerar el índice tras cambiar topics con `bun run index`.
 
 ## Próxima lectura
 
-Consultar `docs/TOPICS.md`; abrir `topics/agent-runtime-habitat.md`,
-`topics/rpc-client.md`, `topics/omp-fleet.md`, `topics/wezterm-attention.md` o
-`topics/ux-matrix.md` según el cambio.
+- `topics/ux-matrix.md`: OMP/WinInput, filtros, links, modelos y OMP Live.
+- `topics/agent-runtime-habitat.md`: sesiones visibles, handoff y lifecycle.
+- `topics/omp-fleet.md`: workers multi-repo y cancelación.
+- `topics/rpc-client.md`: protocolo RPC y settle.
+- `topics/wezterm-attention.md`: atención del terminal.
