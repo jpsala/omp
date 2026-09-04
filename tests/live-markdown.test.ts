@@ -20,24 +20,83 @@ test("maps repositories under C dev into a centralized familiar tree", () => {
 	expect(external).toMatch(/^C:\\dev\\omp-live\\_externos\\portal--[a-f0-9]{8}$/);
 });
 
-test("creates chronological paths with the complete session identity", () => {
+test("creates readable chronological paths with a stable short identity", () => {
 	const filePath = sessionMarkdownPath({
 		cwd: "C:\\dev\\omp",
 		sessionId: "12345678-abcd-ef00",
 		pane: "2",
+		title: "Diagnóstico del orden en OMP Live",
 		startedAt: new Date(2026, 7, 28, 15, 7),
 	});
 	expect(filePath).toBe(
-		"C:\\dev\\omp-live\\omp\\2026-08-28\\15-07 - pane 2 - 12345678-abcd-ef00.md",
+		"C:\\dev\\omp-live\\omp\\2026-08-28\\15-07 - Diagnóstico del orden en OMP Live - p2 - e6dcb6b8.md",
 	);
 
 	const concurrentPath = sessionMarkdownPath({
 		cwd: "C:\\dev\\omp",
 		sessionId: "12345678-abcd-ef01",
 		pane: "2",
+		title: "Diagnóstico del orden en OMP Live",
 		startedAt: new Date(2026, 7, 28, 15, 7),
 	});
 	expect(concurrentPath).not.toBe(filePath);
+});
+
+test("renames a live mirror when OMP generates its session title", async () => {
+	type EventHandler = (event: unknown, ctx: ExtensionContext) => void;
+	const handlers = new Map<string, EventHandler>();
+	const writes: string[] = [];
+	const moves: Array<[string, string]> = [];
+	let resolveFirstWrite: (() => void) | undefined;
+	const firstWrite = new Promise<void>(resolve => {
+		resolveFirstWrite = resolve;
+	});
+	let sessionName: string | undefined;
+	let resolveSecondWrite: (() => void) | undefined;
+	const secondWrite = new Promise<void>(resolve => {
+		resolveSecondWrite = resolve;
+	});
+	const testApi = {
+		on: (event: string, handler: EventHandler) => {
+			handlers.set(event, handler);
+		},
+		registerCommand: () => {},
+		getSessionName: () => sessionName,
+		logger: { error: () => {} },
+	};
+	liveMarkdown(testApi as unknown as ExtensionAPI, {
+		interactive: true,
+		outputRoot: "C:\\mirror",
+		ensureDirectory: async () => {},
+		writeSnapshot: async path => {
+			writes.push(path);
+			if (writes.length === 1) resolveFirstWrite?.();
+			if (writes.length === 2) resolveSecondWrite?.();
+		},
+		moveSnapshot: async (source, destination) => {
+			moves.push([source, destination]);
+		},
+		touchDirectory: async () => {},
+	});
+
+	const ctx = {
+		cwd: "C:\\dev\\omp",
+		hasUI: true,
+		sessionManager: {
+			getSessionId: () => "session-title",
+			getHeader: () => ({ timestamp: "2026-09-04T10:55:00.000" }),
+			getBranch: () => [],
+		},
+	} as unknown as ExtensionContext;
+	handlers.get("session_start")?.({}, ctx);
+	await firstWrite;
+	sessionName = "Diagnóstico del orden en OMP Live";
+	handlers.get("message_start")?.({ message: { role: "user", content: "Revisá el orden" } }, ctx);
+	await secondWrite;
+
+	expect(writes[0]).toContain(" - Sesión - ");
+	expect(writes[1]).toContain(" - Diagnóstico del orden en OMP Live - ");
+	expect(moves).toEqual([[writes[0], writes[1]]]);
 });
 
 test("creates a clean session file and refreshes its activity directories", async () => {

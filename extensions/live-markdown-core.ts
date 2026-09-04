@@ -238,14 +238,15 @@ function twoDigits(value: number): string {
 }
 
 function sessionFileId(sessionId: string): string {
-	const value = sessionId.trim();
-	return value ? encodeURIComponent(value).replaceAll("*", "%2A") : "sin-id";
+	const value = sessionId.trim() || "sin-id";
+	return createHash("sha256").update(value).digest("hex").slice(0, 8);
 }
 
 export function sessionMarkdownPath(options: {
 	cwd: string;
 	sessionId: string;
 	pane?: string;
+	title?: string;
 	startedAt: Date;
 	outputRoot?: string;
 	devRoot?: string;
@@ -253,11 +254,12 @@ export function sessionMarkdownPath(options: {
 	const { startedAt } = options;
 	const day = `${startedAt.getFullYear()}-${twoDigits(startedAt.getMonth() + 1)}-${twoDigits(startedAt.getDate())}`;
 	const time = `${twoDigits(startedAt.getHours())}-${twoDigits(startedAt.getMinutes())}`;
-	const label = sanitizeFileSegment(options.pane ? `pane ${options.pane}` : "sesión", "sesión");
+	const title = sanitizeFileSegment(options.title ?? "", "Sesión");
+	const pane = sanitizeFileSegment(options.pane ? `p${options.pane}` : "sin pane", "sin pane");
 	const id = sessionFileId(options.sessionId);
 	return win32.join(
 		repositoryMirrorDirectory(options.cwd, options.outputRoot, options.devRoot),
 		day,
-		`${time} - ${label} - ${id}.md`,
+		`${time} - ${title} - ${pane} - ${id}.md`,
 	);
 }

@@ -1,4 +1,4 @@
-import { mkdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, rename, utimes, writeFile } from "node:fs/promises";
 import { basename, win32 } from "node:path";
 import type {
 	ExtensionAPI,
@@ -18,6 +18,7 @@ export interface LiveMarkdownDependencies {
 	outputRoot?: string;
 	ensureDirectory?: (path: string) => Promise<void>;
 	writeSnapshot?: (path: string, content: string) => Promise<void>;
+	moveSnapshot?: (source: string, destination: string) => Promise<void>;
 	touchDirectory?: (path: string, timestamp: Date) => Promise<void>;
 }
 
@@ -26,6 +27,8 @@ interface MirrorRuntime {
 	document: LiveMarkdownDocument;
 	filePath: string;
 	sessionId: string;
+	startedAt: Date;
+	pane?: string;
 	generating: boolean;
 	directoryReady: boolean;
 	writeRunning: boolean;
@@ -77,6 +80,7 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 		(async (path: string, content: string): Promise<void> => {
 			await writeFile(path, content, "utf8");
 		});
+	const moveSnapshot = dependencies.moveSnapshot ?? rename;
 	const touchDirectory =
 		dependencies.touchDirectory ??
 		(async (path: string, timestamp: Date): Promise<void> => {
@@ -89,9 +93,25 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 			const content = current.pendingContent;
 			current.pendingContent = undefined;
 			try {
+				const desiredPath = sessionMarkdownPath({
+					cwd: current.ctx.cwd,
+					sessionId: current.sessionId,
+					pane: current.pane,
+					title: pi.getSessionName?.(),
+					startedAt: current.startedAt,
+					outputRoot,
+				});
 				if (!current.directoryReady) {
-					await ensureDirectory(win32.dirname(current.filePath));
+					await ensureDirectory(win32.dirname(desiredPath));
 					current.directoryReady = true;
+				}
+				if (desiredPath !== current.filePath) {
+					try {
+						await moveSnapshot(current.filePath, desiredPath);
+					} catch (error) {
+						if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+					}
+					current.filePath = desiredPath;
 				}
 				await writeSnapshot(current.filePath, content);
 				const timestamp = new Date();
@@ -173,9 +193,12 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 					sessionId,
 					pane: process.env.WEZTERM_PANE,
 					startedAt,
+					title: pi.getSessionName?.(),
 					outputRoot,
 				}),
 				sessionId,
+				startedAt,
+				pane: process.env.WEZTERM_PANE?.trim() || undefined,
 				generating: false,
 				directoryReady: false,
 				writeRunning: false,

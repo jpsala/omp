@@ -28,9 +28,10 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   segura de `Ctrl+C`. El mouse y la rueda quedan en manos de WezTerm;
   `Shift + flechas` selecciona dentro del prompt.
 - `extensions/live-markdown.ts` publica una vista de lectura por turnos bajo
-  `C:/dev/omp-live/<repo>/<fecha>/`. Incluye prompts, progreso público
-  transitorio y respuesta final; excluye thinking, argumentos, resultados,
-  system prompts y adjuntos.
+  `C:/dev/omp-live/<repo>/<fecha>/`. Los archivos usan el título nativo de OMP,
+  pane y un digest corto; cada escritura propaga actividad a las carpetas para
+  el orden `modified`. Incluye prompts, progreso público transitorio y respuesta
+  final; excluye thinking, argumentos, resultados, system prompts y adjuntos.
 - La selección persistente de modelos usa `Alt+M`/`/models`; `/switch` cambia
   sólo la sesión viva. `/modo normal|economico|estado` conserva los perfiles
   gestionados del laboratorio. Los overlays completos siguen en `profiles/`.

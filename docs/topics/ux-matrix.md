@@ -124,11 +124,12 @@ El texto normal del asistente permanece mutable hasta `message_end`, por lo que
 el renderer nativo no puede retirarlo de forma segura al scrollback mientras
 crece. Para lectura paralela sin otro delta core, `extensions/live-markdown.ts`
 consume `message_update` y publica Markdown local por sesión en
-`C:/dev/omp-live/<repo>/<fecha>/`. Usa la rama persistida como base, reemplaza
-el snapshot vivo con debounce de 60 ms y conserva el session id completo en el
-nombre. La fecha y hora salen del header de sesión, no del instante de una
-recarga o switch. Dos procesos concurrentes con ids distintos no comparten
-archivo.
+`C:/dev/omp-live/<repo>/<fecha>/`. Usa la rama persistida como base y reemplaza
+el snapshot vivo con debounce de 60 ms. El nombre combina hora, título nativo
+de OMP, pane y un digest estable de ocho caracteres; el session id completo
+permanece en el frontmatter. Si OMP genera o cambia el título después de crear
+el mirror, la siguiente escritura renombra el archivo. Dos sesiones distintas
+no comparten archivo.
 
 El mirror es una vista de lectura por turnos, independiente de la visibilidad
 diagnóstica del transcript. Cada turno cita el texto `user` antes de la

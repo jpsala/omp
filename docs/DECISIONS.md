@@ -826,3 +826,17 @@ directorios desde la fecha de la sesión hasta el hijo inmediato de la raíz de
 salida. No toca la raíz ni cambia nombres o fechas de sesión. Así la actividad
 se propaga en todos los niveles de la jerarquía relativa bajo `C:/dev` y el
 orden `modified` muestra arriba el proyecto activo.
+
+## 2026-09-04 — OMP Live reutiliza el título nativo de sesión
+
+OMP ya genera y persiste un título breve a partir del primer prompt útil. OMP
+Live no debe duplicar esa llamada con otro modelo: usa `getSessionName()` como
+fuente y reserva Luna Low sólo para migrar mirrors históricos sin título nativo.
+
+El nombre visible pasa a ser
+`<hora> - <título> - p<pane> - <digest>.md`. El digest estable de ocho
+caracteres evita colisiones; el session id completo sigue en el frontmatter.
+Una sesión inicialmente sin título usa `Sesión` y el productor renombra el
+archivo en una escritura posterior cuando OMP publica el título. Esto reemplaza
+la decisión de conservar el UUID completo en el filename, no su identidad
+dentro del documento.
