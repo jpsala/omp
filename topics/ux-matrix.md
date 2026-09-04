@@ -1,7 +1,7 @@
 # UX surfaces: native, port or discard
 
 Status: active
-Summary: Matriz durable de Windows input, status/cuota, renderers y atención WezTerm revalidada sobre OMP 18.1.6.
+Summary: Matriz durable de Windows input, status/cuota, links locales, renderers y atención WezTerm revalidada sobre OMP 18.1.10.
 
 ## Criterio
 
@@ -13,11 +13,12 @@ Summary: Matriz durable de Windows input, status/cuota, renderers y atención We
 
 | Superficie | Clasificación | Evidencia verificada | Acción |
 | --- | --- | --- | --- |
-| Windows input y clipboard | **integración deliberada sobre editor nativo** | OMP 18.1.6 ya posee clipboard, paste, VT input y mitigaciones ConPTY. `windows-input-native.ts` conserva únicamente la selección editable por teclado, undo Windows y la semántica verificada de `Ctrl+C`; delega render y autocomplete al editor OMP. El build activo embebe el addon Win32 18.1.6 publicado. | Cargar `extensions/windows-input.ts` directamente. Mantener un único registro de `/windows-input` en la implementación nativa; no conservar wrappers, diagnóstico duplicado ni selección paralela de modelos. |
-| Status/footer | **native**; **descartar** un footer paralelo | OMP 18.1.6 documenta e implementa `statusLine.preset`, separators y custom segments. | Hablar de `statusLine`, el nombre real. Configurar presets/segments sólo cuando exista un objetivo medible. |
-| Quota/usage en status | **nativa + enriquecimiento AOS acotado** | OMP 18.1.6 registra el segmento `usage`, muestra ventanas y resets del provider, y expone `omp usage`. AOS Budget publica el valor de su forecast laboral y Work Mode lo combina en un único estado `N/normal` o `N/económico`; refresca en lifecycle con cache de un minuto y no crea un timer de polling. | Conservar `usage` como meter y porcentaje autoritativos. Mostrar únicamente `N/modo`, sin las etiquetas `ritmo` o `modo`; porcentaje proyectado, reserva, créditos y detalle permanecen en `/aos-budget`. |
-| Modelos y esfuerzos rápidos | **native** | `modelRoles` acepta selectores con sufijo de effort; `modelTags` nombra roles; `cycleOrder` es el ciclo nativo de `Ctrl+P`/`Ctrl+Shift+P`; `/models` permite editar Roles y `Alt+M` selecciona el modelo de la sesión. | Usar `Alt+M`/`/models` como única superficie local de selección; no agregar favoritos, renderers ni hotkeys paralelos. Reservar overlays/perfiles para Task, `prewalk` y concurrencia. |
-| Renderers | **native** | OMP 18.1.6 documenta `renderCall`/`renderResult`, message renderer y thinking renderer; `omp gallery` es el visor nativo de estados. | Mantener renderers dentro del contrato nativo sólo cuando una tool local los necesite. No portar un renderer general. |
+| Windows input y clipboard | **integración deliberada sobre editor nativo** | OMP 18.1.10 ya posee clipboard, paste, VT input y mitigaciones ConPTY. `windows-input-native.ts` conserva únicamente la selección editable por teclado, undo Windows y la semántica verificada de `Ctrl+C`; delega render y autocomplete al editor OMP. El build activo embebe el addon Win32 18.1.10 publicado. | Cargar `extensions/windows-input.ts` directamente. Mantener un único registro de `/windows-input` en la implementación nativa; no conservar wrappers, diagnóstico duplicado ni selección paralela de modelos. |
+| Status/footer | **native**; **descartar** un footer paralelo | OMP 18.1.10 documenta e implementa `statusLine.preset`, separators y custom segments. | Hablar de `statusLine`, el nombre real. Configurar presets/segments sólo cuando exista un objetivo medible. |
+| Quota/usage en status | **nativa + enriquecimiento AOS acotado** | OMP 18.1.10 registra el segmento `usage`, muestra ventanas y resets del provider, y expone `omp usage`. AOS Budget publica el valor de su forecast laboral y Work Mode lo combina en un único estado `N/normal` o `N/económico`; refresca en lifecycle con cache de un minuto y no crea un timer de polling. | Conservar `usage` como meter y porcentaje autoritativos. Mostrar únicamente `N/modo`, sin las etiquetas `ritmo` o `modo`; porcentaje proyectado, reserva, créditos y detalle permanecen en `/aos-budget`. |
+| Modelos y esfuerzos rápidos | **native** | `modelRoles` acepta selectores con sufijo de effort; `modelTags` nombra roles; `cycleOrder` es el ciclo nativo de `Ctrl+P`/`Ctrl+Shift+P`; `/models` permite editar Roles, `Alt+M` selecciona el modelo y `/switch <selector>` cambia sólo la sesión viva con compactación preventiva cuando hace falta. | Usar `Alt+M`/`/models` para selección persistente y `/switch` para pruebas temporales; no agregar favoritos, renderers ni hotkeys paralelos. Reservar overlays/perfiles para Task, `prewalk` y concurrencia. |
+| Renderers | **native** | OMP 18.1.10 documenta `renderCall`/`renderResult`, message renderer y thinking renderer; `omp gallery` es el visor nativo de estados. | Mantener renderers dentro del contrato nativo sólo cuando una tool local los necesite. No portar un renderer general. |
+| Links Markdown locales | **nativa + integración WezTerm** | OMP 18.1.10 resuelve links Markdown existentes —rutas relativas al cwd, `file://` e internal URLs file-backed— a OSC 8 `file://`, sin abrir procesos ni resolver recursos remotos. WezTerm detecta el link y `C:/dev/wezterm/config/open_uri.lua` abre archivos y ubicaciones en VS Code. | Mantener `tui.hyperlinks: auto`, que detecta WezTerm; usar links Markdown reales en las respuestas. El handler terminal conserva HTTP(S) en el navegador y limita VS Code al esquema `file`. |
 | WezTerm Attention | **integración deliberada** | El productor existente usa eventos OMP (`agent_start`, `tool_execution_start`, `session_stop`, `tool_call`, `tool_result`) y un marcador atómico consumible por WezTerm. [Extensions](https://github.com/can1357/oh-my-pi/blob/main/docs/extensions.md) documenta el factory y los eventos. | Fuente única en `extensions/wezterm-attention.ts`, cargada directamente por el perfil global y repetida en `.omp/config.yml`; no mantener wrapper. |
 
 ## Mouse en WinInput
@@ -42,12 +43,12 @@ rueda.
 
 ## Filtros nativos del transcript
 
-OMP 18.1.6 puede retirar snapshots comprometidos y reconstruir el transcript
+OMP 18.1.10 puede retirar snapshots comprometidos y reconstruir el transcript
 principal con `resetDisplay()`. Eso permite seguir trabajando con Markdown,
 renderers, streaming y editor normales; el costo es reemplazar la representación
 terminal anterior, no conservarla byte por byte en el scrollback.
 
-El patch downstream durable `patches/omp-18.1.6-workstation.patch` agrega
+El patch downstream durable `patches/omp-18.1.10-workstation.patch` agrega
 `display.hiddenTools`, `display.hideAssistantToolPreambles`,
 `display.transcriptVisibilityProfiles`, la API opcional de visibilidad y el
 ceiling económico de provider dispatch. La política visual cubre thinking,
@@ -62,20 +63,21 @@ no hay progreso. La revisión del rebase confirmó que su estimación suma promp
 schemas no-message, mensajes persistidos y mensajes pendientes; no existe el
 subconteo señalado en la primera pasada del audit.
 
-Revisión contra el tag oficial `v18.1.6`: upstream conserva los toggles
+Revisión contra el tag oficial `v18.1.10`: upstream conserva los toggles
 globales de thinking, actividad de tools y métricas, pero no expone filtros por
-nombre, ocultamiento de preámbulos ni perfiles atómicos. Las reacciones, el
-picker de modelos ampliado y el nuevo status line de extensiones no sustituyen
-esa granularidad downstream. El endurecimiento de filas estables continúa
-congelando publicaciones que retraen bytes ya emitidos en vez de fallar el
-render; es complementario al selector granular. El delta requirió resolver
-conflictos en `ChatTranscriptBuilder`, `TranscriptContainer` y
-`EventController`, preservó las firmas nuevas de timeline de 18.1.6 y pasó los
-22 tests focales, 92 assertions y el check tipado/formato completo de
-`packages/coding-agent`. El smoke TUI real mostró 42 opciones, los perfiles
-`main` y `zen`, y restauró `Windows input: on`. El patch queda fijado a
-`v18.1.6`; cada update posterior exige rebase y tests focales, nunca aplicación
-ciega.
+nombre, ocultamiento de preámbulos ni perfiles atómicos. Los links Markdown
+locales, `/switch`, resultados estructurados de Task y las correcciones de
+compactación se adoptan sin duplicarlos. El endurecimiento de filas estables
+continúa congelando publicaciones que retraen bytes ya emitidos en vez de fallar
+el render; es complementario al selector granular. El rebase preservó la nueva
+resolución de links durante streaming y sólo requirió adaptar un hunk de
+`EventController`.
+El delta pasó 22 tests focales con 92 assertions y el check completo de
+`packages/coding-agent`. El smoke TUI del PE final abrió el selector con los
+tres presets, los perfiles `main` y `zen`, 41 opciones, confirmó
+`Windows input: on` y renderizó un link local existente.
+El patch queda fijado a `v18.1.10`; cada update posterior exige rebase y tests
+focales, nunca aplicación ciega.
 
 ### Promoción upstream
 

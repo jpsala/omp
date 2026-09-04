@@ -13,6 +13,13 @@ compaction:
     - shake
     - soft
 
+browser:
+  enabled: false
+computer:
+  enabled: false
+tui:
+  hyperlinks: auto
+
 extensions:
   - extensions/wezterm-attention.ts
   - extensions/agent-runtime-habitat.ts

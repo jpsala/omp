@@ -771,3 +771,27 @@ callers y concede 5 segundos al ack. Al vencer el plazo cierra el transporte y
 finaliza como abortado; un rechazo explícito previo restaura la posibilidad de
 éxito. Así se preserva la semántica de rechazo existente sin depender de que un
 worker colgado coopere.
+
+## 2026-09-04 — Rebase granular sobre OMP 18.1.10 y links locales
+
+OMP 18.1.10 incorpora correcciones de replay de reasoning, retries transitorios,
+compactación remota y estabilidad TUI, además de resultados estructurados de
+Task, `/switch` y links Markdown locales. Se adoptan esas superficies nativas
+sin duplicarlas. Los links existentes se convierten en OSC 8 `file://`;
+WezTerm abre sólo ese esquema en la ventana reutilizada de VS Code y conserva
+HTTP(S) con su comportamiento predeterminado.
+
+Desde 18.1.9, las capacidades nativas `browser` y `computer` se inyectan como
+preludios de `eval`, fuera del bloqueo por nombre de tool de la extensión AXI.
+Quedan deshabilitadas en los perfiles global y local. AXI continúa como única
+superficie web interactiva autorizada y Computer permanece opt-in para
+aplicaciones de escritorio no-browser.
+
+El delta granular queda fijado en
+`patches/omp-18.1.10-workstation.patch`. El rebase sólo requirió adaptar el hunk
+de `EventController` para conservar la resolución upstream de links durante
+streaming. Pasó 22 tests focales con 92 assertions y el check completo de
+`packages/coding-agent`. El PE embebe el addon Win32 18.1.10 publicado:
+`--smoke-test` pasó antes y después del deploy canónico. El smoke TUI real
+verificó los presets, los perfiles `main` y `zen`, 41 opciones y
+`Windows input: on`.
