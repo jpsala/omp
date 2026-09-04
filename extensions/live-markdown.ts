@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { mkdir, utimes, writeFile } from "node:fs/promises";
+import { basename, win32 } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -18,6 +18,7 @@ export interface LiveMarkdownDependencies {
 	outputRoot?: string;
 	ensureDirectory?: (path: string) => Promise<void>;
 	writeSnapshot?: (path: string, content: string) => Promise<void>;
+	touchDirectory?: (path: string, timestamp: Date) => Promise<void>;
 }
 
 interface MirrorRuntime {
@@ -46,6 +47,19 @@ function repositoryName(cwd: string): string {
 	return basename(cwd.replace(/[\\/]+$/, "")) || cwd;
 }
 
+function activityDirectories(filePath: string, outputRoot: string): string[] {
+	const root = win32.resolve(outputRoot);
+	const directories: string[] = [];
+	let current = win32.dirname(filePath);
+	while (current !== root) {
+		const relative = win32.relative(root, current);
+		if (win32.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${win32.sep}`)) break;
+		directories.push(current);
+		current = win32.dirname(current);
+	}
+	return directories;
+}
+
 
 export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdownDependencies = {}): void {
 	let runtime: MirrorRuntime | undefined;
@@ -63,6 +77,11 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 		(async (path: string, content: string): Promise<void> => {
 			await writeFile(path, content, "utf8");
 		});
+	const touchDirectory =
+		dependencies.touchDirectory ??
+		(async (path: string, timestamp: Date): Promise<void> => {
+			await utimes(path, timestamp, timestamp);
+		});
 
 	const drainWrites = async (current: MirrorRuntime): Promise<void> => {
 		current.writeRunning = true;
@@ -71,12 +90,18 @@ export default function liveMarkdown(pi: ExtensionAPI, dependencies: LiveMarkdow
 			current.pendingContent = undefined;
 			try {
 				if (!current.directoryReady) {
-					await ensureDirectory(dirname(current.filePath));
+					await ensureDirectory(win32.dirname(current.filePath));
 					current.directoryReady = true;
 				}
 				await writeSnapshot(current.filePath, content);
+				const timestamp = new Date();
+				await Promise.all(
+					activityDirectories(current.filePath, outputRoot).map(directory =>
+						touchDirectory(directory, timestamp),
+					),
+				);
 			} catch (error) {
-				pi.logger.error("Live Markdown write failed", {
+				pi.logger.error("Live Markdown filesystem update failed", {
 					error: error instanceof Error ? error.message : String(error),
 					filePath: current.filePath,
 				});

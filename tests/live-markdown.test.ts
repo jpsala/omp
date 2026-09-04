@@ -40,14 +40,19 @@ test("creates chronological paths with the complete session identity", () => {
 	expect(concurrentPath).not.toBe(filePath);
 });
 
-test("creates a clean session file before the first useful answer", async () => {
+test("creates a clean session file and refreshes its activity directories", async () => {
 	type EventHandler = (event: unknown, ctx: ExtensionContext) => void;
 	const handlers = new Map<string, EventHandler>();
 	let writtenPath = "";
 	let writtenContent = "";
+	const touchedDirectories: string[] = [];
 	let resolveWrite: (() => void) | undefined;
 	const writeComplete = new Promise<void>(resolve => {
 		resolveWrite = resolve;
+	});
+	let resolveActivity: (() => void) | undefined;
+	const activityComplete = new Promise<void>(resolve => {
+		resolveActivity = resolve;
 	});
 	const testApi = {
 		on: (event: string, handler: EventHandler) => {
@@ -65,6 +70,10 @@ test("creates a clean session file before the first useful answer", async () => 
 			writtenContent = content;
 			resolveWrite?.();
 		},
+		touchDirectory: async path => {
+			touchedDirectories.push(path);
+			if (touchedDirectories.length === 2) resolveActivity?.();
+		},
 	});
 
 	const timestamp = "2026-09-03T08:40:11.934";
@@ -78,12 +87,13 @@ test("creates a clean session file before the first useful answer", async () => 
 		},
 	} as unknown as ExtensionContext;
 	handlers.get("session_start")?.({}, ctx);
-	await writeComplete;
+	await Promise.all([writeComplete, activityComplete]);
 
 	expect(writtenPath).toContain("C:\\mirror\\omp\\2026-09-03\\08-40");
 	expect(writtenContent).toContain('session_id: "session-empty"');
 	expect(writtenContent).toContain("status: idle");
 	expect(writtenContent).not.toContain("## Agente");
+	expect(touchedDirectories).toEqual(["C:\\mirror\\omp\\2026-09-03", "C:\\mirror\\omp"]);
 });
 
 test("does not publish RPC or headless sessions", () => {

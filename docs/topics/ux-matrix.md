@@ -148,10 +148,13 @@ el único cuerpo del agente.
 Cada sesión TUI materializa desde `session_start` un archivo metadata-only, aun
 antes de producir un prompt o respuesta; las sesiones background/headless no
 publican. La cola coalesce snapshots pendientes y ejecuta
-`mkdir`/`writeFile` sin hacer esperar eventos de agente, mensaje o sesión. Un
+`mkdir`/`writeFile` sin hacer esperar eventos de agente, mensaje o sesión.
+Después de cada escritura actualiza el `mtime` de los directorios ancestro hasta
+la raíz de OMP Live, sin tocar esa raíz: así el orden por modificación de VS Code
+propaga la actividad del archivo a la fecha y al proyecto correspondientes. Un
 error del destino se registra y la sesión OMP continúa; cerrar o reiniciar no
-elimina salidas anteriores. La raíz central conserva la jerarquía relativa
-bajo `C:/dev` sin introducir estos documentos en los checkouts.
+elimina salidas anteriores. La raíz central conserva la jerarquía relativa bajo
+`C:/dev` sin introducir estos documentos en los checkouts.
 `/live-markdown` muestra el archivo actual y `OMP_LIVE_MARKDOWN_ROOT` permite
 cambiar sólo la raíz.
 

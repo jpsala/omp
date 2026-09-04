@@ -813,3 +813,16 @@ de registrarse como compatible.
 El audit compartido pasó con un único warning informativo por la ausencia de
 glossary; el audit específico pasó y la suite completa quedó en 185 tests
 aprobados, 1 skip y 910 assertions.
+
+## 2026-09-04 — La actividad de OMP Live se propaga a sus carpetas
+
+VS Code ordena carpetas por el `mtime` de cada carpeta, no por la modificación
+recursiva de sus archivos. Reescribir una sesión actualizaba únicamente el
+Markdown; por eso el proyecto permanecía en su posición aunque la sesión
+estuviera activa.
+
+Después de cada snapshot exitoso, OMP Live actualiza con un mismo timestamp los
+directorios desde la fecha de la sesión hasta el hijo inmediato de la raíz de
+salida. No toca la raíz ni cambia nombres o fechas de sesión. Así la actividad
+se propaga en todos los niveles de la jerarquía relativa bajo `C:/dev` y el
+orden `modified` muestra arriba el proyecto activo.
