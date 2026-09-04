@@ -58,6 +58,18 @@ test("sets runtime markers from the actual child pane and scrubs recursion marke
   }
 });
 
+test("uses native Orca pane identity before inherited WezTerm identity", () => {
+  const environment = buildChildEnvironment(metadata, {
+    ORCA_PANE_KEY: "tab-orca:leaf-orca",
+    ORCA_TAB_ID: "tab-orca",
+    ORCA_WORKTREE_ID: "worktree-orca",
+    WEZTERM_PANE: "91",
+    WEZTERM_UNIX_SOCKET: "socket-1",
+  });
+  expect(environment.OMP_RUNTIME_PANE_ID).toBe("tab-orca:leaf-orca");
+  expect(environment.OMP_RUNTIME_INSTANCE).toBe("worktree-orca");
+});
+
 test("keeps the pane open in a clean interactive shell after OMP exits", async () => {
   const calls: Array<{ program: string; args: string[]; env: NodeJS.ProcessEnv }> = [];
   const exitCodes = [7, 0];

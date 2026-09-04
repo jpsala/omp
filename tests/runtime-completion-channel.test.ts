@@ -131,6 +131,10 @@ test("rejects unsafe completion identities", async () => {
     await expect(store.register({ ...pending("launch-a"), parentSessionId: "../escape" })).rejects.toThrow("invalid pending");
     await expect(store.publish({ ...completion("launch-a"), summary: "" })).rejects.toThrow("invalid child completion");
     expect(await store.consume("../escape")).toEqual({ completions: [], progress: [], remaining: 0 });
+    const orca = pending("launch-orca");
+    orca.paneId = "tab-id:leaf-id";
+    await expect(store.register(orca)).resolves.toBeUndefined();
+    await expect(store.register({ ...pending("launch-bad-pane"), paneId: "../escape" })).rejects.toThrow("invalid pending");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

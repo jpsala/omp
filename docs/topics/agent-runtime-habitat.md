@@ -11,6 +11,8 @@ triggers:
 primary_refs:
   - extensions/agent-runtime-habitat.ts
   - scripts/runtime-child-bootstrap.ts
+  - src/runtime-host-orca.ts
+  - scripts/runtime-orca-command-bootstrap.ts
   - tests/agent-runtime-habitat.test.ts
 ---
 
@@ -33,8 +35,8 @@ parent no investiga para cerrar un plan completo ni implementa. Sin argumento
 deriva la solicitud accionable inmediatamente anterior; si no existe un objetivo
 recuperable, pide sólo ese dato y no abre una sesión.
 
-La hija es fresh saved, hereda modelo y cwd, abre un split derecho al 50%,
-conserva el foco en el parent y usa `onExit: "keep-open"`. El request declara
+La hija es fresh saved, hereda modelo y cwd, abre un split derecho al 50% en
+el host actual, conserva el foco en el parent y usa `onExit: "keep-open"`. El request declara
 exactamente `workflow: { mode: "plan-yolo", target: "@smol", advisor: true }`.
 OMP recibe el workflow nativo plan-yolo: la hija produce el plan y aplica el
 cambio patch-specific, en vez de recibir un plan completo preparado por el
@@ -45,14 +47,15 @@ El pane recibe un título corto `Implementador · <objetivo>`. El parent no abre
 panes adicionales ni monitorea al child después del handshake. Salir de OMP
 devuelve a un PowerShell limpio en el mismo split, en vez de eliminarlo.
 
-### Orquestación visible en ventana
+### Orquestación visible en superficie dedicada
 
 `/orquestar [objetivo]` convierte la sesión actual en dispatcher y lanza
 exactamente un owner fresh saved con modelo heredado, `focus:true`,
 `onExit:"keep-open"`, `closeOnComplete:true` y
-`placement:{kind:"window"}`. Sin argumento deriva la solicitud accionable
-inmediatamente anterior; si no existe, pide sólo el objetivo y no abre una
-ventana.
+`placement:{kind:"window"}`. WezTerm abre una ventana dedicada; Orca, que no
+expone una primitiva de ventana en su CLI, abre un tab dedicado del mismo
+worktree. Sin argumento deriva la solicitud accionable inmediatamente anterior;
+si no existe, pide sólo el objetivo y no abre una sesión.
 
 El dispatcher sólo construye un kickoff autocontenido. El owner decide si
 delegar aporta valor: puede trabajar solo o fijar contratos, dependencias y
@@ -61,8 +64,8 @@ orquestación declara `closeOnComplete:true`: el owner cierra sus workers cuando
 ya recibió el resultado, y el dispatcher cierra el owner cuando recibe el
 resultado consolidado. Paraleliza únicamente frentes independientes, integra
 todos los retornos automáticos y verifica el conjunto antes de responder
-upstream. El dispatcher no abre workers, no monitorea la ventana y un fallo de
-launch no crea una segunda. Tras el handshake confirma owner, pane y session id,
+upstream. El dispatcher no abre workers, no monitorea la superficie del owner y
+un fallo de launch no crea una segunda. Tras el handshake confirma owner, pane y session id,
 pero no queda en silencio: mantiene un widget persistente con el último estado
 comprobado y el retorno automático.
 
@@ -110,19 +113,28 @@ El nombre de la hija deriva del nombre actual con generación incremental
 (`<nombre> · 2`, `<nombre> · 3`); el mismo valor se persiste como nombre de
 sesión OMP y título explícito de tab.
 
-El tab nace en la misma ventana e inmediatamente después del tab origen. El
+WezTerm crea el tab en la misma ventana e inmediatamente después del origen. Su
 bootstrap emite `OMP_HANDOFF_AFTER_TAB_ID` como user var con el id decimal del
 origen; la configuración WezTerm canónica mueve sólo el tab que contiene al pane
-emisor. El parent confirma nombre, adyacencia, session id distinta y hash exacto
-antes de considerar exitoso el lanzamiento. Un fallo revierte únicamente el
-pane owned.
+emisor. Orca crea un tab nativo en el mismo worktree; no intenta emular orden ni
+ventanas que su CLI no expone. En ambos hosts el parent confirma nombre, session
+id distinta y hash exacto antes de considerar exitoso el lanzamiento. Un fallo
+revierte únicamente el pane owned.
 
-## Primera implementación
+## Backends de host
 
-- Harness: OMP 17.2.13.
-- Host: WezTerm en Windows.
-- Ubicación: instancia, window, tab y pane se validan por `wezterm cli list --format json`.
-- Split: `split-pane` con pane origen explícito; tab: `spawn` con pane origen explícito.
+- Harness: OMP 18.1.10.
+- WezTerm/Windows: instancia, window, tab y pane se validan por
+  `wezterm cli list --format json`; split usa `split-pane`, tab/window usan
+  `spawn`.
+- Orca 1.4.197/Windows: `ORCA_PANE_KEY`, `ORCA_TAB_ID` y `ORCA_WORKTREE_ID` se
+  validan contra `orca terminal list --json` antes de aceptar el host. Los hints
+  Orca tienen prioridad sobre variables WezTerm heredadas.
+- Orca split usa `orca terminal split` y admite únicamente right/bottom al 50%;
+  tab usa `orca terminal create`; window se traduce explícitamente a tab.
+- El comando de arranque Orca sólo referencia un spec efímero local con modo
+  restrictivo. El bootstrap lo elimina antes de ejecutar la hija, para no
+  persistir el canal privado del prompt en la metadata del terminal.
 - Fresh saved: overlay `runtime/omp-fresh-session.yml` con `autoResume: false`.
 - Fresh ephemeral: `--no-session`.
 - Selección de modelo: el request siempre declara `explicit` o `inherit`;
@@ -156,27 +168,28 @@ origen.
 Todo request de `agent_runtime_session` declara
 `pane: { title, onExit, closeOnComplete? }`. `placement` es opcional: si se
 omite, el runtime abre un split derecho al 50%; `{ kind: "tab" }` crea un tab
-inmediatamente después del origen y `{ kind: "window" }` crea el primer tab de
-una ventana dedicada. Una ubicación split explícita conserva soporte para otra
-dirección. `title` se persiste como nombre de sesión OMP; para tab y window
-placement también se aplica mediante `wezterm cli set-tab-title`.
+nombrado y `{ kind: "window" }` crea una ventana dedicada en WezTerm o un tab
+dedicado en Orca. WezTerm conserva splits en las cuatro direcciones y porcentaje
+explícito; Orca acepta sólo right/bottom al 50%, las geometrías que su CLI puede
+representar sin fingir soporte. `title` se persiste como nombre de sesión OMP y,
+para tab/window, se aplica mediante el comando de rename del host.
 
 Los tabs y ventanas nuevos conservan genealogía visual automáticamente. El
 runtime toma como origen el título real del tab creador leído del probe validado
-de WezTerm y, sólo si ese dato falta, usa el nombre de sesión OMP. Luego antepone
+del host y, sólo si ese dato falta, usa el nombre de sesión OMP. Luego antepone
 `<origen>: <title>`; no lo duplica cuando el título solicitado ya empieza con
 ese origen seguido por `:` o ` · `. Esto conserva el nombre del tab dispatcher
 como raíz común y permite jerarquía anidada (`os: Orquestador: Implementador`).
 Los splits no cambian su título porque no crean otro tab.
 
 `onExit: "close"` conserva el comportamiento nativo: al terminar OMP también
-termina el proceso principal y WezTerm elimina el pane. `onExit: "keep-open"`
+termina el proceso principal y el host elimina el pane. `onExit: "keep-open"`
 inicia un shell interactivo después de OMP, en el mismo `cwd`; Windows usa
 PowerShell 7 y otros hosts usan `$SHELL` o `/bin/sh`. El shell recibe un entorno
 limpio: no hereda metadata `OMP_RUNTIME_*`, el canal efímero del prompt ni
-marcadores de recursión. Cerrar explícitamente un pane normal en WezTerm siempre
-lo elimina. El pane, shell o proceso bootstrap que sobreviva por `keep-open` no
-es trabajo pendiente por sí mismo.
+marcadores de recursión. Cerrar explícitamente un pane normal siempre lo elimina.
+El pane, shell o proceso bootstrap que sobreviva por `keep-open` no es trabajo
+pendiente por sí mismo.
 
 `closeOnComplete:true` es un opt-in distinto de `onExit`: el parent conserva en
 memoria el handle exacto que creó y cierra sólo ese pane después de encolar con
@@ -196,12 +209,12 @@ sobreviviente intacto antes que arriesgar cerrar un pane reutilizado.
 no gobierna la vida del pane. `placement` gobierna únicamente ubicación y tamaño.
 
 La tool es exclusiva de un owner interactivo con `harness.hasUI:true`. Los
-subagentes background de Task pueden heredar variables WezTerm y metadata
+subagentes background de Task pueden heredar variables del host y metadata
 `OMP_RUNTIME_*`, pero no poseen la UI ni el pane: `agent_runtime_session`
 devuelve `unsupported`, y sus hooks no publican acks ni completions heredadas.
-Esos subagentes deben devolver por Task; nunca pueden abrir splits, tabs o
-ventanas visibles usando el pane del parent. El fragmento runtime expone
-`ui=yes|no` para que el agente conozca este gate antes de invocar.
+Esos subagentes deben devolver por Task; nunca pueden abrir sesiones visibles
+usando el pane del parent. El fragmento runtime expone `ui=yes|no` para que el
+agente conozca este gate antes de invocar.
 
 ### Retorno automático y estado observable
 
@@ -445,7 +458,15 @@ continuaciones de Advisor entre turnos; el worker devolvió
 reentrega previa al acknowledgment, enqueue fallido, cleanup fallido y el orden
 enqueue → acknowledgment → cierre.
 
+Smoke Orca del 2026-09-04: un parent validado por `ORCA_PANE_KEY` lanzó
+`/plan-implement-short` en un split del mismo tab. La hija abrió session
+`01a06e04-d95b-7000-8912-300a6eb14d77`, devolvió `ORCA_SPLIT_OK`, reanudó al
+parent y fue cerrada por `closeOnComplete`. El mismo parent ejecutó
+`/orquestar`; Orca creó un tab dedicado con session
+`01a06e05-fe79-7000-8299-cdc6fbb808ff`, el owner devolvió `ORCA_OWNER_OK`, el
+parent integró el retorno y el tab owned desapareció.
+
 El smoke vivo requiere pedido explícito. Para splits debe demostrar mismo tab,
 nuevo pane, session id distinta, modelo esperado y acknowledgment exacto. Para
-orquestación visible debe demostrar ventana dedicada, tabs agrupados, títulos
-genealógicos y retorno automático transitivo hasta el parent.
+orquestación visible debe demostrar la superficie dedicada nativa del host,
+títulos genealógicos y retorno automático transitivo hasta el parent.

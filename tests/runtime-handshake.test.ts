@@ -19,6 +19,19 @@ test("publishes atomically with restrictive modes and consumes once", async () =
   try { const store = createMarkerStore(root); const value = ack(); await store.publish(value); const names = await readdir(root); expect(names).toEqual([`${value.launchId}.session_start.json`]); expect(await store.consume(value.launchId, "session_start")).toEqual(value); expect(await store.consume(value.launchId, "session_start")).toBeUndefined(); }
   finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("accepts native Orca pane keys without weakening launch path safety", async () => {
+  const root = await mkdtemp(join(tmpdir(), "omp-marker-"));
+  try {
+    const store = createMarkerStore(root);
+    const value = ack({ paneId: "tab-id:leaf-id" });
+    await store.publish(value);
+    expect(await store.consume(value.launchId, "session_start")).toEqual(value);
+    await expect(store.publish(ack({ paneId: "../escape" }))).rejects.toThrow("invalid ack");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test("publish tolerates a consumer claiming the final marker immediately after rename", async () => {
   const root = await mkdtemp(join(tmpdir(), "omp-marker-race-"));
   const claimed = join(root, "claimed.json");

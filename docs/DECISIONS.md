@@ -849,9 +849,17 @@ session id y resume, pero ejecuta el mismo OMP con sus tools, perfil y gates. La
 conversación viva permanece en el TUI de OMP; el sidebar `Agent Session History`
 aporta transcript estructurado, últimos turnos, log y acciones de resume, no una
 Chat UI que reemplace el terminal. Task/Hub sigue siendo la orquestación normal;
-Habitat conserva sesiones visibles y handoff; Fleet conserva el trabajo
-multi-repo. Orca orchestration se usa sólo ante pedido explícito y no reemplaza
-esos contratos.
+Habitat conserva la autoridad de sesiones visibles y handoff, ahora mediante
+adapters nativos del host; Fleet conserva el trabajo multi-repo. Orca
+orchestration se usa sólo ante pedido explícito y no reemplaza esos contratos.
+
+Habitat detecta primero la identidad Orca validada para no confundir las
+variables WezTerm heredadas por el proceso lanzador. `/plan-implement-short`
+abre un split Orca derecho al 50%; `/orquestar` traduce su placement `window` a
+un tab dedicado porque Orca no expone una primitiva CLI de nueva ventana. La
+traducción preserva sesión fresh saved, modelo, handshake, retorno automático,
+ownership y `closeOnComplete`; no finge geometrías ni orden de tabs que el host
+no garantiza. WezTerm conserva sin cambios su ventana dedicada y sus placements.
 
 El repo declara únicamente el setup reproducible en `orca.yaml`. Las skills
 oficiales `orca-cli` y `computer-use` viven bajo `~/.agents/skills/` y OMP las
@@ -861,11 +869,11 @@ branch `jpsala/orca-flow` está publicado. Orca Mobile quedó emparejado por LAN
 sin Relay. El recorrido real verificó rich Markdown en el TUI, tabs y splits,
 Source Control y Checks, Computer Use, Task/Hub con un subagente, reinicio
 completo con resume de contexto, reanudación de una sesión OMP existente con su
-transcript visible en `Agent Session History` y `/handoff` desde Orca hacia una
-sesión fresh guardada en WezTerm.
+transcript visible en `Agent Session History`, y los retornos reales de
+`/plan-implement-short` y `/orquestar` dentro de Orca.
 
 La adopción conserva rollback sin migración destructiva: WezTerm y su perfil no
-se modifican y siguen disponibles para Habitat, diagnóstico y recuperación.
+se modifican y siguen disponibles como backend Habitat, diagnóstico y recuperación.
 `Agent sleep` permanece apagado porque un transcript finalizado puede quedar
 visualmente `Working`; el sleep manual sí conserva contexto. Automations OMP no
 se programan todavía porque ejecutan pero no capturan output/usage de forma

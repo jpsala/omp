@@ -1,16 +1,28 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { HANDOFF_AFTER_TAB_ENV } from "./runtime-tab-placement.ts";
+import type {
+  RuntimeHostAdapter,
+  RuntimeHostLocation,
+  RuntimeHostSource,
+  RuntimePaneHandle,
+  RuntimeProcessResult,
+  RuntimeProcessRunner,
+  RuntimeProcessRunOptions,
+  RuntimeSplitRequest,
+  RuntimeTabRequest,
+  RuntimeWindowRequest,
+} from "./runtime-host.ts";
 
-export interface ProcessResult { exitCode: number; stdout: string; stderr: string }
-export interface ProcessRunOptions { stdin?: string | Uint8Array; timeoutMs?: number; env?: NodeJS.ProcessEnv }
-export type ProcessRunner = (executable: string, argv: readonly string[], options?: ProcessRunOptions) => Promise<ProcessResult>;
-export interface WezTermLocation { instanceRef: string; windowId: string; tabId: string; paneId: string; workspace?: string; cwd?: string }
-export interface WezTermSource { instanceRef: string; paneId: string }
-export interface WezTermPaneHandle { instanceRef: string; sourcePaneId: string; ownedPaneId: string; location: WezTermLocation }
-export interface SplitRequest { source: WezTermSource; cwd: string; direction: "left" | "right" | "top" | "bottom"; percent: number; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
-export interface TabRequest { source: WezTermSource; cwd: string; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
-export interface WindowRequest { source: WezTermSource; cwd: string; program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
+export type ProcessResult = RuntimeProcessResult;
+export type ProcessRunOptions = RuntimeProcessRunOptions;
+export type ProcessRunner = RuntimeProcessRunner;
+export type WezTermLocation = RuntimeHostLocation;
+export type WezTermSource = RuntimeHostSource;
+export type WezTermPaneHandle = RuntimePaneHandle;
+export type SplitRequest = RuntimeSplitRequest;
+export type TabRequest = RuntimeTabRequest;
+export type WindowRequest = RuntimeWindowRequest;
 export interface WezTermAdapterOptions { runner?: ProcessRunner; executable?: string; timeoutMs?: number }
 
 const defaultRunner: ProcessRunner = (executable, argv, options = {}) => new Promise((resolve, reject) => {
@@ -28,7 +40,7 @@ function paneAlreadyGone(result: ProcessResult): boolean {
   const detail = result.stderr || result.stdout;
   return result.exitCode !== 0 && /\bno such pane(?:\s+\d+)?\b/i.test(detail);
 }
-export class WezTermHostAdapter {
+export class WezTermHostAdapter implements RuntimeHostAdapter {
   private readonly run: ProcessRunner; private readonly executable: string; private readonly timeoutMs: number; private readonly owned = new Map<string, WezTermPaneHandle>();
   constructor(options: WezTermAdapterOptions = {}) { this.run = options.runner ?? defaultRunner; this.executable = options.executable ?? (process.platform === "win32" ? "wezterm.exe" : "wezterm"); this.timeoutMs = options.timeoutMs ?? 5000; }
   private opts(instanceRef: string, extra: ProcessRunOptions = {}): ProcessRunOptions { return { ...extra, timeoutMs: this.timeoutMs, env: { ...process.env, ...(extra.env ?? {}), WEZTERM_UNIX_SOCKET: instanceRef } }; }

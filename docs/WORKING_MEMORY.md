@@ -35,9 +35,9 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
 - La selección persistente de modelos usa `Alt+M`/`/models`; `/switch` cambia
   sólo la sesión viva. `/modo normal|economico|estado` conserva los perfiles
   gestionados del laboratorio. Los overlays completos siguen en `profiles/`.
-- Habitat administra sesiones visibles y handoffs; Fleet, ejecuciones
-  multi-repo; el cliente RPC, framing y finalización. Sus contratos detallados
-  viven en los topics enlazados abajo, no en esta memoria.
+- Habitat administra sesiones visibles y handoffs mediante adapters nativos de
+  Orca y WezTerm; Fleet, ejecuciones multi-repo; el cliente RPC, framing y
+  finalización. Sus contratos detallados viven en los topics enlazados abajo.
 - Orca `1.4.197` es la interfaz visual principal reversible en `JP`; ejecuta el
   mismo OMP como agente predeterminado y no sustituye su runtime, tools ni
   perfil. Mantiene permisos manuales, PowerShell, el TUI de OMP y el sidebar
@@ -48,8 +48,8 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   bajo `~/.agents/skills/` y OMP las descubre mediante junctions. Task/Hub sigue
   siendo la orquestación normal; Orca orchestration queda disponible sólo ante
   pedido explícito. `OMP Flow` es el workspace diario, limpio y publicado como
-  `jpsala/orca-flow`; `omp` y `os` están registrados como proyectos. WezTerm se
-  conserva intacto como rollback y host de Habitat.
+  `jpsala/orca-flow`; `omp` y `os` están registrados como proyectos. Orca es el
+  host principal de Habitat; WezTerm se conserva intacto como rollback.
 
 ## Trabajo abierto
 
@@ -61,9 +61,10 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   exacto, rebase y tests focales, build con addon coincidente y despliegue
   exclusivo mediante `bun run deploy:omp -- <artifact>`.
 - La adopción verificó el flujo diario completo, Task/Hub real, pairing móvil
-  LAN, reinicio con resume de contexto y `/handoff` a WezTerm. `Terminal
-  attention` sigue habilitado; la evidencia y sus límites viven en
-  `docs/topics/ux-matrix.md` y `docs/DECISIONS.md`.
+  LAN, reinicio con resume de contexto, `/handoff`, `/plan-implement-short` y
+  `/orquestar` nativos en Orca, incluidos split/tab, handshake, retorno
+  automático y cierre owned. `Terminal attention` sigue habilitado; la evidencia
+  y sus límites viven en `docs/topics/ux-matrix.md` y `docs/DECISIONS.md`.
 - Mantener `Agent sleep` apagado y no programar automations OMP: ambos dependen
   de un estado final que puede permanecer visualmente `Working`, y automations
   no captura output/usage confiable. AXI continúa como única superficie web

@@ -20,8 +20,47 @@ const normalizeCwd=(cwd: string): string | undefined => {
   return cwd;
  } catch { return undefined; }
 };
+function orcaPaneKey(value: Record<string, unknown>): string | undefined {
+ const direct=value.paneKey;
+ if(typeof direct==="string"&&direct) return direct;
+ const tabId=value.tabId, leafId=value.leafId;
+ return typeof tabId==="string"&&tabId&&typeof leafId==="string"&&leafId ? `${tabId}:${leafId}` : undefined;
+}
+
+function parseOrcaTerminalList(stdout:string,paneKey:string,tabId:string,worktreeId:string):AgentRuntimeContextV1["location"]|undefined {
+ let parsed:unknown;
+ try{parsed=JSON.parse(stdout);}catch{return undefined;}
+ if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)||!("result" in parsed)) return undefined;
+ const result=parsed.result;
+ if(!result||typeof result!=="object"||Array.isArray(result)||!("terminals" in result)||!Array.isArray(result.terminals)) return undefined;
+ for(const candidate of result.terminals){
+  if(!candidate||typeof candidate!=="object"||Array.isArray(candidate)) continue;
+  const row=candidate as Record<string,unknown>;
+  if(orcaPaneKey(row)!==paneKey||row.tabId!==tabId||row.worktreeId!==worktreeId) continue;
+  if(typeof row.worktreePath!=="string"||!row.worktreePath.trim()) return undefined;
+  const cwd=normalizeCwd(row.worktreePath);
+  if(!cwd) return undefined;
+  return {instanceRef:worktreeId,windowId:worktreeId,tabId,paneId:paneKey,...(typeof row.title==="string"&&row.title.trim()?{tabTitle:row.title.trim()}:{}),workspace:worktreeId,cwd};
+ }
+ return undefined;
+}
+
 export async function detectRuntimeContext(options: HostDetectionOptions={}): Promise<AgentRuntimeContextV1> {
  const env=options.env??process.env;
+ const orcaHinted=!!env.ORCA_PANE_KEY||!!env.ORCA_TAB_ID||!!env.ORCA_WORKTREE_ID;
+ if(orcaHinted){
+  const paneKey=env.ORCA_PANE_KEY, tabId=env.ORCA_TAB_ID, worktreeId=env.ORCA_WORKTREE_ID;
+  if(!paneKey||!tabId||!worktreeId) return unknownContext(options);
+  const run=options.run??defaultRun;
+  const executable=env.ORCA_CLI_COMMAND?.trim()||(process.platform==="win32"?"orca.exe":"orca");
+  try{
+   const probe=await run([executable,"terminal","list","--worktree",`id:${worktreeId}`,"--json"],{timeoutMs:5000,env,cwd:options.cwd});
+   if(probe.status!==0) return unknownContext(options);
+   const location=parseOrcaTerminalList(probe.stdout,paneKey,tabId,worktreeId);
+   if(!location) return unknownContext(options);
+   return {version:1,harness:{id:options.harness?.id??"omp",hasUI:options.harness?.hasUI??false,...(options.harness?.sessionId?{sessionId:options.harness.sessionId}:{}),...(options.harness?.agentDir?{agentDir:options.harness.agentDir}:{}),...(options.harness?.model?{model:options.harness.model}: {})},host:{kind:"terminal",provider:"Orca",trust:"validated-local-probe"},location,capabilities:{sessionPlacement:["split","tab","window-as-tab"]}};
+  }catch{return unknownContext(options);}
+ }
  const hinted=env.TERM_PROGRAM==="WezTerm" || !!env.WEZTERM_PANE || !!env.WEZTERM_UNIX_SOCKET;
  if(!hinted) return unknownContext(options);
  const pane=env.WEZTERM_PANE;

@@ -27,6 +27,7 @@ export interface MarkerFs {
 }
 const nativeFs: MarkerFs = { mkdir, writeFile, rename, readFile, unlink, readdir, chmod };
 const safe = (x: string) => typeof x === "string" && /^[A-Za-z0-9._-]{1,160}$/.test(x);
+const safePane = (x: string) => typeof x === "string" && /^[A-Za-z0-9._:-]{1,200}$/.test(x);
 const stages: AckStage[] = ["session_start", "before_agent_start"];
 const TTL_MS = 60_000;
 export const MARKER_TTL_MS = TTL_MS;
@@ -42,7 +43,7 @@ function validAck(value: unknown, stage: AckStage): value is HandshakeAck {
   if (!value || typeof value !== "object") return false;
   const a = value as HandshakeAck;
   return a.version === 1 && a.stage === stage && safe(a.launchId) && safe(a.nonce) &&
-    safe(a.paneId) && safe(a.sessionId) && typeof a.model === "string" && /^[A-Za-z0-9._:/-]{1,200}$/.test(a.model) &&
+    safePane(a.paneId) && safe(a.sessionId) && typeof a.model === "string" && /^[A-Za-z0-9._:/-]{1,200}$/.test(a.model) &&
     Number.isSafeInteger(a.timestamp) && Math.abs(Date.now() - a.timestamp) <= TTL_MS &&
     (a.promptHash === undefined || /^[a-f0-9]{64}$/.test(a.promptHash)) &&
     (a.sessionName === undefined || (typeof a.sessionName === "string" && !!a.sessionName.trim() && a.sessionName.length <= 500 && !/[\u0000-\u001f\u007f]/.test(a.sessionName))) &&

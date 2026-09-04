@@ -103,12 +103,14 @@ export interface CompletionStore {
 
 const nativeFs: CompletionFs = { chmod, mkdir, readdir, readFile, rename, rmdir, unlink, writeFile };
 const ID = /^[A-Za-z0-9._-]{1,160}$/;
+const PANE_ID = /^[A-Za-z0-9._:-]{1,200}$/;
 const MAX_TITLE = 500;
 const MAX_SUMMARY = 16_000;
 const MAX_PROGRESS_DETAIL = 2_000;
 const COMPLETION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const safeId = (value: unknown): value is string => typeof value === "string" && ID.test(value);
+const safePaneId = (value: unknown): value is string => typeof value === "string" && PANE_ID.test(value);
 const safeTitle = (value: unknown): value is string => typeof value === "string" && !!value.trim() && value.length <= MAX_TITLE && !/[\u0000-\u001f\u007f]/.test(value);
 const safeTimestamp = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) <= Date.now() + 5 * 60_000 && (value as number) >= Date.now() - COMPLETION_TTL_MS;
 const safeStatus = (value: unknown): value is ChildCompletionStatus => value === "completed" || value === "failed" || value === "cancelled";
@@ -123,7 +125,7 @@ function validPending(value: unknown, parentSessionId?: string, requireFresh = t
     && (parentSessionId === undefined || pending.parentSessionId === parentSessionId)
     && safeId(pending.childSessionId)
     && safeTitle(pending.childName)
-    && safeId(pending.paneId)
+    && safePaneId(pending.paneId)
     && Number.isSafeInteger(pending.startedAt)
     && pending.startedAt <= Date.now() + 5 * 60_000
     && (!requireFresh || pending.startedAt >= Date.now() - COMPLETION_TTL_MS);
@@ -138,7 +140,7 @@ function validCompletion(value: unknown, parentSessionId?: string): value is Chi
     && (parentSessionId === undefined || completion.parentSessionId === parentSessionId)
     && safeId(completion.childSessionId)
     && safeTitle(completion.childName)
-    && safeId(completion.paneId)
+    && safePaneId(completion.paneId)
     && safeStatus(completion.status)
     && typeof completion.summary === "string"
     && !!completion.summary.trim()
@@ -155,7 +157,7 @@ function validProgress(value: unknown, parentSessionId?: string): value is Child
     && (parentSessionId === undefined || progress.parentSessionId === parentSessionId)
     && safeId(progress.childSessionId)
     && safeTitle(progress.childName)
-    && safeId(progress.paneId)
+    && safePaneId(progress.paneId)
     && safeProgressState(progress.state)
     && typeof progress.detail === "string"
     && !!progress.detail.trim()

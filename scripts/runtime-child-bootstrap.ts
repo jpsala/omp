@@ -109,9 +109,10 @@ export function buildChildEnvironment(
   metadata: BootstrapMetadata,
   base: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-  const paneId = value(base.WEZTERM_PANE, "WEZTERM_PANE");
-  if (!/^\d+$/.test(paneId)) throw new Error("WEZTERM_PANE must be decimal");
-  const instanceRef = value(base.WEZTERM_UNIX_SOCKET, "WEZTERM_UNIX_SOCKET");
+  const orcaPaneKey = base.ORCA_PANE_KEY;
+  const paneId = value(orcaPaneKey ?? base.WEZTERM_PANE, orcaPaneKey ? "ORCA_PANE_KEY" : "WEZTERM_PANE");
+  if (!orcaPaneKey && !/^\d+$/.test(paneId)) throw new Error("WEZTERM_PANE must be decimal");
+  const instanceRef = value(orcaPaneKey ? base.ORCA_WORKTREE_ID : base.WEZTERM_UNIX_SOCKET, orcaPaneKey ? "ORCA_WORKTREE_ID" : "WEZTERM_UNIX_SOCKET");
   const environment = { ...base };
   for (const marker of RECURSION_MARKERS) delete environment[marker];
   environment.OMP_RUNTIME_LAUNCH_ID = metadata.launchId;

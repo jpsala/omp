@@ -24,6 +24,34 @@ test("detects valid OMP + WezTerm context without secrets", async () => {
   expect(JSON.stringify(value)).not.toContain("WEZTERM_UNIX_SOCKET");
 });
 
+test("prefers a validated Orca host over inherited WezTerm variables", async () => {
+  let received: readonly string[] = [];
+  const orcaEnv = {
+    ...env,
+    ORCA_PANE_KEY: "tab-orca:leaf-orca",
+    ORCA_TAB_ID: "tab-orca",
+    ORCA_WORKTREE_ID: "worktree-orca",
+  };
+  const stdout = JSON.stringify({ result: { terminals: [{ handle: "term-orca", tabId: "tab-orca", leafId: "leaf-orca", worktreeId: "worktree-orca", worktreePath: "C:/dev/omp", title: "OMP" }] } });
+  const value = await detectRuntimeContext({ env: orcaEnv, run: async argv => { received = argv; return { status: 0, stdout }; } });
+  expect(received).toEqual([process.platform === "win32" ? "orca.exe" : "orca", "terminal", "list", "--worktree", "id:worktree-orca", "--json"]);
+  expect(value).toEqual({
+    version: 1,
+    harness: { id: "omp", hasUI: false },
+    host: { kind: "terminal", provider: "Orca", trust: "validated-local-probe" },
+    location: { instanceRef: "worktree-orca", windowId: "worktree-orca", tabId: "tab-orca", paneId: "tab-orca:leaf-orca", tabTitle: "OMP", workspace: "worktree-orca", cwd: "C:/dev/omp" },
+    capabilities: { sessionPlacement: ["split", "tab", "window-as-tab"] },
+  });
+});
+
+test("does not fall through to inherited WezTerm when Orca identity is incomplete or stale", async () => {
+  expect((await detect({ ORCA_PANE_KEY: "tab:leaf" })).host.kind).toBe("unknown");
+  expect((await detect(
+    { ORCA_PANE_KEY: "tab:missing", ORCA_TAB_ID: "tab", ORCA_WORKTREE_ID: "worktree" },
+    JSON.stringify({ result: { terminals: [] } }),
+  )).host.kind).toBe("unknown");
+});
+
 test("degrades to unknown for missing pane, socket, invalid list JSON, and stale pane", async () => {
   for (const overrides of [{ WEZTERM_PANE: undefined }, { WEZTERM_UNIX_SOCKET: undefined }]) expect((await detect(overrides)).host.kind).toBe("unknown");
   expect((await detect({}, "not json")).host.kind).toBe("unknown");
@@ -107,7 +135,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(schema.properties?.workflow.properties).toHaveProperty("target");
     expect(sessionTool?.description).toContain("never model.spec");
     expect(sessionTool?.description).toContain("background Task agents must return through Task");
-    expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-window orchestration owner");
+    expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("dedicated-surface orchestration owner");
     expect(commands.get(ORCHESTRATE_COMMAND)?.description).toContain("--critical");
     const planCommand = commands.get(PLAN_IMPLEMENT_SHORT_COMMAND);
     expect(planCommand?.description).toContain("planning-and-implementation owner");
@@ -166,7 +194,7 @@ test("extension registers context and an explicit nested launch contract", async
     expect(details.harness.model).toEqual({ provider: "openai-codex", id: "gpt-5.6-sol", thinking: "medium" });
 
     const invalid = await sessionTool!.execute("id", { cwd: "C:\\tmp", prompt: "x", placement: { type: "split", direction: "right", size: 50 }, fresh: true, persistence: "saved", model: { type: "inherit" }, focus: false }, new AbortController().signal, () => {}, {});
-    expect(JSON.parse(invalid.content[0].text).reason).toContain("{kind:'window'} for a dedicated window");
+    expect(JSON.parse(invalid.content[0].text).reason).toContain("{kind:'window'} for a dedicated host surface");
     const invalidWorkflow = await sessionTool!.execute("id", {
       cwd: `${agentDir}/missing`,
       prompt: "x",
@@ -604,7 +632,7 @@ test("adds one bounded Sol gate to the critical short implementation flow", () =
   expect(critical.match(/invocá agent_runtime_session exactamente una vez/gi)).toHaveLength(1);
   expect(buildPlanImplementShortPrompt("--critical")).toContain("solicitud de usuario accionable inmediatamente anterior");
 });
-test("builds a closed dedicated-window orchestration command", () => {
+test("builds a closed dedicated-surface orchestration command", () => {
   const prompt = buildOrchestratePrompt('resolver "metadata"');
   expect(prompt).toContain(JSON.stringify('resolver "metadata"'));
   expect(prompt).not.toContain(CRITICAL_REVIEWER_MODEL);

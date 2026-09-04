@@ -187,12 +187,13 @@ opción correcta cuando se necesita navegación, paneles o layouts que exceden e
 ## Conclusión
 
 La base de ejecución sigue siendo OMP nativo y Orca es su interfaz visual
-principal reversible en `JP`. WezTerm/Habitat permanece instalado, intacto y
-verificado como rollback, handoff y diagnóstico. Orca aporta worktrees, rich
-editor, Source Control, Checks, Computer Use, Mobile, resume y navegación del
-transcript mediante `Agent Session History`; la conversación activa sigue en el
-TUI de OMP. Las excepciones restantes son WezTerm Attention, conductas Windows
-acotadas y AXI como única superficie web interactiva. Paseo y
+principal reversible en `JP`. Habitat usa adapters nativos de Orca y WezTerm:
+Orca hospeda splits, tabs, handoff y orquestación visible en el flujo diario;
+WezTerm permanece intacto como rollback y diagnóstico. Orca aporta además
+worktrees, rich editor, Source Control, Checks, Computer Use, Mobile, resume y
+navegación del transcript mediante `Agent Session History`; la conversación
+activa sigue en el TUI de OMP. Las excepciones restantes son WezTerm Attention,
+conductas Windows acotadas y AXI como única superficie web interactiva. Paseo y
 `omp-desktop` quedan como referencias; los paquetes de render Pi no son
 dependencias.
 

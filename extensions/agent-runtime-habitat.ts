@@ -5,7 +5,9 @@ import { detectRuntimeContext } from "../src/runtime-host-detect.ts";
 import type { AgentRuntimeContextV1, SpawnAgentSessionRequestV1 } from "../src/agent-runtime-context.ts";
 import { CompletionTurnGate, completionRoot, createCompletionStore, isCompletionFollowUpTurn, renderCompletionFollowUp, shouldDeferTerminalCompletion, shouldReportCompletionUpstream, summarizeAgentCompletion, type ChildProgressState, type ChildSessionCompletion, type CompletionBatch, type PendingChildSession } from "../src/runtime-completion-channel.ts";
 import { createMarkerStore, markerRoot, promptSha256, randomLaunchId, type HandshakeAck } from "../src/runtime-handshake.ts";
-import { createWezTermAdapter, type WezTermHostAdapter, type WezTermPaneHandle } from "../src/runtime-host-wezterm.ts";
+import { createWezTermAdapter } from "../src/runtime-host-wezterm.ts";
+import { createOrcaAdapter } from "../src/runtime-host-orca.ts";
+import type { RuntimeHostAdapter, RuntimePaneHandle } from "../src/runtime-host.ts";
 import { launchAgent, RuntimeLaunchError } from "../src/runtime-launcher.ts";
 import { consumePromptChannel, PROMPT_CHANNEL_HASH_ENV, PROMPT_CHANNEL_URL_ENV } from "../src/runtime-prompt-channel.ts";
 import { translateOmpRequest } from "../src/runtime-harness-omp.ts";
@@ -210,7 +212,7 @@ export function normalizeSessionToolInput(input: SessionToolInput, sourceName?: 
  const title=placement.kind!=="split" ? childSessionTitle(sourceTabTitle??sourceName,input.pane.title) : input.pane.title;
  return {version:1,...input,placement,pane:{...input.pane,title}};
 }
-export type OwnedChildToClose={adapter:Pick<WezTermHostAdapter,"isOwnedPanePresent"|"killOwnedPane">;pane:WezTermPaneHandle};
+export type OwnedChildToClose={adapter:Pick<RuntimeHostAdapter,"isOwnedPanePresent"|"killOwnedPane">;pane:RuntimePaneHandle};
 export interface OwnedChildrenCloseResult {
  closedLaunchIds:string[];
  failedChildNames:string[];
@@ -499,7 +501,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
    handler:(args)=>{pi.sendUserMessage(buildPlanImplementShortPrompt(String(args??"")));},
  });
  pi.registerCommand(ORCHESTRATE_COMMAND,{
-   description:"Start a dedicated-window orchestration owner with automatic child returns; add a final Sol review with --critical",
+   description:"Start a dedicated-surface orchestration owner with automatic child returns; add a final Sol review with --critical",
    handler:(args)=>{pi.sendUserMessage(buildOrchestratePrompt(String(args??"")));},
  });
  pi.on("input",(event)=>{
@@ -587,7 +589,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
  });
   pi.registerTool({
     name:"agent_runtime_session",label:"Launch agent session",
-    description:"Launch one fresh visible child session from an interactive UI owner; background Task agents must return through Task and cannot use this tool. placement defaults to a right 50% split; {kind:'tab'} creates an adjacent named tab and {kind:'window'} creates the first tab of a dedicated window. Tab and window titles automatically inherit the source WezTerm tab title, falling back to the source session name (`<source>: <title>`), unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title; pane.closeOnComplete:true asks the parent to close only that runtime-owned pane after its completion follow-up was queued. pane.onExit is 'close' or 'keep-open'; model is {mode:'inherit'} or {mode:'explicit',spec:'provider/model'}. Optional workflow is closed: {mode:'prewalk'|'plan-yolo',target?:nativeRoleSelector,advisor?:boolean}; target selects a native role such as '@smol', never model.spec.",
+    description:"Launch one fresh visible child session from an interactive UI owner. WezTerm uses native splits, tabs, and dedicated windows; Orca uses native right/bottom 50% splits and dedicated tabs (`window` maps to a tab because Orca exposes no window primitive); background Task agents must return through Task and cannot use this tool. Use model inherit by default and never model.spec unless the user explicitly requested that exact model. Titles inherit the source tab/session name unless already inherited. Every launched session reports its terminal result back to the parent, which is automatically resumed; orchestrators with pending children do not report upstream early. pane.title is persisted as the OMP session name and explicit tab title; pane.closeOnComplete:true asks the parent to close only the runtime-owned child after its result is received.",
     approval:"write",
     parameters:{type:"object",properties:{
       cwd:{type:"string",minLength:1},
@@ -613,7 +615,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
     },required:["cwd","prompt","pane","fresh","persistence","model","focus"],additionalProperties:false},
     execute:async(_id, raw, signal, _onUpdate, ctx)=>{
       if (!isRequestInput(raw)) {
-        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for an adjacent named tab, {kind:'window'} for a dedicated window, or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open',closeOnComplete?:boolean} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
+        const result={status:"unsupported",reason:"invalid launch request; expected cwd, prompt, optional placement (default right 50% split), {kind:'tab'} for a named tab, {kind:'window'} for a dedicated host surface (window in WezTerm, tab in Orca), or explicit {kind:'split',direction,percent}; pane {title,onExit:'close'|'keep-open',closeOnComplete?:boolean} where title is also the session name, fresh:true, persistence 'saved'|'ephemeral', model {mode:'inherit'} or {mode:'explicit',spec}, focus, and optional closed workflow {mode:'prewalk'|'plan-yolo',target?:native role selector,advisor?:boolean}"};
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       let cwdPath=raw.cwd;
@@ -631,12 +633,14 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"})}],details:{status:"unsupported",reason:"visible child sessions require an interactive UI owner; background Task agents must return through Task"}};
       const translated=await translateOmpRequest(request,runtime);
       if("kind" in translated) return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:translated.message})}],details:{status:"unsupported",reason:translated.message}};
-      if(runtime.host.provider!=="WezTerm"||runtime.host.kind!=="terminal"||!runtime.location?.paneId||!runtime.location.instanceRef)
+      if(runtime.host.kind!=="terminal"||!["WezTerm","Orca"].includes(runtime.host.provider)||!runtime.location?.paneId||!runtime.location.instanceRef)
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"unsupported runtime host"})}],details:{status:"unsupported",reason:"unsupported runtime host"}};
       if(!runtime.harness.sessionId)
         return {content:[{type:"text",text:JSON.stringify({status:"unsupported",reason:"launching a child session requires a persisted parent session id for completion routing"})}],details:{status:"unsupported",reason:"launching a child session requires a persisted parent session id for completion routing"}};
       const value=request;
-      const adapter=createWezTermAdapter();
+      const adapter:RuntimeHostAdapter=runtime.host.provider==="Orca"?createOrcaAdapter():createWezTermAdapter();
+      const statusExtension=runtime.host.provider==="Orca"?process.env.ORCA_OMP_STATUS_EXTENSION:undefined;
+      const childArgv=statusExtension?["--extension",statusExtension,...translated.argv]:translated.argv;
       try{
         const result=await launchAgent(value,{adapter,signal,timeoutMs:HANDSHAKE_TIMEOUT_MS,markers:createMarkerStore(markerRoot()),model:translated.argv[translated.argv.indexOf("--model")+1],source:{instanceRef:runtime.location.instanceRef,paneId:runtime.location.paneId},parentSessionId:runtime.harness.sessionId,
           buildChild:async(_request,env)=>({
@@ -648,7 +652,7 @@ export default function agentRuntimeHabitat(pi: ExtensionAPI): void {
               title:_request.pane.title,
               onExit:_request.pane.onExit,
               ...(runtime.harness.agentDir?{agentDir:runtime.harness.agentDir}:{})
-            },translated.executable,translated.argv)]
+            },translated.executable,childArgv)]
           }),
           onReady:async(ready,pane)=>{
             await completionStore.register({version:1,launchId:ready.launchId,parentSessionId:runtime.harness.sessionId!,childSessionId:ready.sessionId,childName:value.pane.title,paneId:ready.paneId,startedAt:Date.now()});
