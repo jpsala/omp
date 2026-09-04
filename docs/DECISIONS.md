@@ -899,3 +899,17 @@ animación; cualquier otro `agent_end` la detiene inmediatamente. Una
 actualización de Orca reemplaza el bundle; se reejecuta el workaround sólo si la
 versión nueva conserva la rama vulnerable y se retira cuando upstream entregue
 el mismo comportamiento.
+
+## 2026-09-05 — `OMP` nativo y `OMP TUI` son superficies distintas
+
+El item integrado `+ → OMP` no abre un terminal: crea la Chat UI estructurada de
+Orca respaldada por OMP. Configurar OMP como `Default Agent` tampoco cambia esa
+frontera ni convierte `Ctrl+T` en un launcher del TUI. La afirmación anterior de
+que ese item abría directamente el TUI era incorrecta.
+
+Para el flujo diario se guarda un Quick Command global `OMP TUI`, de tipo
+`Terminal Command`, cuyo comando exacto es `omp`. Orca lo fija como botón visible
+junto al `+`; un clic crea un tab terminal y la evidencia runtime debe mostrar
+`agentIdentity: omp` y título idle `π > <repo>`. La Chat UI nativa queda
+disponible bajo `+ → OMP`, pero sólo se usa cuando se elige explícitamente esa
+superficie. La preferencia vive en Orca y no se copia al repositorio.
