@@ -50,6 +50,11 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   pedido explícito. `OMP Flow` es el workspace diario, limpio y publicado como
   `jpsala/orca-flow`; `omp` y `os` están registrados como proyectos. Orca es el
   host principal de Habitat; WezTerm se conserva intacto como rollback.
+- Orca `1.4.197` tiene aplicado en `JP` el workaround reproducible
+  `bun run fix:orca-spinner`: el generador de `orca-titlebar-spinner.ts`
+  detiene el título ante `agent_end.willContinue !== true`, sin esperar
+  `ctx.isIdle()`. Una actualización de Orca reemplaza el bundle y exige
+  reejecutar el comando sólo mientras upstream conserve esa rama vulnerable.
 
 ## Trabajo abierto
 
@@ -65,10 +70,10 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   `/orquestar` nativos en Orca, incluidos split/tab, handshake, retorno
   automático y cierre owned. `Terminal attention` sigue habilitado; la evidencia
   y sus límites viven en `docs/topics/ux-matrix.md` y `docs/DECISIONS.md`.
-- Mantener `Agent sleep` apagado y no programar automations OMP: ambos dependen
-  de un estado final que puede permanecer visualmente `Working`, y automations
-  no captura output/usage confiable. AXI continúa como única superficie web
-  interactiva. No hay emulador, host remoto ni recipe cloud configurados.
+- Mantener `Agent sleep` apagado hasta una decisión explícita, ya no por el
+  spinner final. Automations OMP siguen fuera de uso porque no capturan
+  output/usage confiable. AXI continúa como única superficie web interactiva.
+  No hay emulador, host remoto ni recipe cloud configurados.
 
 ## Invariantes operativas
 

@@ -880,3 +880,22 @@ se programan todavía porque ejecutan pero no capturan output/usage de forma
 confiable. AXI continúa como única superficie web interactiva autorizada en esta
 workstation. Mobile Relay, hosts remotos, cloud recipes, emuladores y cuentas
 adicionales requieren sus gates explícitos; no se habilitan por adoptar Orca.
+
+## 2026-09-05 — El título Orca liquida el `agent_end` terminal de OMP
+
+Orca `1.4.197` ya publica correctamente el estado HTTP final de OMP, pero su
+extensión gestionada `orca-titlebar-spinner.ts` aplica todavía el fallback de
+Pi: después de `agent_end` espera que `ctx.isIdle()` cambie a `true`. En OMP ese
+valor permanece `false` dentro del callback final; el timer de 80 ms queda vivo
+y el título sigue rotando aunque el turno terminó. Es el mismo desacople de
+lifecycle documentado en `stablyai/orca#14278`, aplicado aquí al productor del
+título.
+
+La workstation parchea el seam único del generador dentro de `app.asar` con un
+reemplazo de igual longitud y corrige la copia activa bajo `~/.omp/agent/`.
+`bun run fix:orca-spinner` es idempotente y falla cerrado si el bundle deja de
+coincidir con `1.4.197`. El contrato queda: `willContinue === true` conserva la
+animación; cualquier otro `agent_end` la detiene inmediatamente. Una
+actualización de Orca reemplaza el bundle; se reejecuta el workaround sólo si la
+versión nueva conserva la rama vulnerable y se retira cuando upstream entregue
+el mismo comportamiento.
