@@ -7,6 +7,14 @@ Laboratorio independiente para estudiar y extender Oh My Pi con sus superficies 
 - `C:\dev\omp`: fuentes versionables del laboratorio, decisiones, topics, extensión local y cliente RPC de referencia.
 - `~/.omp`: estado privado administrado por OMP (autenticación, sesiones, settings, caches y stores). No es parte de este workspace y nunca se copia aquí.
 
+El host visual tiene otro dueño:
+[Orca workstation](file:///C:/dev/orca/docs/topics/orca-workstation.md), en
+[`C:/dev/orca`](file:///C:/dev/orca/README.md). Allí viven settings, CLI,
+worktrees, límites conocidos y parches de la aplicación. La
+[integración OMP](file:///C:/dev/orca/docs/topics/omp-integration.md) enlaza
+los contratos que siguen aquí: runtime, Habitat, Fleet, RPC y OMP Live.
+WezTerm conserva su configuración en `C:/dev/wezterm` como rollback.
+
 Para abrir OMP desde este workspace:
 
 ```powershell

@@ -15,10 +15,12 @@ Bootstrap estable: OMP gobierna la ejecución y el runtime de agentes; este labo
 - `extensions/` es la fuente durable; `.omp/config.yml` sólo conecta esas fuentes con el discovery project-local.
 - El cliente RPC es una referencia reusable y no una dependencia runtime de otros repositorios.
 - Los inicios de sesión nuevos y los efectos externos sensibles conservan sus gates.
-- Orca puede hospedar OMP como superficie visual opcional; `orca.yaml` gobierna
-  únicamente el setup de sus worktrees. OMP, Task/Hub, Habitat y Fleet conservan
-  la autoridad de ejecución y orquestación salvo pedido explícito de usar la
-  orquestación propia de Orca.
+- `C:/dev/orca` es el repo dueño del host Orca: instalación, configuración,
+  CLI, worktrees y parches. Consultar su `AGENTS.md` e índice antes de trabajar
+  en ese dominio; aquí dejar referencias, no procedimientos espejo.
+- `orca.yaml` conserva sólo el setup de este proyecto. OMP, Task/Hub, Habitat
+  y Fleet conservan ejecución y orquestación; la orquestación propia de Orca
+  se usa únicamente ante pedido explícito.
 
 ## Flujo documental
 
