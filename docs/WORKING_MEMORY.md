@@ -33,8 +33,11 @@ en `docs/topics/`; el código y la configuración siguen siendo la fuente de ver
   el orden `modified`. Incluye prompts, progreso público transitorio y respuesta
   final; excluye thinking, argumentos, resultados, system prompts y adjuntos.
 - La selección persistente de modelos usa `Alt+M`/`/models`; `/switch` cambia
-  sólo la sesión viva. `/modo normal|economico|estado` conserva los perfiles
-  gestionados del laboratorio. Los overlays completos siguen en `profiles/`.
+  sólo la sesión viva. `/modo normal|ligero|profundo` selecciona Astra medium/low/high;
+  `/modo sol` usa Sol medium y `/modo economico` Luna high. `/modo estado`
+  informa selección efectiva, sin etiquetas cacheadas. Política y cuota:
+  `C:/dev/os/docs/topics/llm-pricing-model-selection.md`. Los overlays completos
+  siguen en `profiles/`.
 - Habitat administra sesiones visibles y handoffs mediante adapters nativos de
   Orca y WezTerm; Fleet, ejecuciones multi-repo; el cliente RPC, framing y
   finalización. Sus contratos detallados viven en los topics enlazados abajo.
